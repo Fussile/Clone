@@ -1,0 +1,15 @@
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+.idea/
+*.sln
+*.slnx
+*.VC.db
+*.VC.opendb
+*.suo
+*.user
+.DS_Store
+steam_appid.txt
+Content/Restricted/
