@@ -3,6 +3,7 @@
 #include "GameFramework/Character.h"
 #include "SurvivalCharacter.generated.h"
 
+class ASurvivalSupplyCrate;
 class UCameraComponent;
 class UInputComponent;
 
@@ -13,6 +14,8 @@ class ASurvivalCharacter : public ACharacter
 
 public:
     ASurvivalCharacter();
+    ASurvivalSupplyCrate* FindSupplyCrate() const;
+    int32 GetSupplyCount() const { return SupplyCount; }
 
 protected:
     virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
@@ -20,6 +23,9 @@ protected:
 private:
     void MoveForward(float Value);
     void MoveRight(float Value);
+    void Scavenge();
+
+    int32 SupplyCount = 0;
 
     UPROPERTY(VisibleAnywhere, Category = "Camera")
     TObjectPtr<UCameraComponent> FirstPersonCamera;
