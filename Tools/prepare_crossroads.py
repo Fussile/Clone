@@ -214,6 +214,9 @@ def prepare():
     import_surfaces()
     import_survivor()
     import_building()
+    sidearm = SOURCE / "Weapons" / "SM_CrossroadsSidearm.glb"
+    if sidearm.is_file():
+        import_asset(sidearm, BUILDING, unreal.StaticMesh)
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     if assets.does_asset_exist(LEVEL):

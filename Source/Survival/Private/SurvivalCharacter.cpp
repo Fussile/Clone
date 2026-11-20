@@ -346,11 +346,59 @@ void ASurvivalCharacter::PrimaryAction()
     }
 }
 
+int32 ASurvivalCharacter::GetLivingAttackers() const
+{
+    int32 Alive = 0;
+    for (const TWeakObjectPtr<ASurvivalZombie>& Attacker : Attackers)
+    {
+        if (Attacker.IsValid())
+        {
+            ++Alive;
+        }
+    }
+    return Alive;
+}
+
 void ASurvivalCharacter::StartDefense()
 {
-    if (HealthPoints > 0 && !Attacker.IsValid())
+    if (HealthPoints <= 0 || DefenseWave >= DefenseWaveCount || GetLivingAttackers() > 0)
     {
-        Attacker = GetWorld()->SpawnActor<ASurvivalZombie>(FVector(3700.0, 1650.0, 112.0), FRotator(0, 90, 0));
+        return;
+    }
+
+    const FVector SpawnPoints[] = {
+        FVector(3700.0, 1650.0, 112.0),
+        FVector(3490.0, 1410.0, 112.0),
+        FVector(3920.0, 1240.0, 112.0)
+    };
+    static_assert(UE_ARRAY_COUNT(SpawnPoints) == DefenseWaveCount);
+    const int32 NextWave = DefenseWave + 1;
+    Attackers.Reset();
+    FActorSpawnParameters SpawnParameters;
+    SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
+    for (int32 Index = 0; Index < NextWave; ++Index)
+    {
+        ASurvivalZombie* Zombie = GetWorld()->SpawnActor<ASurvivalZombie>(
+            SpawnPoints[Index], FRotator(0, 90, 0), SpawnParameters);
+        if (!Zombie)
+        {
+            for (const TWeakObjectPtr<ASurvivalZombie>& Spawned : Attackers)
+            {
+                if (ASurvivalZombie* PartialWave = Spawned.Get())
+                {
+                    PartialWave->Destroy();
+                }
+            }
+            Attackers.Reset();
+            return;
+        }
+        Attackers.Add(Zombie);
+    }
+
+    DefenseWave = NextWave;
+    if (DefenseWave > 1 && bHasSidearm)
+    {
+        Ammo += 6;
     }
 }
 

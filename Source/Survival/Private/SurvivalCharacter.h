@@ -34,7 +34,9 @@ public:
     int32 GetHealthPoints() const { return HealthPoints; }
     int32 GetAmmo() const { return Ammo; }
     bool HasSidearm() const { return bHasSidearm; }
-    bool IsDefenseActive() const { return Attacker.IsValid(); }
+    int32 GetLivingAttackers() const;
+    int32 GetDefenseWave() const { return DefenseWave; }
+    static constexpr int32 DefenseWaveCount = 3;
     bool ShowHitMarker() const;
 
 protected:
@@ -75,7 +77,8 @@ private:
     int32 Ammo = 0;
     int32 HealthPoints = 100;
     double HitMarkerUntil = -1.0;
-    TWeakObjectPtr<ASurvivalZombie> Attacker;
+    int32 DefenseWave = 0;
+    TArray<TWeakObjectPtr<ASurvivalZombie>> Attackers;
 
     UPROPERTY(Transient)
     TObjectPtr<ASurvivalSidearm> Sidearm;

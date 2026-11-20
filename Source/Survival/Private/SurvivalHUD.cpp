@@ -44,8 +44,23 @@ void ASurvivalHUD::DrawHUD()
     DrawRect(Panel, 20.0f, 20.0f, 300.0f, 54.0f);
     DrawText(FString::Printf(TEXT("Health   %d   |   %s"), Character->GetHealthPoints(), *Loadout),
         FLinearColor::White, 32.0f, 28.0f);
-    DrawText(Character->IsDefenseActive() ? TEXT("Zombie approaching") : TEXT("[G] Start defense   [F5] Restart"),
-        Muted, 32.0f, 48.0f);
+    const int32 Wave = Character->GetDefenseWave();
+    const int32 Alive = Character->GetLivingAttackers();
+    FString DefenseStatus = TEXT("[G] Start defense   [F5] Restart");
+    if (Alive > 0)
+    {
+        DefenseStatus = FString::Printf(TEXT("Wave %d / %d   |   %d remaining"),
+            Wave, ASurvivalCharacter::DefenseWaveCount, Alive);
+    }
+    else if (Wave >= ASurvivalCharacter::DefenseWaveCount)
+    {
+        DefenseStatus = TEXT("Station defended   [F5] Restart");
+    }
+    else if (Wave > 0)
+    {
+        DefenseStatus = TEXT("Wave clear   [G] Next wave (+6 rounds)");
+    }
+    DrawText(DefenseStatus, Muted, 32.0f, 48.0f);
     if (Character->GetHealthPoints() <= 0)
     {
         DrawText(TEXT("Downed   [F5] Restart"), Blocked, CenterX + 14.0f, CenterY + 12.0f);
@@ -54,15 +69,21 @@ void ASurvivalHUD::DrawHUD()
 
     const FSurvivalMaterials Inventory = Character->GetInventory();
     const FSurvivalMaterials PlannedCost = Character->GetPlannedCost();
-    const FSurvivalMaterials Shortage = PlannedCost.MissingFrom(Inventory);
-    const float PanelY = Canvas->SizeY - 112.0f;
-    DrawRect(Panel, 20.0f, PanelY, 322.0f, 92.0f);
+    const bool bHasPlans = !PlannedCost.IsEmpty();
+    const float PanelHeight = bHasPlans ? 92.0f : 52.0f;
+    const float PanelY = Canvas->SizeY - PanelHeight - 20.0f;
+    DrawRect(Panel, 20.0f, PanelY, 322.0f, PanelHeight);
     DrawText(FString::Printf(TEXT("Inventory   %d timber / %d stone"), Inventory.Timber, Inventory.Stone),
         FLinearColor::White, 32.0f, PanelY + 10.0f);
-    DrawText(FString::Printf(TEXT("Plans require   %s"), *PlannedCost.ToText()), Cyan, 32.0f, PanelY + 30.0f);
-    DrawText(FString::Printf(TEXT("Still needed   %s"), *Shortage.ToText()),
-        Shortage.IsEmpty() ? Muted : Blocked, 32.0f, PanelY + 50.0f);
-    DrawText(TEXT("[B] Build menu   [V] Switch view"), Muted, 32.0f, PanelY + 70.0f);
+    if (bHasPlans)
+    {
+        const FSurvivalMaterials Shortage = PlannedCost.MissingFrom(Inventory);
+        DrawText(FString::Printf(TEXT("Plans require   %s"), *PlannedCost.ToText()), Cyan, 32.0f, PanelY + 30.0f);
+        const FString Status = Shortage.IsEmpty() ? TEXT("Materials ready")
+            : FString::Printf(TEXT("Still needed   %s"), *Shortage.ToText());
+        DrawText(Status, Shortage.IsEmpty() ? Muted : Blocked, 32.0f, PanelY + 50.0f);
+    }
+    DrawText(TEXT("[B] Build menu   [V] Switch view"), Muted, 32.0f, PanelY + PanelHeight - 22.0f);
 
     if (Character->IsBuilding())
     {

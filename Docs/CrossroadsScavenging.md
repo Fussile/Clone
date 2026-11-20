@@ -16,5 +16,7 @@ For editor play, run `Tools/prepare_crossroads.py` and open Southern Crossroads.
 3. Restart with **F5**. Build a timber wall centered in front of the shop doorway, slightly clear of the permanent front wall. Stand inside and press **G**. Watch the finished piece lose health. Press **E** to repair a damaged piece for one unit of its material. Allow a wall to reach zero and verify the zombie can move through the opening. Repeat with stone to compare its longer survival.
 4. Take timber from the cache near the west pump and stone from the cache outside the east wall. Verify adjacent finished pieces keep their health and can still be repaired after one in the same chunk breaks.
 5. Toggle third person and check the textured survivor. During preparation, the generated sun and skylight are switched to movable. Check that the generated map no longer shows the unbuilt-light warning.
+6. After clearing the first wave, repair and press **G** again. Verify the next two waves have two and three zombies, with six rounds added when each begins. Pressing **G** during a wave leaves it unchanged. After all three waves, check that the HUD reports victory.
+7. Remove or finish the last plan and check that the requirements disappear from the HUD. Placing another plan should bring them back.
 
 The material counts, plans, completed pieces, health and loot reset when the solo session restarts.

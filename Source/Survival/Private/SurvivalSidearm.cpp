@@ -9,6 +9,11 @@
 ASurvivalSidearm::ASurvivalSidearm()
 {
     SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
+    ImportedVisual = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ImportedVisual"));
+    ImportedVisual->SetupAttachment(GetRootComponent());
+    ImportedVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    ImportedVisual->SetCastShadow(false);
+
     static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
     if (!Cube.Succeeded())
     {
@@ -36,10 +41,35 @@ ASurvivalSidearm::ASurvivalSidearm()
 void ASurvivalSidearm::BeginPlay()
 {
     Super::BeginPlay();
+    TInlineComponentArray<UStaticMeshComponent*> Parts(this);
+    UStaticMesh* SidearmAsset = LoadObject<UStaticMesh>(nullptr,
+        TEXT("/Game/Art/Crossroads/Building/SM_CrossroadsSidearm.SM_CrossroadsSidearm"), nullptr, LOAD_NoWarn);
+    if (SidearmAsset)
+    {
+        const FBoxSphereBounds Bounds = SidearmAsset->GetBounds();
+        const double Length = 2.0 * FMath::Max(Bounds.BoxExtent.X, Bounds.BoxExtent.Y);
+        if (Length > UE_SMALL_NUMBER)
+        {
+            const double Scale = 24.0 / Length;
+            const FRotator Rotation(0.0, Bounds.BoxExtent.Y > Bounds.BoxExtent.X ? -90.0 : 0.0, 0.0);
+            ImportedVisual->SetStaticMesh(SidearmAsset);
+            ImportedVisual->SetRelativeScale3D(FVector(Scale));
+            ImportedVisual->SetRelativeRotation(Rotation);
+            ImportedVisual->SetRelativeLocation(FVector(6, 0, 1) - Rotation.RotateVector(Bounds.Origin * Scale));
+            for (UStaticMeshComponent* Part : Parts)
+            {
+                if (Part != ImportedVisual.Get())
+                {
+                    Part->SetVisibility(false);
+                }
+            }
+            return;
+        }
+    }
+
     if (UMaterialInterface* Steel = LoadObject<UMaterialInterface>(nullptr,
         TEXT("/Game/Art/Crossroads/Building/M_DefenseSteel.M_DefenseSteel")))
     {
-        TInlineComponentArray<UStaticMeshComponent*> Parts(this);
         for (UStaticMeshComponent* Part : Parts)
         {
             Part->SetMaterial(0, Steel);

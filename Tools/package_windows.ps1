@@ -62,6 +62,11 @@ try {
         throw 'Expected one staged Windows package with Survival.exe and cooked content.'
     }
 
+    $importedSidearm = Join-Path $projectRoot 'Content\Art\Crossroads\Building\SM_CrossroadsSidearm.uasset'
+    if (Test-Path -LiteralPath $importedSidearm -PathType Leaf) {
+        Copy-Item -LiteralPath (Join-Path $projectRoot 'Docs\SidearmAttribution.txt') -Destination $package[0]
+    }
+
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $temporaryZip = Join-Path $work $zipName
     [System.IO.Compression.ZipFile]::CreateFromDirectory($package[0], $temporaryZip)
