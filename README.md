@@ -10,6 +10,8 @@ The solo playtest starts outside the Southern Crossroads gas station. Use **WASD
 
 Press **B** to open the build menu, **scroll** to select a piece, and **R** to rotate it. **Left-click** to place a free blueprint. Aim at the blueprint and press **E** to finish it with timber or stone, or **X** to remove it. The HUD shows the total materials required and how many you still need to collect.
 
+Loot the darker case inside the shop for the sidearm. **G** starts the solo defense, **left-click** fires when the build menu is closed, and **E** repairs an aimed-at damaged piece. The timber and stone caches sit outside near the west pump and east shop wall. **F5** restarts Crossroads.
+
 ## Build a playtest ZIP
 
 On Windows with Unreal Engine 5.8 and its supported C++ toolchain installed, run this from the repository root in PowerShell. Use your own UE 5.8 installation path.

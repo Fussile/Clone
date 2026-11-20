@@ -15,7 +15,12 @@ public:
     ASurvivalSupplyCrate();
 
     FSurvivalMaterials TakeMaterials();
+    bool TakeSidearm();
+    bool HasSidearm() const { return !bSearched && bContainsSidearm; }
     bool HasMaterials() const { return !bSearched && (TimberAmount > 0 || StoneAmount > 0); }
+
+protected:
+    virtual void BeginPlay() override;
 
 private:
     UPROPERTY(VisibleAnywhere, Category = "Scavenging")
@@ -26,6 +31,9 @@ private:
 
     UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0"))
     int32 StoneAmount = 12;
+
+    UPROPERTY(EditAnywhere, Category = "Scavenging")
+    bool bContainsSidearm = false;
 
     bool bSearched = false;
 };

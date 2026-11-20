@@ -6,6 +6,9 @@
 #include "SurvivalCharacter.generated.h"
 
 class ASurvivalSupplyCrate;
+class ASurvivalSidearm;
+class ASurvivalZombie;
+struct FSurvivalFinishedPiece;
 class UAnimSequence;
 class UCameraComponent;
 class USpringArmComponent;
@@ -26,6 +29,13 @@ public:
     int32 GetSelectedPiece() const { return SelectedPiece; }
     TOptional<FSurvivalBuildPlacement> FindPlacement() const;
     bool CanFinish(const FSurvivalBuildPlacement& Placement) const;
+    const FSurvivalFinishedPiece* FindFinishedPiece() const;
+    void ReceiveZombieHit(int32 Amount);
+    int32 GetHealthPoints() const { return HealthPoints; }
+    int32 GetAmmo() const { return Ammo; }
+    bool HasSidearm() const { return bHasSidearm; }
+    bool IsDefenseActive() const { return Attacker.IsValid(); }
+    bool ShowHitMarker() const;
 
 protected:
     virtual void BeginPlay() override;
@@ -50,12 +60,25 @@ private:
     void RemovePlan();
     void ToggleView();
     void UpdateSurvivorAnimation();
+    void PrimaryAction();
+    void EquipSidearm();
+    void UpdateSidearmView();
+    void StartDefense();
+    void RestartDefense();
 
     FSurvivalMaterials Inventory;
     int32 SelectedPiece = 0;
     int32 QuarterTurns = 0;
     bool bBuildMode = false;
     bool bThirdPerson = false;
+    bool bHasSidearm = false;
+    int32 Ammo = 0;
+    int32 HealthPoints = 100;
+    double HitMarkerUntil = -1.0;
+    TWeakObjectPtr<ASurvivalZombie> Attacker;
+
+    UPROPERTY(Transient)
+    TObjectPtr<ASurvivalSidearm> Sidearm;
 
     UPROPERTY(VisibleAnywhere, Category = "Camera")
     TObjectPtr<UCameraComponent> FirstPersonCamera;

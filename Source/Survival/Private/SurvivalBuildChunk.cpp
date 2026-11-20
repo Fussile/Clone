@@ -110,13 +110,95 @@ bool ASurvivalBuildChunk::FinishPlan(int32 Index)
         return false;
     }
 
-    TArray<int32> Indices;
-    UInstancedStaticMeshComponent& Component = Plan->GetPiece().bStone ? *Stone : *Timber;
-    if (!AddInstances(Component, *Plan, Indices))
+    const int32 MaxHealth = Plan->GetPiece().bStone ? 140 : 70;
+    const int32 FinishedIndex = Finished.Add(FSurvivalFinishedPiece{*Plan, MaxHealth, MaxHealth});
+    if (!AddFinishedInstances(FinishedIndex))
     {
+        Finished.Pop();
         return false;
     }
     RemovePlan(Index);
+    return true;
+}
+
+bool ASurvivalBuildChunk::AddFinishedInstances(int32 Index)
+{
+    const FSurvivalBuildPlacement& Placement = Finished[Index].Placement;
+    const bool bStone = Placement.GetPiece().bStone;
+    TArray<int32> Indices;
+    if (!AddInstances(bStone ? *Stone : *Timber, Placement, Indices))
+    {
+        return false;
+    }
+    TMap<int32, int32>& Owners = bStone ? StoneOwners : TimberOwners;
+    for (int32 Instance : Indices)
+    {
+        Owners.Add(Instance, Index);
+    }
+    return true;
+}
+
+int32 ASurvivalBuildChunk::FindFinishedIndex(const FHitResult& Hit) const
+{
+    const TMap<int32, int32>* Owners = nullptr;
+    if (Hit.GetComponent() == Stone.Get())
+    {
+        Owners = &StoneOwners;
+    }
+    else if (Hit.GetComponent() == Timber.Get())
+    {
+        Owners = &TimberOwners;
+    }
+    const int32* Index = Owners ? Owners->Find(Hit.Item) : nullptr;
+    return Index ? *Index : INDEX_NONE;
+}
+
+const FSurvivalFinishedPiece* ASurvivalBuildChunk::FindFinished(const FHitResult& Hit) const
+{
+    const int32 Index = FindFinishedIndex(Hit);
+    return Finished.IsValidIndex(Index) ? &Finished[Index] : nullptr;
+}
+
+bool ASurvivalBuildChunk::DamageFinished(const FHitResult& Hit, int32 Amount)
+{
+    const int32 Index = FindFinishedIndex(Hit);
+    if (!Finished.IsValidIndex(Index) || Amount <= 0)
+    {
+        return false;
+    }
+    FSurvivalFinishedPiece& Piece = Finished[Index];
+    Piece.Health -= Amount;
+    if (Piece.Health <= 0)
+    {
+        Finished.RemoveAtSwap(Index);
+        Timber->ClearInstances();
+        Stone->ClearInstances();
+        TimberOwners.Reset();
+        StoneOwners.Reset();
+        for (int32 Remaining = 0; Remaining < Finished.Num(); ++Remaining)
+        {
+            const bool bAdded = AddFinishedInstances(Remaining);
+            ensure(bAdded);
+        }
+    }
+    return true;
+}
+
+bool ASurvivalBuildChunk::RepairFinished(const FHitResult& Hit, FSurvivalMaterials& Inventory)
+{
+    const int32 Index = FindFinishedIndex(Hit);
+    if (!Finished.IsValidIndex(Index))
+    {
+        return false;
+    }
+    FSurvivalFinishedPiece& Piece = Finished[Index];
+    const FSurvivalMaterials Cost = Piece.RepairCost();
+    if (Piece.Health >= Piece.MaxHealth || !Cost.MissingFrom(Inventory).IsEmpty())
+    {
+        return false;
+    }
+    Inventory.Spend(Cost);
+    Piece.Health = FMath::Min(Piece.MaxHealth, Piece.Health + 30);
     return true;
 }
 

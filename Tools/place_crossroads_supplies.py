@@ -1,30 +1,46 @@
-"""Place the prototype supply crate in an existing Southern Crossroads map."""
+"""Place the loot crates and update the generated station lighting."""
 import unreal
 
 
 def place():
     level = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
     if not level or level.get_path_name().split(".")[0] != "/Game/Maps/L_SouthernCrossroads":
-        raise RuntimeError("Open L_SouthernCrossroads before placing the supply crate.")
+        raise RuntimeError("Open L_SouthernCrossroads before preparing the defense playtest.")
 
     crate_class = unreal.load_class(None, "/Script/Survival.SurvivalSupplyCrate")
     if not crate_class:
         raise RuntimeError("Build SurvivalEditor and restart the editor first.")
 
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
-    tag = unreal.Name("CrossroadsStationSupplies")
-    if any(actor.actor_has_tag(tag) for actor in actors.get_all_level_actors()):
-        unreal.log("The gas station supply crate is already in this level.")
-        return
+    existing = actors.get_all_level_actors()
+    crates = (
+        ("CrossroadsStationSupplies", "Gas station supply crate", (3700, 5150, 52), (1.2, 0.8, 0.8), 24, 12, False),
+        ("CrossroadsStationSidearm", "Gas station sidearm case", (4100, 5050, 39), (0.95, 0.65, 0.54), 0, 0, True),
+        ("CrossroadsStationTimber", "Timber cache by west pump", (2850, 2680, 41), (0.95, 0.7, 0.66), 12, 0, False),
+        ("CrossroadsStationStone", "Stone cache by east wall", (4750, 4660, 34), (0.7, 0.7, 0.68), 0, 8, False),
+    )
+    for tag, label, position, scale, timber, stone, sidearm in crates:
+        name = unreal.Name(tag)
+        if any(actor.actor_has_tag(name) for actor in existing):
+            continue
+        crate = actors.spawn_actor_from_class(crate_class, unreal.Vector(*position))
+        if not crate:
+            raise RuntimeError(f"Could not place {label}.")
+        crate.set_actor_label(label)
+        crate.set_actor_scale3d(unreal.Vector(*scale))
+        crate.set_editor_property("tags", [name])
+        crate.set_editor_property("timber_amount", timber)
+        crate.set_editor_property("stone_amount", stone)
+        crate.set_editor_property("contains_sidearm", sidearm)
 
-    # The gas station's slab is 12 cm high. Set the bottom of the crate on it.
-    crate = actors.spawn_actor_from_class(crate_class, unreal.Vector(3700, 5150, 52))
-    if not crate:
-        raise RuntimeError("Could not place the gas station supply crate.")
-    crate.set_actor_label("Gas station supply crate")
-    crate.set_actor_scale3d(unreal.Vector(1.2, 0.8, 0.8))
-    crate.set_editor_property("tags", [tag])
-    unreal.log("Placed the supply crate. Save the map when ready.")
+    for actor in existing:
+        for label, component_type in (
+            ("Sun", unreal.DirectionalLightComponent), ("Sky light", unreal.SkyLightComponent)
+        ):
+            if actor.get_actor_label() == label:
+                light = actor.get_component_by_class(component_type)
+                if light:
+                    light.set_mobility(unreal.ComponentMobility.MOVABLE)
 
 
 place()

@@ -12,9 +12,13 @@
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInterface.h"
 #include "SurvivalBuildChunk.h"
 #include "SurvivalGameMode.h"
+#include "SurvivalSidearm.h"
 #include "SurvivalSupplyCrate.h"
+#include "SurvivalZombie.h"
 
 namespace
 {
@@ -62,6 +66,14 @@ void ASurvivalCharacter::BeginPlay()
 
     USkeletalMeshComponent* Body = GetMesh();
     Body->SetSkeletalMesh(SurvivorMesh);
+    if (UMaterialInterface* Skin = LoadObject<UMaterialInterface>(nullptr,
+        TEXT("/Game/Art/Crossroads/Survivor/M_Survivor.M_Survivor")))
+    {
+        for (int32 Slot = 0; Slot < Body->GetNumMaterials(); ++Slot)
+        {
+            Body->SetMaterial(Slot, Skin);
+        }
+    }
     const FBoxSphereBounds Bounds = SurvivorMesh->GetBounds();
     const double Scale = 175.0 / FMath::Max(1.0, 2.0 * Bounds.BoxExtent.Z);
     const double MeshBottom = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * Scale;
@@ -114,9 +126,11 @@ void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
     PlayerInputComponent->BindAction(TEXT("RotatePiece"), IE_Pressed, this, &ASurvivalCharacter::RotatePiece);
     PlayerInputComponent->BindAction(TEXT("NextPiece"), IE_Pressed, this, &ASurvivalCharacter::NextPiece);
     PlayerInputComponent->BindAction(TEXT("PreviousPiece"), IE_Pressed, this, &ASurvivalCharacter::PreviousPiece);
-    PlayerInputComponent->BindAction(TEXT("PlacePlan"), IE_Pressed, this, &ASurvivalCharacter::PlacePlan);
+    PlayerInputComponent->BindAction(TEXT("PrimaryAction"), IE_Pressed, this, &ASurvivalCharacter::PrimaryAction);
     PlayerInputComponent->BindAction(TEXT("RemovePlan"), IE_Pressed, this, &ASurvivalCharacter::RemovePlan);
     PlayerInputComponent->BindAction(TEXT("ToggleView"), IE_Pressed, this, &ASurvivalCharacter::ToggleView);
+    PlayerInputComponent->BindAction(TEXT("StartDefense"), IE_Pressed, this, &ASurvivalCharacter::StartDefense);
+    PlayerInputComponent->BindAction(TEXT("RestartDefense"), IE_Pressed, this, &ASurvivalCharacter::RestartDefense);
 }
 
 void ASurvivalCharacter::MoveForward(float Value)
@@ -135,6 +149,7 @@ void ASurvivalCharacter::ToggleView()
     FirstPersonCamera->SetActive(!bThirdPerson);
     ThirdPersonCamera->SetActive(bThirdPerson);
     GetMesh()->SetOwnerNoSee(!bThirdPerson);
+    UpdateSidearmView();
 }
 
 const UCameraComponent& ASurvivalCharacter::GetAimCamera() const
@@ -205,6 +220,10 @@ FSurvivalMaterials ASurvivalCharacter::GetPlannedCost() const
 
 void ASurvivalCharacter::Interact()
 {
+    if (HealthPoints <= 0)
+    {
+        return;
+    }
     const FSurvivalPlanTarget Target = FindPlan();
     if (const FSurvivalBuildPlacement* Plan = Target.GetPlan())
     {
@@ -216,13 +235,143 @@ void ASurvivalCharacter::Interact()
     }
     else if (ASurvivalSupplyCrate* Crate = FindSupplyCrate())
     {
-        Inventory.Add(Crate->TakeMaterials());
+        if (!bHasSidearm && Crate->TakeSidearm())
+        {
+            EquipSidearm();
+        }
+        else
+        {
+            Inventory.Add(Crate->TakeMaterials());
+        }
     }
+    else
+    {
+        FHitResult Hit;
+        if (FindWorldAimHit(InteractReach, Hit) && HasReachTo(Hit.ImpactPoint, InteractReach))
+        {
+            if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
+            {
+                Chunk->RepairFinished(Hit, Inventory);
+            }
+        }
+    }
+}
+
+const FSurvivalFinishedPiece* ASurvivalCharacter::FindFinishedPiece() const
+{
+    FHitResult Hit;
+    if (FindWorldAimHit(InteractReach, Hit) && HasReachTo(Hit.ImpactPoint, InteractReach))
+    {
+        if (const ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
+        {
+            return Chunk->FindFinished(Hit);
+        }
+    }
+    return nullptr;
+}
+
+void ASurvivalCharacter::EquipSidearm()
+{
+    bHasSidearm = true;
+    Ammo = 12;
+    Sidearm = GetWorld()->SpawnActor<ASurvivalSidearm>();
+    UpdateSidearmView();
+}
+
+void ASurvivalCharacter::UpdateSidearmView()
+{
+    if (!Sidearm)
+    {
+        return;
+    }
+
+    const FName Hand(TEXT("RightHand"));
+    if (bThirdPerson)
+    {
+        const bool bHandAvailable = GetMesh()->DoesSocketExist(Hand);
+        Sidearm->SetActorHiddenInGame(!bHandAvailable);
+        if (bHandAvailable)
+        {
+            Sidearm->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, Hand);
+            Sidearm->SetActorRelativeRotation(FRotator(0, 0, 90));
+        }
+    }
+    else
+    {
+        Sidearm->AttachToComponent(FirstPersonCamera, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+        Sidearm->SetActorRelativeLocation(FVector(48, 19, -15));
+        Sidearm->SetActorHiddenInGame(false);
+    }
+}
+
+bool ASurvivalCharacter::ShowHitMarker() const
+{
+    return GetWorld()->GetTimeSeconds() < HitMarkerUntil;
+}
+
+void ASurvivalCharacter::PrimaryAction()
+{
+    if (HealthPoints <= 0)
+    {
+        return;
+    }
+    if (bBuildMode)
+    {
+        PlacePlan();
+        return;
+    }
+    if (!bHasSidearm || Ammo <= 0)
+    {
+        return;
+    }
+
+    --Ammo;
+    AddControllerPitchInput(-0.65f);
+    constexpr double Range = 4000.0;
+    FHitResult Aim;
+    if (FindWorldAimHit(Range, Aim))
+    {
+        const FVector Eyes = FirstPersonCamera->GetComponentLocation();
+        const FVector End = Aim.ImpactPoint + (Aim.ImpactPoint - Eyes).GetSafeNormal() * 3.0;
+        FHitResult Hit;
+        if (GetWorld()->LineTraceSingleByChannel(Hit, Eyes, End, ECC_Visibility,
+            FCollisionQueryParams(SCENE_QUERY_STAT(Sidearm), false, this)))
+        {
+            if (ASurvivalZombie* Zombie = Cast<ASurvivalZombie>(Hit.GetActor()))
+            {
+                Zombie->HitBySidearm();
+                HitMarkerUntil = GetWorld()->GetTimeSeconds() + 0.15;
+            }
+        }
+    }
+}
+
+void ASurvivalCharacter::StartDefense()
+{
+    if (HealthPoints > 0 && !Attacker.IsValid())
+    {
+        Attacker = GetWorld()->SpawnActor<ASurvivalZombie>(FVector(3700.0, 1650.0, 112.0), FRotator(0, 90, 0));
+    }
+}
+
+void ASurvivalCharacter::ReceiveZombieHit(int32 Amount)
+{
+    HealthPoints = FMath::Max(0, HealthPoints - Amount);
+    if (HealthPoints == 0)
+    {
+        bBuildMode = false;
+        GetCharacterMovement()->DisableMovement();
+    }
+}
+
+void ASurvivalCharacter::RestartDefense()
+{
+    UGameplayStatics::OpenLevel(this, FName(*UGameplayStatics::GetCurrentLevelName(this)));
 }
 
 void ASurvivalCharacter::ToggleBuildMode()
 {
-    bBuildMode = !bBuildMode;
+    bBuildMode = HealthPoints > 0 && !bBuildMode;
 }
 
 void ASurvivalCharacter::RotatePiece()
@@ -356,6 +505,10 @@ void ASurvivalCharacter::PlacePlan()
 
 void ASurvivalCharacter::RemovePlan()
 {
+    if (HealthPoints <= 0)
+    {
+        return;
+    }
     if (ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>())
     {
         GameMode->RemovePlan(FindPlan());

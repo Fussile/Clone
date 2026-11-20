@@ -47,7 +47,7 @@ def import_asset(source, directory, asset_type, options=None):
     return asset
 
 
-def make_material(directory, name, textures):
+def make_material(directory, name, textures, tint=None):
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     path = f"{directory}/{name}"
     if assets.does_asset_exist(path):
@@ -63,7 +63,20 @@ def make_material(directory, name, textures):
         )
         sample.set_editor_property("texture", texture)
         sample.set_editor_property("sampler_type", sampler)
-        if not editing.connect_material_property(sample, output, prop):
+        expression = sample
+        if tint is not None and prop == unreal.MaterialProperty.MP_BASE_COLOR:
+            color = editing.create_material_expression(
+                material, unreal.MaterialExpressionConstant3Vector, -320, 180
+            )
+            color.set_editor_property("constant", tint)
+            expression = editing.create_material_expression(
+                material, unreal.MaterialExpressionMultiply, -125, 0
+            )
+            if (not editing.connect_material_expressions(sample, output, expression, "A")
+                    or not editing.connect_material_expressions(color, "", expression, "B")):
+                raise RuntimeError(f"Could not tint {path}.")
+            output = ""
+        if not editing.connect_material_property(expression, output, prop):
             raise RuntimeError(f"Could not connect {texture.get_name()} to {path}.")
     editing.recompile_material(material)
     if not assets.save_loaded_asset(material):
@@ -108,16 +121,23 @@ def import_survivor():
     material = make_material(SURVIVOR, "M_Survivor", (
         (skin, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, "RGB", unreal.MaterialProperty.MP_BASE_COLOR),
     ))
+    zombie = make_material(SURVIVOR, "M_StationZombie", (
+        (skin, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, "RGB", unreal.MaterialProperty.MP_BASE_COLOR),
+    ), tint=unreal.LinearColor(0.47, 0.95, 0.38, 1.0))
+    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    for visual in (material, zombie):
+        unreal.MaterialEditingLibrary.set_material_usage(visual, unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH)
+        if not assets.save_loaded_asset(visual):
+            raise RuntimeError(f"Could not save {visual.get_path_name()}.")
+
     materials = mesh.get_editor_property("materials")
     if not materials:
         raise RuntimeError("The survivor mesh has no material slots.")
-    assigned = materials[0].get_editor_property("material_interface")
-    if assigned is None or assigned.get_path_name().startswith("/Engine/"):
-        materials[0].set_editor_property("material_interface", material)
-        mesh.set_editor_property("materials", materials)
-        assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
-        if not assets.save_loaded_asset(mesh):
-            raise RuntimeError("Could not save the survivor material assignment.")
+    for slot in materials:
+        slot.set_editor_property("material_interface", material)
+    mesh.set_editor_property("materials", materials)
+    if not assets.save_loaded_asset(mesh):
+        raise RuntimeError("Could not save the survivor material assignment.")
 
     anim_options = unreal.FbxImportUI()
     anim_options.set_editor_property("automated_import_should_detect_type", False)
@@ -170,6 +190,20 @@ def import_building():
         editing.set_material_usage(material, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
         if not assets.save_loaded_asset(material):
             raise RuntimeError(f"Could not save {material.get_path_name()}.")
+
+    path = f"{BUILDING}/M_DefenseSteel"
+    if not assets.does_asset_exist(path):
+        tools = unreal.AssetToolsHelpers.get_asset_tools()
+        steel = tools.create_asset("M_DefenseSteel", BUILDING, unreal.Material, unreal.MaterialFactoryNew())
+        if steel is None:
+            raise RuntimeError(f"Could not create {path}.")
+        color = editing.create_material_expression(steel, unreal.MaterialExpressionConstant3Vector, -300, 0)
+        color.set_editor_property("constant", unreal.LinearColor(0.075, 0.10, 0.12, 1.0))
+        if not editing.connect_material_property(color, "", prop.MP_BASE_COLOR):
+            raise RuntimeError(f"Could not wire {path}.")
+        editing.recompile_material(steel)
+        if not assets.save_loaded_asset(steel):
+            raise RuntimeError(f"Could not save {path}.")
 
 
 def prepare():

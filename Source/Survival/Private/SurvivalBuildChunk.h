@@ -6,6 +6,18 @@
 
 class UInstancedStaticMeshComponent;
 
+struct FSurvivalFinishedPiece
+{
+    FSurvivalBuildPlacement Placement;
+    int32 Health;
+    int32 MaxHealth;
+
+    FSurvivalMaterials RepairCost() const
+    {
+        return Placement.GetPiece().bStone ? FSurvivalMaterials{0, 1} : FSurvivalMaterials{1, 0};
+    }
+};
+
 UCLASS()
 class ASurvivalBuildChunk : public AActor
 {
@@ -19,6 +31,9 @@ public:
     bool FinishPlan(int32 Index);
     const FSurvivalBuildPlacement* GetPlan(int32 Index) const;
     FSurvivalPlanTarget GetPlanTarget(const FHitResult& Hit);
+    const FSurvivalFinishedPiece* FindFinished(const FHitResult& Hit) const;
+    bool DamageFinished(const FHitResult& Hit, int32 Amount);
+    bool RepairFinished(const FHitResult& Hit, FSurvivalMaterials& Inventory);
 
 protected:
     virtual void BeginPlay() override;
@@ -27,6 +42,8 @@ private:
     bool AddInstances(UInstancedStaticMeshComponent& Component, const FSurvivalBuildPlacement& Placement,
         TArray<int32>& Indices);
     void RebuildGhosts();
+    int32 FindFinishedIndex(const FHitResult& Hit) const;
+    bool AddFinishedInstances(int32 Index);
 
     UPROPERTY()
     TObjectPtr<UInstancedStaticMeshComponent> Timber;
@@ -39,4 +56,7 @@ private:
 
     TArray<FSurvivalBuildPlacement> Plans;
     TMap<int32, int32> GhostOwners;
+    TArray<FSurvivalFinishedPiece> Finished;
+    TMap<int32, int32> TimberOwners;
+    TMap<int32, int32> StoneOwners;
 };

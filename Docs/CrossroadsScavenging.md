@@ -9,4 +9,12 @@ For editor play, run `Tools/prepare_crossroads.py` and open Southern Crossroads.
 5. Try placing another plan in the same space as a ghost and verify the preview rejects it. Try finishing a plan while standing inside it and check that completion waits until you step clear. Verify a solid shop wall blocks interaction with a ghost behind it.
 6. Press **V** and verify that the survivor is visible and animates when idle, moving and jumping. Verify aiming at the crate and ghosts works in both views.
 
-The material counts, plans, and completed pieces reset when the solo session restarts.
+## Defend the station
+
+1. Take the sidearm and 12 rounds from the darker case inside the shop. Press **E** again to verify the case is empty. Check that left-click places plans with the build menu open and fires only after the menu closes.
+2. Start the encounter with **G** while the shop entrance is open and head inside. Check that the zombie comes through the entrance. A hit shows a crosshair marker. Three hits defeat the zombie. The sidearm displays in first person and attaches to the survivor's hand in third person.
+3. Restart with **F5**. Build a timber wall centered in front of the shop doorway, slightly clear of the permanent front wall. Stand inside and press **G**. Watch the finished piece lose health. Press **E** to repair a damaged piece for one unit of its material. Allow a wall to reach zero and verify the zombie can move through the opening. Repeat with stone to compare its longer survival.
+4. Take timber from the cache near the west pump and stone from the cache outside the east wall. Verify adjacent finished pieces keep their health and can still be repaired after one in the same chunk breaks.
+5. Toggle third person and check the textured survivor. During preparation, the generated sun and skylight are switched to movable. Check that the generated map no longer shows the unbuilt-light warning.
+
+The material counts, plans, completed pieces, health and loot reset when the solo session restarts.

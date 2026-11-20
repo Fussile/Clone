@@ -2,6 +2,7 @@
 
 #include "Engine/Canvas.h"
 #include "GameFramework/PlayerController.h"
+#include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
 #include "SurvivalSupplyCrate.h"
 
@@ -25,6 +26,31 @@ void ASurvivalHUD::DrawHUD()
     const float CenterX = Canvas->SizeX * 0.5f;
     const float CenterY = Canvas->SizeY * 0.5f;
     DrawRect(FLinearColor::White, CenterX - 1.5f, CenterY - 1.5f, 3.0f, 3.0f);
+    if (Character->ShowHitMarker())
+    {
+        for (const float X : {-1.0f, 1.0f})
+        {
+            for (const float Y : {-1.0f, 1.0f})
+            {
+                DrawLine(CenterX + X * 4.0f, CenterY + Y * 4.0f,
+                    CenterX + X * 9.0f, CenterY + Y * 9.0f, Cyan, 1.5f);
+            }
+        }
+    }
+
+    const FString Loadout = Character->HasSidearm()
+        ? FString::Printf(TEXT("Sidearm   %d rounds"), Character->GetAmmo())
+        : TEXT("Sidearm   search the shop");
+    DrawRect(Panel, 20.0f, 20.0f, 300.0f, 54.0f);
+    DrawText(FString::Printf(TEXT("Health   %d   |   %s"), Character->GetHealthPoints(), *Loadout),
+        FLinearColor::White, 32.0f, 28.0f);
+    DrawText(Character->IsDefenseActive() ? TEXT("Zombie approaching") : TEXT("[G] Start defense   [F5] Restart"),
+        Muted, 32.0f, 48.0f);
+    if (Character->GetHealthPoints() <= 0)
+    {
+        DrawText(TEXT("Downed   [F5] Restart"), Blocked, CenterX + 14.0f, CenterY + 12.0f);
+        return;
+    }
 
     const FSurvivalMaterials Inventory = Character->GetInventory();
     const FSurvivalMaterials PlannedCost = Character->GetPlannedCost();
@@ -70,8 +96,23 @@ void ASurvivalHUD::DrawHUD()
     }
     else if (const ASurvivalSupplyCrate* Crate = Character->FindSupplyCrate())
     {
-        DrawText(Crate->HasMaterials() ? TEXT("[E] Search building materials") : TEXT("Crate empty"),
+        const TCHAR* Prompt = Crate->HasSidearm() ? TEXT("[E] Take sidearm and ammo") :
+            (Crate->HasMaterials() ? TEXT("[E] Search building materials") : TEXT("Crate empty"));
+        DrawText(Prompt,
             FLinearColor::White, CenterX + 14.0f, CenterY + 12.0f);
+    }
+    else if (const FSurvivalFinishedPiece* Piece = Character->FindFinishedPiece())
+    {
+        DrawText(FString::Printf(TEXT("%s   %d / %d HP"), Piece->Placement.GetPiece().Name,
+            Piece->Health, Piece->MaxHealth), FLinearColor::White, CenterX + 14.0f, CenterY + 12.0f);
+        if (Piece->Health < Piece->MaxHealth)
+        {
+            const FSurvivalMaterials Cost = Piece->RepairCost();
+            const bool bCanRepair = Cost.MissingFrom(Inventory).IsEmpty();
+            const FString Prompt = bCanRepair ? FString::Printf(TEXT("[E] Repair for %s"), *Cost.ToText())
+                : FString::Printf(TEXT("Repair needs %s"), *Cost.ToText());
+            DrawText(Prompt, bCanRepair ? Cyan : Blocked, CenterX + 14.0f, CenterY + 32.0f);
+        }
     }
 }
 
@@ -79,7 +120,7 @@ void ASurvivalHUD::DrawBuildMenu(const ASurvivalCharacter& Character)
 {
     const TConstArrayView<FSurvivalBuildPiece> Pieces = GetSurvivalBuildPieces();
     const float X = 20.0f;
-    const float Y = 20.0f;
+    const float Y = 86.0f;
     constexpr float Width = 298.0f;
     constexpr float Row = 24.0f;
     const float Footer = Y + 42.0f + Row * Pieces.Num();
