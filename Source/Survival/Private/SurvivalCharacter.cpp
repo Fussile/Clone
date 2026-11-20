@@ -53,16 +53,16 @@ ASurvivalCharacter::ASurvivalCharacter()
 void ASurvivalCharacter::BeginPlay()
 {
     Super::BeginPlay();
-    USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr,
+    USkeletalMesh* SurvivorMesh = LoadObject<USkeletalMesh>(nullptr,
         TEXT("/Game/Art/Crossroads/Survivor/characterMedium.characterMedium"));
-    if (!Mesh)
+    if (!SurvivorMesh)
     {
         return;
     }
 
     USkeletalMeshComponent* Body = GetMesh();
-    Body->SetSkeletalMesh(Mesh);
-    const FBoxSphereBounds Bounds = Mesh->GetBounds();
+    Body->SetSkeletalMesh(SurvivorMesh);
+    const FBoxSphereBounds Bounds = SurvivorMesh->GetBounds();
     const double Scale = 175.0 / FMath::Max(1.0, 2.0 * Bounds.BoxExtent.Z);
     const double MeshBottom = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * Scale;
     Body->SetRelativeScale3D(FVector(Scale));
