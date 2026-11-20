@@ -12,21 +12,21 @@ Source: developer's November 20, 2026 project brief and chat clarification. Prop
 | D006 | Confirmed / developer | Assemble complex equipment from quality-bearing parts; average/sum contributes to result |
 | D007 | Confirmed / developer, supersedes brief sections 4 and 6.8 | CC0 is not required. Assets licensed for commercial game use are eligible |
 | D008 | Provisional / agent | Survival is an internal module/project identifier, not a game title |
-| D009 | Proposed / brief | Chunked instanced building, local support updates, host authority |
+| D009 | Confirmed / developer | Start with grid-snapped, chunked building. Instancing, authority and support solver details remain implementation proposals |
 | D010 | Proposed / brief | SteamSockets transport; no host migration |
 | D011 | Proposed / agent | First validate local IP networking, then packaged Steam networking |
 | D012 | Proposed / agent | Create feature modules as implemented rather than empty modules now |
+| D013 | Confirmed / developer | Windows initially. Target 4–8 players including the host |
+| D014 | Confirmed / developer | Generate one standard world and edit it by hand before shipping. Player-selectable procedural worlds are deferred |
 
 ## Open decisions
 
 - Working title.
-- Maximum co-op size and minimum host hardware.
-- Target platforms: Windows only, Linux, Steam Deck?
-- Handcrafted versus generated production world.
+- Minimum host hardware and performance budgets at 4 and 8 players.
 - Day duration and whether seven-day assaults are fixed or configurable.
 - Future terrain deformation scope.
 - Save ownership, location and schema; whether player progress is world-specific or portable across hosts.
-- Approval or revisions of proposed architecture, including material/load-based structural integrity and part aggregation rules.
+- Open implementation details include material/load-based structural integrity and part aggregation rules.
 
 ## Milestones
 

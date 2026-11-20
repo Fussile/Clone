@@ -24,7 +24,7 @@ Use Source/<Module>/Public and Private; Config for configuration, Content for di
 
 ## World and building proposal
 
-Start with a small authored test map, not production world streaming. Landscape/World Partition remains a candidate for the large world. Query contracts should cover ground support, obstruction and damageable targets without exposing terrain storage.
+Use a small map for movement testing. For production, generate one standard world in the editor from a recorded seed and generator version, then bake it into editable level content. Keep hand-authored overrides separate from generated output so selectively regenerating an area cannot silently discard edits. Ship the curated result as the standard world. Defer player-facing world generation. Landscape/World Partition remains a candidate for streaming. Query contracts should cover ground support, obstruction and damageable targets without exposing terrain storage.
 
 Building pieces use stable IDs in chunk managers, instanced rendering and bounded replication. Do not use one actor per piece. Translate instance hit indices into stable IDs before gameplay operations. Validate placement distance, resources and occupancy on the host.
 
@@ -44,4 +44,4 @@ Average/sum quality is required intent; weighted per-stat formulas are proposals
 
 ## Performance and scope
 
-Measure host frame time, AI update cost, active zombies, replication bandwidth, building edits and navigation rebuild cost. No numeric shipping budgets are fixed until player count and host hardware are chosen. Defer Mass/Iris and production world streaming decisions until a measured need and UE5.8 validation exist.
+Measure host frame time, AI update cost, active zombies, replication bandwidth, building edits and navigation rebuild cost. No numeric shipping budgets are fixed until host hardware is chosen and measured at four and eight players. Defer Mass/Iris and production world streaming decisions until a measured need and UE5.8 validation exist.
