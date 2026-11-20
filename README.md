@@ -8,6 +8,8 @@ Download `Survival-Windows-x64.zip` from [Releases](https://github.com/Fussile/C
 
 The solo playtest starts outside the Southern Crossroads gas station. Use **WASD** and the mouse to move and look, **Space** to jump, and **E** to search the supply crate in the shop.
 
+Each supply buys one barricade wall. Press **B** to enter build mode, aim at nearby level ground, press **R** to rotate the preview, and **left-click** to place it.
+
 ## Build a playtest ZIP
 
 On Windows with Unreal Engine 5.8 and its supported C++ toolchain installed, run this from the repository root in PowerShell. Use your own UE 5.8 installation path.
@@ -16,7 +18,7 @@ On Windows with Unreal Engine 5.8 and its supported C++ toolchain installed, run
 powershell -ExecutionPolicy Bypass -File .\Tools\package_windows.ps1 -EngineRoot 'C:\Program Files\Epic Games\UE_5.8'
 ```
 
-The script builds the editor target, imports the starter art, generates the playtest map if needed, places the crate, and cooks a standalone Windows build. It writes `Dist/Survival-Windows-x64.zip` with app-local prerequisites. Before publishing, extract the ZIP on a Windows PC without Unreal Editor and verify startup at the station, movement, and the crate awarding three supplies once. Attach the verified ZIP to a GitHub Release for the commit you built.
+The script builds the editor target, imports the starter art, generates the playtest map if needed, places the crate, and cooks a standalone Windows build. It writes `Dist/Survival-Windows-x64.zip` with app-local prerequisites. Before publishing, extract the ZIP on a Windows PC without Unreal Editor and run the [scavenging and building playtest](Docs/CrossroadsScavenging.md). Attach the verified ZIP to a GitHub Release for the commit you built.
 
 For editor-only work, build and open `Survival.uproject`, then use **File → Execute Python Script** to run `Tools/prepare_crossroads.py`. See the [blockout guide](Docs/CrossroadsBlockout.md) for level editing and the [art guide](Docs/CrossroadsArt.md) for the imported assets.
 
