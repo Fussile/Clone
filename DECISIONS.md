@@ -14,10 +14,11 @@ Source: developer's November 20, 2026 project brief and chat clarification. Prop
 | D008 | Provisional / agent | Survival is an internal module/project identifier, not a game title |
 | D009 | Confirmed / developer | Start with grid-snapped, chunked building. Instancing, authority and support solver details remain implementation proposals |
 | D010 | Proposed / brief | SteamSockets transport; no host migration |
-| D011 | Proposed / agent | First validate local IP networking, then packaged Steam networking |
+| D011 | Proposed / agent | When co-op integration starts, validate local IP networking before packaged Steam networking |
 | D012 | Proposed / agent | Create feature modules as implemented rather than empty modules now |
 | D013 | Confirmed / developer | Windows initially. Target 4–8 players including the host |
 | D014 | Confirmed / developer | Generate one standard world and edit it by hand before shipping. Player-selectable procedural worlds are deferred |
+| D015 | Confirmed / developer | Build and iterate on the first playable slice in single-player. Integrate multiplayer later |
 
 ## Open decisions
 
@@ -30,8 +31,10 @@ Source: developer's November 20, 2026 project brief and chat clarification. Prop
 
 ## Milestones
 
-M0: project builds, minimal C++ character, test map, repeatable two-process host/join test, followed by packaged Steam validation.
-M1: grid building, destruction, support rules, bounded chunk replication and stress test.
+M0: project builds, minimal C++ character, editable southern crossroads blockout and solo movement playtest.
+M1: grid building, destruction, support rules, and a local stress test.
 M2: survival/time, inventory/crafting, one zombie that attacks building pieces.
 M3: small playable world, first horde, one assembled rifle, practice skills and books.
+Later co-op milestone: add gameplay replication, session handling, two-process host/join and packaged Steam validation.
+
 M4+: traders, quests, content expansion, art, future terrain work.

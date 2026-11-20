@@ -26,19 +26,19 @@ Use Source/<Module>/Public and Private; Config for configuration, Content for di
 
 Use a small map for movement testing. For production, generate one standard world in the editor from a recorded seed and generator version, then bake it into editable level content. Keep hand-authored overrides separate from generated output so selectively regenerating an area cannot silently discard edits. Ship the curated result as the standard world. Defer player-facing world generation. Landscape/World Partition remains a candidate for streaming. Query contracts should cover ground support, obstruction and damageable targets without exposing terrain storage.
 
-Building pieces use stable IDs in chunk managers, instanced rendering and bounded replication. Do not use one actor per piece. Translate instance hit indices into stable IDs before gameplay operations. Validate placement distance, resources and occupancy on the host.
+Building pieces use stable IDs in chunk managers, and instanced rendering. Do not use one actor per piece. Translate instance hit indices into stable IDs before gameplay operations. Validate placement distance, resources and occupancy in shared gameplay code.
 
 Connectivity is only the first support check: a grounded path alone permits infinite cantilevers. Define load/span/material rules before calling structural integrity complete. Incremental processing still needs a bounded queue and a defined pending state when a removed support affects a large structure.
 
 ## Authority and persistence proposal
 
-The listen host validates gameplay changes; clients send intents. CharacterMovement provides the initial movement replication baseline. Building snapshots carry a revision, with queued deltas applied after that revision; cap snapshot bandwidth and test late joining during edits.
+For the solo slice, gameplay calls the state-changing functions directly. Keep inventory and building rules in gameplay code that the future host can call. During co-op integration, the listen host validates gameplay changes; clients send intents. CharacterMovement provides the initial movement replication baseline. Building snapshots carry a revision, with queued deltas applied after that revision; cap snapshot bandwidth and test late joining during edits.
 
-Keep platform transport outside gameplay. Start with local IP/LAN tests, then separately validate SteamSockets sessions on packaged builds. No host migration is proposed. A host-owned save keyed by world ID and verified player identity is the simplest default, but cross-host inventory transfer is a separate unresolved design choice.
+Keep platform transport outside gameplay. When multiplayer work begins, start with local IP/LAN tests, then separately validate SteamSockets sessions on packaged builds. No host migration is proposed. A host-owned save keyed by world ID and verified player identity is the simplest default, but cross-host inventory transfer is a separate unresolved design choice.
 
 ## Items and progression proposal
 
-Use data assets for definitions and explicit schemas for instances. Replicate part quality, durability and rolled modifiers, plus definition/version IDs. Deterministic recomputation requires identical content versions, canonical part order and defined rounding. Avoid client-authoritative quality or XP.
+Use data assets for definitions and explicit schemas for instances. For later co-op, replicate part quality, durability and rolled modifiers, plus definition/version IDs. Deterministic recomputation requires identical content versions, canonical part order and defined rounding. Avoid client-authoritative quality or XP.
 
 Average/sum quality is required intent; weighted per-stat formulas are proposals. Minimum reliability and minimum jam probability have opposite meanings: normalize favorable/unfavorable stats before selecting aggregation rules.
 
