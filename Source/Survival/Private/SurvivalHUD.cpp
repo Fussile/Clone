@@ -5,11 +5,18 @@
 #include "SurvivalCharacter.h"
 #include "SurvivalSupplyCrate.h"
 
+namespace
+{
+const FLinearColor Panel(0.02f, 0.04f, 0.05f, 0.88f);
+const FLinearColor Cyan(0.42f, 0.88f, 1.0f);
+const FLinearColor Muted(0.72f, 0.76f, 0.78f);
+const FLinearColor Blocked(1.0f, 0.51f, 0.36f);
+}
+
 void ASurvivalHUD::DrawHUD()
 {
     Super::DrawHUD();
-    const ASurvivalCharacter* Character = PlayerOwner
-        ? Cast<ASurvivalCharacter>(PlayerOwner->GetPawn()) : nullptr;
+    const ASurvivalCharacter* Character = PlayerOwner ? Cast<ASurvivalCharacter>(PlayerOwner->GetPawn()) : nullptr;
     if (!Canvas || !Character)
     {
         return;
@@ -18,64 +25,108 @@ void ASurvivalHUD::DrawHUD()
     const float CenterX = Canvas->SizeX * 0.5f;
     const float CenterY = Canvas->SizeY * 0.5f;
     DrawRect(FLinearColor::White, CenterX - 1.5f, CenterY - 1.5f, 3.0f, 3.0f);
-    DrawText(FString::Printf(TEXT("Supplies: %d"), Character->GetSupplyCount()),
-        FLinearColor::White, 24.0f, Canvas->SizeY - 48.0f);
+
+    const FSurvivalMaterials Inventory = Character->GetInventory();
+    const FSurvivalMaterials PlannedCost = Character->GetPlannedCost();
+    const FSurvivalMaterials Shortage = PlannedCost.MissingFrom(Inventory);
+    const float PanelY = Canvas->SizeY - 112.0f;
+    DrawRect(Panel, 20.0f, PanelY, 322.0f, 92.0f);
+    DrawText(FString::Printf(TEXT("Inventory   %d timber / %d stone"), Inventory.Timber, Inventory.Stone),
+        FLinearColor::White, 32.0f, PanelY + 10.0f);
+    DrawText(FString::Printf(TEXT("Plans require   %s"), *PlannedCost.ToText()), Cyan, 32.0f, PanelY + 30.0f);
+    DrawText(FString::Printf(TEXT("Still needed   %s"), *Shortage.ToText()),
+        Shortage.IsEmpty() ? Muted : Blocked, 32.0f, PanelY + 50.0f);
+    DrawText(TEXT("[B] Build menu   [V] Switch view"), Muted, 32.0f, PanelY + 70.0f);
+
     if (Character->IsBuilding())
     {
-        const TOptional<FSurvivalWallPlacement> Placement = Character->FindWallPlacement();
-        const bool bCanBuild = Placement.IsSet() && Placement->bClear && Character->GetSupplyCount() > 0;
-        const FLinearColor Color = bCanBuild ? FLinearColor(0.25f, 1.0f, 0.4f) : FLinearColor(1.0f, 0.35f, 0.25f);
-        const TCHAR* Status = TEXT("Aim at level ground within 5 m");
-        if (Character->GetSupplyCount() <= 0)
+        DrawBuildMenu(*Character);
+        if (const TOptional<FSurvivalBuildPlacement> Placement = Character->FindPlacement(); Placement.IsSet())
         {
-            Status = TEXT("Need 1 supply");
+            DrawPlacement(*Placement, Placement->bClear ? Cyan : Blocked);
         }
-        else if (Placement.IsSet())
-        {
-            Status = bCanBuild ? TEXT("[LMB] Place wall (1 supply)") : TEXT("Wall needs clear, supported ground");
-        }
-        DrawText(Status, Color, CenterX + 12.0f, CenterY + 14.0f);
-        DrawText(TEXT("[R] Rotate   [B] Exit building"), FLinearColor::White, 24.0f, Canvas->SizeY - 72.0f);
-        if (Placement.IsSet())
-        {
-            DrawWallPreview(*Placement, Color);
-        }
-        return;
     }
 
-    DrawText(TEXT("[B] Build wall"), FLinearColor::White, 24.0f, Canvas->SizeY - 72.0f);
-    if (const ASurvivalSupplyCrate* Crate = Character->FindSupplyCrate())
+    const FSurvivalPlanTarget Target = Character->FindPlan();
+    if (const FSurvivalBuildPlacement* Plan = Target.GetPlan())
     {
-        const FString Prompt = Crate->HasSupplies() ? TEXT("[E] Search crate") : TEXT("Crate empty");
-        DrawText(Prompt, FLinearColor::White, CenterX + 12.0f, CenterY + 14.0f);
+        const FSurvivalMaterials Missing = Plan->GetPiece().Cost.MissingFrom(Inventory);
+        FString Prompt = TEXT("[E] Finish   [X] Remove plan");
+        FLinearColor Color = Cyan;
+        if (!Missing.IsEmpty())
+        {
+            Prompt = FString::Printf(TEXT("Need %s   [X] Remove"), *Missing.ToText());
+            Color = Blocked;
+        }
+        else if (!Character->CanFinish(*Plan))
+        {
+            Prompt = TEXT("Clear the footprint   [X] Remove");
+            Color = Blocked;
+        }
+
+        DrawText(FString::Printf(TEXT("%s   %s"), Plan->GetPiece().Name, *Plan->GetPiece().Cost.ToText()),
+            FLinearColor::White, CenterX + 14.0f, CenterY + 12.0f);
+        DrawText(Prompt, Color, CenterX + 14.0f, CenterY + 32.0f);
+    }
+    else if (const ASurvivalSupplyCrate* Crate = Character->FindSupplyCrate())
+    {
+        DrawText(Crate->HasMaterials() ? TEXT("[E] Search building materials") : TEXT("Crate empty"),
+            FLinearColor::White, CenterX + 14.0f, CenterY + 12.0f);
     }
 }
 
-void ASurvivalHUD::DrawWallPreview(const FSurvivalWallPlacement& Placement, const FLinearColor& Color)
+void ASurvivalHUD::DrawBuildMenu(const ASurvivalCharacter& Character)
 {
-    FVector2D Corners[8];
-    const FVector Half = FSurvivalWallPlacement::HalfExtent;
-    for (int32 Index = 0; Index < UE_ARRAY_COUNT(Corners); ++Index)
+    const TConstArrayView<FSurvivalBuildPiece> Pieces = GetSurvivalBuildPieces();
+    const float X = 20.0f;
+    const float Y = 20.0f;
+    constexpr float Width = 298.0f;
+    constexpr float Row = 24.0f;
+    const float Footer = Y + 42.0f + Row * Pieces.Num();
+    DrawRect(Panel, X, Y, Width, Footer - Y + 49.0f);
+    DrawText(TEXT("BUILD PLAN"), Cyan, X + 12.0f, Y + 12.0f, nullptr, 1.25f);
+    for (int32 Index = 0; Index < Pieces.Num(); ++Index)
     {
-        const FVector Offset(Index & 1 ? Half.X : -Half.X, Index & 2 ? Half.Y : -Half.Y,
-            Index & 4 ? Half.Z : -Half.Z);
-        const FVector Point = Placement.Center + Placement.Rotation.RotateVector(Offset);
-        if (!PlayerOwner->ProjectWorldLocationToScreen(Point, Corners[Index], /*bPlayerViewportRelative=*/true))
+        const FSurvivalBuildPiece& Piece = Pieces[Index];
+        const float Top = Y + 40.0f + Row * Index;
+        const bool bSelected = Index == Character.GetSelectedPiece();
+        if (bSelected)
         {
-            return;
+            DrawRect(FLinearColor(0.10f, 0.23f, 0.29f, 0.95f), X + 7.0f, Top, Width - 14.0f, Row);
+            DrawRect(Cyan, X + 7.0f, Top, 2.0f, Row);
         }
+        DrawText(Piece.Name, bSelected ? FLinearColor::White : Muted, X + 15.0f, Top + 4.0f);
+        DrawText(Piece.Cost.ToText(), bSelected ? Cyan : Muted, X + 193.0f, Top + 4.0f);
     }
 
-    for (int32 Index = 0; Index < UE_ARRAY_COUNT(Corners); ++Index)
+    DrawText(TEXT("[Scroll] Select   [R] Rotate   [B] Close"), Muted, X + 12.0f, Footer + 4.0f);
+    DrawText(TEXT("[LMB] Place on level ground"), FLinearColor::White, X + 12.0f, Footer + 24.0f);
+}
+
+void ASurvivalHUD::DrawPlacement(const FSurvivalBuildPlacement& Placement, const FLinearColor& Color)
+{
+    for (const FBox& Box : Placement.GetPiece().Boxes)
     {
-        // Flipping one axis bit reaches the corner at the other end of an edge.
-        for (int32 AxisBit : {1, 2, 4})
+        FVector2D Corners[8];
+        bool Visible[8];
+        for (int32 Index = 0; Index < UE_ARRAY_COUNT(Corners); ++Index)
         {
-            if (!(Index & AxisBit))
+            const FVector Offset(Index & 1 ? Box.Max.X : Box.Min.X, Index & 2 ? Box.Max.Y : Box.Min.Y,
+                Index & 4 ? Box.Max.Z : Box.Min.Z);
+            const FVector Point = Placement.Base + Placement.Rotation.RotateVector(Offset);
+            Visible[Index] = PlayerOwner->ProjectWorldLocationToScreen(Point, Corners[Index], true);
+        }
+
+        for (int32 Index = 0; Index < UE_ARRAY_COUNT(Corners); ++Index)
+        {
+            for (const int32 AxisBit : {1, 2, 4})
             {
-                const FVector2D& Start = Corners[Index];
-                const FVector2D& End = Corners[Index | AxisBit];
-                DrawLine(Start.X, Start.Y, End.X, End.Y, Color, 2.0f);
+                if (!(Index & AxisBit) && Visible[Index] && Visible[Index | AxisBit])
+                {
+                    const FVector2D& Start = Corners[Index];
+                    const FVector2D& End = Corners[Index | AxisBit];
+                    DrawLine(Start.X, Start.Y, End.X, End.Y, Color, 1.5f);
+                }
             }
         }
     }

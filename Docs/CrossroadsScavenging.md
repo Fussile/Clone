@@ -1,15 +1,12 @@
-# Gas station scavenging playtest
+# Crossroads building playtest
 
-The Windows playtest starts in L_SouthernCrossroads with the tagged crate already in the shop. For editor play, run `Tools/prepare_crossroads.py` as described in the [blockout guide](CrossroadsBlockout.md). You can move the tagged crate in the editor after placement.
+For editor play, run `Tools/prepare_crossroads.py` and open Southern Crossroads. The Windows playtest runs preparation as part of packaging.
 
-Press Play. Walk into the shop, approach the crate, aim at it and press **E**. The supplies counter should move from zero to three. The empty crate should award nothing on a second press. From farther than 2.6 m or through a shop wall, the prompt should disappear.
+1. Before looting, press **B** and aim at a clear spot on the forecourt within 5 m. Scroll through the eight shapes and their costs. Select **Timber wall**, press **R** to rotate, and left-click to place a cyan blueprint. Walk through it and check that inventory stays at zero and **Still needed** rises to three timber.
+2. Aim at the blueprint within 2.6 m. Press **E** with zero timber and check that it remains a ghost. Place another blueprint a few meters away, then aim at it and press **X**. Check that the ghost disappears and the totals drop by its recipe cost.
+3. Enter the shop and press **E** on the default crate. It gives 24 timber and 12 stone once. The total planned cost stays visible and the shortage drops to zero for the remaining wall.
+4. Aim at the first wall and press **E**. Verify that the ghost becomes a textured, collidable wall and three timber is deducted. Repeat with a stone piece. Verify that a completed door frame has a walkable opening, that stairs are climbable, and that **X** applies only to blueprints.
+5. Try placing another plan in the same space as a ghost and verify the preview rejects it. Try finishing a plan while standing inside it and check that completion waits until you step clear. Verify a solid shop wall blocks interaction with a ghost behind it.
+6. Press **V** and verify that the survivor is visible and animates when idle, moving and jumping. Verify aiming at the crate and ghosts works in both views.
 
-## Build a barricade
-
-1. Loot the three supplies and walk outside. Press **B** and aim at level ground a few meters away. A green outline means the wall can be placed for one supply.
-2. Left-click to place it, walk into it to check collision, and confirm the HUD reads two supplies. Try building inside that wall or the player capsule. Invalid placement displays in red and costs zero supplies.
-3. Aim at the next grid position and place a second wall. Use **R** to rotate the third wall by 90 degrees before placing it on another clear spot. With zero supplies, left-click should place nothing. Press **B** to leave build mode.
-
-The supplies counter, searched state and walls reset on each play session. This pass adds ground-supported wall placement and collision. Stacking, damage, repair and saves are later work.
-
-The map script skips a crate it has already placed. The original blockout remains editable, including if you built it before this change.
+The material counts, plans, and completed pieces reset when the solo session restarts.

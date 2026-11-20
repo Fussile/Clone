@@ -1,16 +1,31 @@
 #include "SurvivalCharacter.h"
-#include "SurvivalGameMode.h"
-#include "SurvivalSupplyCrate.h"
 
+#include "Animation/AnimSequence.h"
 #include "Camera/CameraComponent.h"
 #include "CollisionQueryParams.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/HitResult.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "SurvivalBuildChunk.h"
+#include "SurvivalGameMode.h"
+#include "SurvivalSupplyCrate.h"
+
+namespace
+{
+constexpr double InteractReach = 260.0;
+constexpr double BuildReach = 500.0;
+constexpr double SupportTolerance = 8.0;
+}
 
 ASurvivalCharacter::ASurvivalCharacter()
 {
+    PrimaryActorTick.bCanEverTick = true;
     bReplicates = true;
     SetReplicateMovement(true);
     bUseControllerRotationYaw = true;
@@ -19,6 +34,70 @@ ASurvivalCharacter::ASurvivalCharacter()
     FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
     FirstPersonCamera->SetRelativeLocation(FVector(0.0, 0.0, BaseEyeHeight));
     FirstPersonCamera->bUsePawnControlRotation = true;
+
+    CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
+    CameraBoom->SetupAttachment(GetCapsuleComponent());
+    CameraBoom->SetRelativeLocation(FVector(0, 0, BaseEyeHeight));
+    CameraBoom->TargetArmLength = 300.0;
+    CameraBoom->SocketOffset = FVector(0, 55, 10);
+    CameraBoom->bUsePawnControlRotation = true;
+
+    ThirdPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("ThirdPersonCamera"));
+    ThirdPersonCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+    ThirdPersonCamera->SetAutoActivate(false);
+
+    GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    GetMesh()->SetOwnerNoSee(true);
+}
+
+void ASurvivalCharacter::BeginPlay()
+{
+    Super::BeginPlay();
+    USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr,
+        TEXT("/Game/Art/Crossroads/Survivor/characterMedium.characterMedium"));
+    if (!Mesh)
+    {
+        return;
+    }
+
+    USkeletalMeshComponent* Body = GetMesh();
+    Body->SetSkeletalMesh(Mesh);
+    const FBoxSphereBounds Bounds = Mesh->GetBounds();
+    const double Scale = 175.0 / FMath::Max(1.0, 2.0 * Bounds.BoxExtent.Z);
+    const double MeshBottom = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * Scale;
+    Body->SetRelativeScale3D(FVector(Scale));
+    Body->SetRelativeLocation(FVector(0, 0, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - MeshBottom));
+    Body->SetRelativeRotation(FRotator(0, -90, 0));
+
+    IdleAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Art/Crossroads/Survivor/idle.idle"));
+    RunAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Art/Crossroads/Survivor/run.run"));
+    JumpAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Art/Crossroads/Survivor/jump.jump"));
+    UpdateSurvivorAnimation();
+}
+
+void ASurvivalCharacter::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+    UpdateSurvivorAnimation();
+}
+
+void ASurvivalCharacter::UpdateSurvivorAnimation()
+{
+    const bool bAirborne = GetCharacterMovement()->IsFalling();
+    UAnimSequence* Desired = IdleAnimation.Get();
+    if (bAirborne && JumpAnimation)
+    {
+        Desired = JumpAnimation.Get();
+    }
+    else if (RunAnimation && GetVelocity().SizeSquared2D() > FMath::Square(20.0))
+    {
+        Desired = RunAnimation.Get();
+    }
+    if (Desired && Desired != CurrentAnimation.Get())
+    {
+        CurrentAnimation = Desired;
+        GetMesh()->PlayAnimation(Desired, Desired != JumpAnimation.Get());
+    }
 }
 
 void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -30,10 +109,14 @@ void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
     PlayerInputComponent->BindAxis(TEXT("LookUp"), this, &APawn::AddControllerPitchInput);
     PlayerInputComponent->BindAction(TEXT("Jump"), IE_Pressed, this, &ACharacter::Jump);
     PlayerInputComponent->BindAction(TEXT("Jump"), IE_Released, this, &ACharacter::StopJumping);
-    PlayerInputComponent->BindAction(TEXT("Scavenge"), IE_Pressed, this, &ASurvivalCharacter::Scavenge);
+    PlayerInputComponent->BindAction(TEXT("Interact"), IE_Pressed, this, &ASurvivalCharacter::Interact);
     PlayerInputComponent->BindAction(TEXT("ToggleBuildMode"), IE_Pressed, this, &ASurvivalCharacter::ToggleBuildMode);
-    PlayerInputComponent->BindAction(TEXT("RotateWall"), IE_Pressed, this, &ASurvivalCharacter::RotateWall);
-    PlayerInputComponent->BindAction(TEXT("PlaceWall"), IE_Pressed, this, &ASurvivalCharacter::PlaceWall);
+    PlayerInputComponent->BindAction(TEXT("RotatePiece"), IE_Pressed, this, &ASurvivalCharacter::RotatePiece);
+    PlayerInputComponent->BindAction(TEXT("NextPiece"), IE_Pressed, this, &ASurvivalCharacter::NextPiece);
+    PlayerInputComponent->BindAction(TEXT("PreviousPiece"), IE_Pressed, this, &ASurvivalCharacter::PreviousPiece);
+    PlayerInputComponent->BindAction(TEXT("PlacePlan"), IE_Pressed, this, &ASurvivalCharacter::PlacePlan);
+    PlayerInputComponent->BindAction(TEXT("RemovePlan"), IE_Pressed, this, &ASurvivalCharacter::RemovePlan);
+    PlayerInputComponent->BindAction(TEXT("ToggleView"), IE_Pressed, this, &ASurvivalCharacter::ToggleView);
 }
 
 void ASurvivalCharacter::MoveForward(float Value)
@@ -46,25 +129,94 @@ void ASurvivalCharacter::MoveRight(float Value)
     AddMovementInput(GetActorRightVector(), Value);
 }
 
+void ASurvivalCharacter::ToggleView()
+{
+    bThirdPerson = !bThirdPerson;
+    FirstPersonCamera->SetActive(!bThirdPerson);
+    ThirdPersonCamera->SetActive(bThirdPerson);
+    GetMesh()->SetOwnerNoSee(!bThirdPerson);
+}
+
+const UCameraComponent& ASurvivalCharacter::GetAimCamera() const
+{
+    return bThirdPerson ? *ThirdPersonCamera : *FirstPersonCamera;
+}
+
+bool ASurvivalCharacter::FindWorldAimHit(double Reach, FHitResult& Hit) const
+{
+    const UCameraComponent& Camera = GetAimCamera();
+    const FVector Start = Camera.GetComponentLocation();
+    const double Distance = Reach + FVector::Dist(Start, FirstPersonCamera->GetComponentLocation());
+    return GetWorld()->LineTraceSingleByChannel(Hit, Start, Start + Camera.GetForwardVector() * Distance,
+        ECC_Visibility, FCollisionQueryParams(SCENE_QUERY_STAT(CrossroadsAim), false, this));
+}
+
+bool ASurvivalCharacter::HasReachTo(const FVector& Point, double Reach) const
+{
+    const FVector Eyes = FirstPersonCamera->GetComponentLocation();
+    if (FVector::DistSquared(Eyes, Point) > FMath::Square(Reach))
+    {
+        return false;
+    }
+
+    // Stop just shy of the target surface so a crate does not occlude itself.
+    const FVector End = Point - (Point - Eyes).GetSafeNormal() * 0.5;
+    return !GetWorld()->LineTraceTestByChannel(Eyes, End, ECC_Visibility,
+        FCollisionQueryParams(SCENE_QUERY_STAT(CrossroadsReach), false, this));
+}
+
 ASurvivalSupplyCrate* ASurvivalCharacter::FindSupplyCrate() const
 {
-    constexpr float ReachCm = 260.0f;
-    const FVector Start = FirstPersonCamera->GetComponentLocation();
-    const FVector End = Start + FirstPersonCamera->GetForwardVector() * ReachCm;
-    const FCollisionQueryParams Query(SCENE_QUERY_STAT(Scavenge), false, this);
     FHitResult Hit;
-    if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Query))
+    if (FindWorldAimHit(InteractReach, Hit) && HasReachTo(Hit.ImpactPoint, InteractReach))
     {
         return Cast<ASurvivalSupplyCrate>(Hit.GetActor());
     }
     return nullptr;
 }
 
-void ASurvivalCharacter::Scavenge()
+FSurvivalPlanTarget ASurvivalCharacter::FindPlan() const
 {
-    if (ASurvivalSupplyCrate* Crate = FindSupplyCrate())
+    const UCameraComponent& Camera = GetAimCamera();
+    const FVector Start = Camera.GetComponentLocation();
+    FHitResult Blocker;
+    const FVector End = FindWorldAimHit(InteractReach, Blocker) ? Blocker.ImpactPoint :
+        Start + Camera.GetForwardVector() *
+        (InteractReach + FVector::Dist(Start, FirstPersonCamera->GetComponentLocation()));
+
+    FHitResult Hit;
+    if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_GameTraceChannel1,
+        FCollisionQueryParams(SCENE_QUERY_STAT(SelectBuildPlan), false, this))
+        && HasReachTo(Hit.ImpactPoint, InteractReach))
     {
-        SupplyCount += Crate->TakeSupplies();
+        if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
+        {
+            return Chunk->GetPlanTarget(Hit);
+        }
+    }
+    return {};
+}
+
+FSurvivalMaterials ASurvivalCharacter::GetPlannedCost() const
+{
+    const ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
+    return GameMode ? GameMode->GetPlannedCost() : FSurvivalMaterials{};
+}
+
+void ASurvivalCharacter::Interact()
+{
+    const FSurvivalPlanTarget Target = FindPlan();
+    if (const FSurvivalBuildPlacement* Plan = Target.GetPlan())
+    {
+        if (ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
+            GameMode && CanFinish(*Plan))
+        {
+            GameMode->FinishPlan(Target, Inventory);
+        }
+    }
+    else if (ASurvivalSupplyCrate* Crate = FindSupplyCrate())
+    {
+        Inventory.Add(Crate->TakeMaterials());
     }
 }
 
@@ -73,81 +225,139 @@ void ASurvivalCharacter::ToggleBuildMode()
     bBuildMode = !bBuildMode;
 }
 
-void ASurvivalCharacter::RotateWall()
+void ASurvivalCharacter::RotatePiece()
 {
     if (bBuildMode)
     {
-        bWallRotated = !bWallRotated;
+        QuarterTurns = (QuarterTurns + 1) % 4;
     }
 }
 
-TOptional<FSurvivalWallPlacement> ASurvivalCharacter::FindWallPlacement() const
+void ASurvivalCharacter::NextPiece()
 {
-    constexpr double Reach = 500.0;
-    constexpr double SupportTolerance = 8.0;
-    const FVector View = FirstPersonCamera->GetComponentLocation();
-    const FVector End = View + FirstPersonCamera->GetForwardVector() * Reach;
-    const UWorld* World = GetWorld();
-    const FCollisionQueryParams TraceQuery(SCENE_QUERY_STAT(WallPlacement), false, this);
-    FHitResult AimHit;
-    if (!World->LineTraceSingleByChannel(AimHit, View, End, ECC_Visibility, TraceQuery)
-        || AimHit.ImpactNormal.Z < 0.95)
+    if (bBuildMode)
+    {
+        SelectedPiece = (SelectedPiece + 1) % GetSurvivalBuildPieces().Num();
+    }
+}
+
+void ASurvivalCharacter::PreviousPiece()
+{
+    if (bBuildMode)
+    {
+        const int32 Count = GetSurvivalBuildPieces().Num();
+        SelectedPiece = (SelectedPiece + Count - 1) % Count;
+    }
+}
+
+bool ASurvivalCharacter::HasSupport(const FSurvivalBuildPlacement& Placement) const
+{
+    const FVector Probe(0, 0, SupportTolerance);
+    const FCollisionQueryParams Query(SCENE_QUERY_STAT(BuildSupport), false, this);
+    const auto TraceSupport = [&](double LocalX, double LocalY, FHitResult& Hit)
+    {
+        const FVector Foot = Placement.Base + Placement.Rotation.RotateVector(FVector(LocalX, LocalY, 0));
+        return GetWorld()->LineTraceSingleByChannel(Hit, Foot + Probe, Foot - Probe, ECC_Visibility, Query)
+            && Hit.ImpactNormal.Z >= 0.95 && Hit.GetComponent()
+            && (Hit.GetComponent()->Mobility == EComponentMobility::Static
+                || Cast<ASurvivalBuildChunk>(Hit.GetActor()));
+    };
+
+    // Only the boxes that reach the ground need support. Door lintels and window caps are carried by the frame.
+    for (const FBox& Box : Placement.GetPiece().Boxes)
+    {
+        if (Box.Min.Z != 0.0)
+        {
+            continue;
+        }
+        FHitResult Hit;
+        const FVector Center = Box.GetCenter();
+        if (!TraceSupport(Center.X, Center.Y, Hit))
+        {
+            return false;
+        }
+        // A completed piece can support a centered floor or other part wider than its own top.
+        if (Cast<ASurvivalBuildChunk>(Hit.GetActor()))
+        {
+            continue;
+        }
+        for (const double X : {Box.Min.X + 2.0, Box.Max.X - 2.0})
+        {
+            for (const double Y : {Box.Min.Y + 2.0, Box.Max.Y - 2.0})
+            {
+                if (!TraceSupport(X, Y, Hit))
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+bool ASurvivalCharacter::IsFootprintClear(const FSurvivalBuildPlacement& Placement, bool bPlanning) const
+{
+    FCollisionQueryParams Query(SCENE_QUERY_STAT(BuildOverlap), false);
+    if (bPlanning)
+    {
+        Query.AddIgnoredActor(this);
+    }
+
+    for (const FBox& Box : Placement.GetPiece().Boxes)
+    {
+        // A small inset lets adjoining boxes touch without rejecting the placement.
+        const FCollisionShape Shape = FCollisionShape::MakeBox(Box.GetExtent() - FVector(0.5));
+        const FVector Center = Placement.WorldCenter(Box);
+        if (GetWorld()->OverlapBlockingTestByChannel(Center, Placement.Rotation, ECC_Pawn, Shape, Query)
+            || (bPlanning && GetWorld()->OverlapBlockingTestByChannel(
+                Center, Placement.Rotation, ECC_GameTraceChannel1, Shape, Query)))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
+{
+    FHitResult Hit;
+    if (!FindWorldAimHit(BuildReach, Hit) || Hit.ImpactNormal.Z < 0.95)
     {
         return {};
     }
 
-    const FVector Snapped(
-        FMath::GridSnap(AimHit.ImpactPoint.X, FSurvivalWallPlacement::GridSize),
-        FMath::GridSnap(AimHit.ImpactPoint.Y, FSurvivalWallPlacement::GridSize),
-        AimHit.ImpactPoint.Z);
-    FSurvivalWallPlacement Placement;
-    Placement.Center = Snapped + FVector(0, 0, FSurvivalWallPlacement::HalfExtent.Z);
-    Placement.Rotation = bWallRotated ? FRotator(0, 90, 0).Quaternion() : FQuat::Identity;
-
-    // Snapping can move a position to the far side of an obstacle.
-    const FVector SightTarget = Snapped + FVector(0, 0, SupportTolerance + 2.0);
-    if (FVector::DistSquared(View, Snapped) > FMath::Square(Reach)
-        || World->LineTraceTestByChannel(View, SightTarget, ECC_Visibility, TraceQuery))
-    {
-        return TOptional<FSurvivalWallPlacement>(Placement);
-    }
-
-    const FVector Half = FSurvivalWallPlacement::HalfExtent;
-    for (int32 XSide : {-1, 1})
-    {
-        for (int32 YSide : {-1, 1})
-        {
-            const FVector Foot = Snapped + Placement.Rotation.RotateVector(
-                FVector(XSide * (Half.X - 2.0), YSide * (Half.Y - 2.0), 0.0));
-            const FVector Probe(0, 0, SupportTolerance);
-            FHitResult SupportHit;
-            if (!World->LineTraceSingleByChannel(SupportHit, Foot + Probe, Foot - Probe, ECC_Visibility, TraceQuery)
-                || SupportHit.ImpactNormal.Z < 0.95 || !SupportHit.GetComponent()
-                || SupportHit.GetComponent()->Mobility != EComponentMobility::Static)
-            {
-                return TOptional<FSurvivalWallPlacement>(Placement);
-            }
-        }
-    }
-
-    // Include the player in the overlap check. Inset the faces so neighboring walls can touch.
-    Placement.bClear = !World->OverlapBlockingTestByChannel(Placement.Center, Placement.Rotation, ECC_Pawn,
-        FCollisionShape::MakeBox(Half - FVector(0.5)), FCollisionQueryParams::DefaultQueryParam,
-        FCollisionResponseParams::DefaultResponseParam);
-    return TOptional<FSurvivalWallPlacement>(Placement);
+    FSurvivalBuildPlacement Placement;
+    Placement.Base = FVector(FMath::GridSnap(Hit.ImpactPoint.X, FSurvivalBuildPlacement::GridSize),
+        FMath::GridSnap(Hit.ImpactPoint.Y, FSurvivalBuildPlacement::GridSize), Hit.ImpactPoint.Z);
+    Placement.Rotation = FRotator(0, QuarterTurns * 90.0, 0).Quaternion();
+    Placement.PieceIndex = SelectedPiece;
+    Placement.bClear = HasReachTo(Placement.Base + FVector(0, 0, SupportTolerance + 2.0), BuildReach)
+        && HasSupport(Placement) && IsFootprintClear(Placement, true);
+    return TOptional<FSurvivalBuildPlacement>(Placement);
 }
 
-void ASurvivalCharacter::PlaceWall()
+bool ASurvivalCharacter::CanFinish(const FSurvivalBuildPlacement& Placement) const
 {
-    if (!bBuildMode || SupplyCount <= 0)
-    {
-        return;
-    }
+    return HasSupport(Placement) && IsFootprintClear(Placement, false);
+}
 
-    const TOptional<FSurvivalWallPlacement> Placement = FindWallPlacement();
-    ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
-    if (Placement.IsSet() && Placement->bClear && GameMode && GameMode->AddWall(*Placement))
+void ASurvivalCharacter::PlacePlan()
+{
+    if (bBuildMode)
     {
-        --SupplyCount;
+        const TOptional<FSurvivalBuildPlacement> Placement = FindPlacement();
+        ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
+        if (Placement.IsSet() && Placement->bClear && GameMode)
+        {
+            GameMode->AddPlan(*Placement);
+        }
+    }
+}
+
+void ASurvivalCharacter::RemovePlan()
+{
+    if (ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>())
+    {
+        GameMode->RemovePlan(FindPlan());
     }
 }

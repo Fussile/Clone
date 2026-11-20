@@ -6,9 +6,9 @@ UE5.8 C++ survival-crafting project inspired by the mechanics and atmosphere of 
 
 Download `Survival-Windows-x64.zip` from [Releases](https://github.com/Fussile/Clone/releases) when a playtest is published. Extract the entire ZIP and open `Survival.exe`. GitHub's **Code → Download ZIP** and **Source code (zip)** downloads contain the Unreal project for developers.
 
-The solo playtest starts outside the Southern Crossroads gas station. Use **WASD** and the mouse to move and look, **Space** to jump, and **E** to search the supply crate in the shop.
+The solo playtest starts outside the Southern Crossroads gas station. Use **WASD** and the mouse to move and look, **Space** to jump, **V** to switch to third person, and **E** to search the building materials crate in the shop.
 
-Each supply buys one barricade wall. Press **B** to enter build mode, aim at nearby level ground, press **R** to rotate the preview, and **left-click** to place it.
+Press **B** to open the build menu, **scroll** to select a piece, and **R** to rotate it. **Left-click** to place a free blueprint. Aim at the blueprint and press **E** to finish it with timber or stone, or **X** to remove it. The HUD shows the total materials required and how many you still need to collect.
 
 ## Build a playtest ZIP
 

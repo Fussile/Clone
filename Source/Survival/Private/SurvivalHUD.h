@@ -3,7 +3,8 @@
 #include "GameFramework/HUD.h"
 #include "SurvivalHUD.generated.h"
 
-struct FSurvivalWallPlacement;
+class ASurvivalCharacter;
+struct FSurvivalBuildPlacement;
 
 UCLASS()
 class ASurvivalHUD : public AHUD
@@ -11,5 +12,6 @@ class ASurvivalHUD : public AHUD
     GENERATED_BODY()
 
     void DrawHUD() override;
-    void DrawWallPreview(const FSurvivalWallPlacement& Placement, const FLinearColor& Color);
+    void DrawBuildMenu(const ASurvivalCharacter& Character);
+    void DrawPlacement(const FSurvivalBuildPlacement& Placement, const FLinearColor& Color);
 };

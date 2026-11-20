@@ -17,12 +17,12 @@ ASurvivalSupplyCrate::ASurvivalSupplyCrate()
     }
 }
 
-int32 ASurvivalSupplyCrate::TakeSupplies()
+FSurvivalMaterials ASurvivalSupplyCrate::TakeMaterials()
 {
-    if (!HasSupplies())
+    if (!HasMaterials())
     {
-        return 0;
+        return {};
     }
     bSearched = true;
-    return SupplyAmount;
+    return {FMath::Max(0, TimberAmount), FMath::Max(0, StoneAmount)};
 }

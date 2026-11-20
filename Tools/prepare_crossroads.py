@@ -12,6 +12,7 @@ SOURCE = TOOLS.parent / "SourceArt" / "Crossroads"
 ART = "/Game/Art/Crossroads"
 SURFACES = ART + "/Surfaces"
 SURVIVOR = ART + "/Survivor"
+BUILDING = ART + "/Building"
 LEVEL = "/Game/Maps/L_SouthernCrossroads"
 
 
@@ -130,6 +131,47 @@ def import_survivor():
         import_asset(source / "Animations" / f"{clip}.fbx", SURVIVOR, unreal.AnimSequence, anim_options)
 
 
+def import_building():
+    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    editing = unreal.MaterialEditingLibrary
+    prop = unreal.MaterialProperty
+
+    timber_path = TOOLS.parent / "Saved" / "GeneratedArt" / "T_TimberPlanks.png"
+    if not assets.does_asset_exist(f"{BUILDING}/{timber_path.stem}"):
+        generate = runpy.run_path(str(TOOLS / "build_timber_texture.py"))
+        generate["write_timber_texture"](timber_path)
+    texture = import_asset(timber_path, BUILDING, unreal.Texture2D)
+    timber = make_material(BUILDING, "M_Timber", (
+        (texture, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, "RGB", prop.MP_BASE_COLOR),
+    ))
+    stone = assets.load_asset(f"{SURFACES}/M_Concrete034")
+
+    ghost_path = f"{BUILDING}/M_BuildPlan"
+    ghost = assets.load_asset(ghost_path) if assets.does_asset_exist(ghost_path) else None
+    if ghost is None:
+        tools = unreal.AssetToolsHelpers.get_asset_tools()
+        ghost = tools.create_asset("M_BuildPlan", BUILDING, unreal.Material, unreal.MaterialFactoryNew())
+        if ghost is None:
+            raise RuntimeError(f"Could not create {ghost_path}.")
+        ghost.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+        ghost.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+        color = editing.create_material_expression(ghost, unreal.MaterialExpressionConstant3Vector, -300, 0)
+        color.set_editor_property("constant", unreal.LinearColor(0.04, 0.65, 1.0, 1.0))
+        opacity = editing.create_material_expression(ghost, unreal.MaterialExpressionConstant, -300, 180)
+        opacity.set_editor_property("r", 0.32)
+        if (not editing.connect_material_property(color, "", prop.MP_EMISSIVE_COLOR)
+                or not editing.connect_material_property(opacity, "", prop.MP_OPACITY)):
+            raise RuntimeError(f"Could not wire {ghost_path}.")
+        editing.recompile_material(ghost)
+
+    for material in (timber, stone, ghost):
+        if not isinstance(material, unreal.Material):
+            raise RuntimeError("A required construction material could not be loaded.")
+        editing.set_material_usage(material, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
+        if not assets.save_loaded_asset(material):
+            raise RuntimeError(f"Could not save {material.get_path_name()}.")
+
+
 def prepare():
     editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
     unreal.SystemLibrary.execute_console_command(
@@ -137,6 +179,7 @@ def prepare():
     )
     import_surfaces()
     import_survivor()
+    import_building()
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     if assets.does_asset_exist(LEVEL):

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GameFramework/Actor.h"
+#include "SurvivalBuilding.h"
 #include "SurvivalSupplyCrate.generated.h"
 
 class UStaticMeshComponent;
@@ -13,15 +14,18 @@ class ASurvivalSupplyCrate : public AActor
 public:
     ASurvivalSupplyCrate();
 
-    int32 TakeSupplies();
-    bool HasSupplies() const { return !bSearched && SupplyAmount > 0; }
+    FSurvivalMaterials TakeMaterials();
+    bool HasMaterials() const { return !bSearched && (TimberAmount > 0 || StoneAmount > 0); }
 
 private:
     UPROPERTY(VisibleAnywhere, Category = "Scavenging")
     TObjectPtr<UStaticMeshComponent> Mesh;
 
-    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "1"))
-    int32 SupplyAmount = 3;
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0"))
+    int32 TimberAmount = 24;
+
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0"))
+    int32 StoneAmount = 12;
 
     bool bSearched = false;
 };
