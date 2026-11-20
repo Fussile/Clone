@@ -13,3 +13,5 @@ Saved/
 .DS_Store
 steam_appid.txt
 Content/Restricted/
+/Dist/
+__pycache__/

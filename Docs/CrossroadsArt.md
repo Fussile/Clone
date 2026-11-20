@@ -1,6 +1,6 @@
 # Crossroads starter art
 
-Import directly from [SourceArt/Crossroads](../SourceArt/Crossroads) in your checkout. All paths below are relative to that folder.
+`Tools/prepare_crossroads.py` imports the files from [SourceArt/Crossroads](../SourceArt/Crossroads) into Unreal during preparation. All source paths below are relative to that folder.
 
 | Source | Use |
 | --- | --- |
