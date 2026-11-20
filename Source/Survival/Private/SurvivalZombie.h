@@ -4,6 +4,7 @@
 #include "SurvivalZombie.generated.h"
 
 class ASurvivalCharacter;
+class UAnimSequence;
 
 UCLASS()
 class ASurvivalZombie : public ACharacter
@@ -22,6 +23,23 @@ private:
     bool ProbePath(const FVector& Destination, FHitResult& Hit) const;
     FVector FindDestination(const ASurvivalCharacter& Target) const;
 
+    void UpdateLocomotion(bool bMoving);
+    void ApplyAttack(ASurvivalCharacter& Target);
+
     int32 Health = 90;
     double NextAttackTime = 0.0;
+    double AttackImpactTime = -1.0;
+    FVector AttackDirection = FVector::ZeroVector;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> IdleAnimation;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> WalkAnimation;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> AttackAnimation;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> ActiveAnimation;
 };

@@ -13,6 +13,13 @@
 #include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
 
+namespace
+{
+constexpr double AttackReach = 115.0;
+constexpr double AttackInterval = 1.35;
+constexpr double StrikeInSourceClip = 0.84;
+}
+
 ASurvivalZombie::ASurvivalZombie()
 {
     PrimaryActorTick.bCanEverTick = true;
@@ -28,7 +35,13 @@ void ASurvivalZombie::BeginPlay()
 {
     Super::BeginPlay();
     USkeletalMesh* ZombieAsset = LoadObject<USkeletalMesh>(nullptr,
-        TEXT("/Game/Art/Crossroads/Survivor/characterMedium.characterMedium"));
+        TEXT("/Game/Art/Crossroads/Zombie/SK_StationZombie.SK_StationZombie"), nullptr, LOAD_NoWarn);
+    const bool bHasImportedBody = ZombieAsset != nullptr;
+    if (!bHasImportedBody)
+    {
+        ZombieAsset = LoadObject<USkeletalMesh>(nullptr,
+            TEXT("/Game/Art/Crossroads/Survivor/characterMedium.characterMedium"));
+    }
     if (!ZombieAsset)
     {
         return;
@@ -41,18 +54,60 @@ void ASurvivalZombie::BeginPlay()
     Body->SetRelativeScale3D(FVector(Scale));
     Body->SetRelativeLocation(FVector(0, 0, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - Bottom));
     Body->SetRelativeRotation(FRotator(0, -90, 0));
-    if (UMaterialInterface* Skin = LoadObject<UMaterialInterface>(nullptr,
-        TEXT("/Game/Art/Crossroads/Survivor/M_StationZombie.M_StationZombie")))
+    if (bHasImportedBody)
     {
-        for (int32 Slot = 0; Slot < Body->GetNumMaterials(); ++Slot)
-        {
-            Body->SetMaterial(Slot, Skin);
-        }
+        IdleAnimation = LoadObject<UAnimSequence>(nullptr,
+            TEXT("/Game/Art/Crossroads/Zombie/StationZombieIdle.StationZombieIdle"));
+        WalkAnimation = LoadObject<UAnimSequence>(nullptr,
+            TEXT("/Game/Art/Crossroads/Zombie/StationZombieWalk.StationZombieWalk"));
+        AttackAnimation = LoadObject<UAnimSequence>(nullptr,
+            TEXT("/Game/Art/Crossroads/Zombie/StationZombieAttack.StationZombieAttack"));
     }
-    if (UAnimSequence* Walk = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Art/Crossroads/Survivor/run.run")))
+    else
     {
-        Body->PlayAnimation(Walk, true);
-        Body->SetPlayRate(0.48f);
+        if (UMaterialInterface* Skin = LoadObject<UMaterialInterface>(nullptr,
+            TEXT("/Game/Art/Crossroads/Survivor/M_StationZombie.M_StationZombie")))
+        {
+            for (int32 Slot = 0; Slot < Body->GetNumMaterials(); ++Slot)
+            {
+                Body->SetMaterial(Slot, Skin);
+            }
+        }
+        WalkAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Art/Crossroads/Survivor/run.run"));
+    }
+    UpdateLocomotion(false);
+}
+
+void ASurvivalZombie::UpdateLocomotion(bool bMoving)
+{
+    UAnimSequence* Sequence = bMoving && WalkAnimation ? WalkAnimation.Get() : IdleAnimation.Get();
+    if (!Sequence)
+    {
+        GetMesh()->SetPlayRate(0.0f);
+        return;
+    }
+    if (ActiveAnimation.Get() != Sequence)
+    {
+        ActiveAnimation = Sequence;
+        GetMesh()->PlayAnimation(Sequence, true);
+    }
+    GetMesh()->SetPlayRate(IdleAnimation ? 1.0f : 0.48f);
+}
+
+void ASurvivalZombie::ApplyAttack(ASurvivalCharacter& Target)
+{
+    FHitResult Hit;
+    if (!ProbePath(GetActorLocation() + AttackDirection * AttackReach, Hit))
+    {
+        return;
+    }
+    if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
+    {
+        Chunk->DamageFinished(Hit, 18);
+    }
+    else if (Hit.GetActor() == &Target)
+    {
+        Target.ReceiveZombieHit(15);
     }
 }
 
@@ -104,34 +159,51 @@ void ASurvivalZombie::Tick(float DeltaSeconds)
         return;
     }
 
+    const double Now = GetWorld()->GetTimeSeconds();
+    if (AttackImpactTime >= 0.0 && Now >= AttackImpactTime)
+    {
+        AttackImpactTime = -1.0;
+        ApplyAttack(*Target);
+    }
+    if (AttackAnimation && Now < NextAttackTime)
+    {
+        return;
+    }
+
     const FVector Destination = FindDestination(*Target);
     FHitResult Obstruction;
     const FVector Direction = (Destination - GetActorLocation()).GetSafeNormal2D();
-    const bool bBlocked = ProbePath(GetActorLocation() + Direction * 115.0, Obstruction);
+    const bool bBlocked = ProbePath(GetActorLocation() + Direction * AttackReach, Obstruction);
     ASurvivalBuildChunk* Chunk = bBlocked ? Cast<ASurvivalBuildChunk>(Obstruction.GetActor()) : nullptr;
     if ((Chunk && Chunk->FindFinished(Obstruction)) || (bBlocked && Obstruction.GetActor() == Target))
     {
-        GetMesh()->SetPlayRate(0.0f);
         GetCharacterMovement()->StopMovementImmediately();
-        const double Now = GetWorld()->GetTimeSeconds();
         if (Now >= NextAttackTime)
         {
-            if (Chunk)
+            AttackDirection = Direction;
+            NextAttackTime = Now + AttackInterval;
+            if (AttackAnimation)
             {
-                Chunk->DamageFinished(Obstruction, 18);
+                SetActorRotation(Direction.Rotation());
+                const double ClipLength = AttackAnimation->GetPlayLength();
+                const double Rate = FMath::Max(1.0, ClipLength / AttackInterval);
+                ActiveAnimation = AttackAnimation;
+                GetMesh()->PlayAnimation(AttackAnimation.Get(), false);
+                GetMesh()->SetPlayRate(static_cast<float>(Rate));
+                AttackImpactTime = Now + FMath::Min(StrikeInSourceClip, ClipLength) / Rate;
             }
             else
             {
-                Target->ReceiveZombieHit(15);
+                UpdateLocomotion(false);
+                ApplyAttack(*Target);
             }
-            NextAttackTime = Now + 1.35;
         }
         return;
     }
 
     if (!bBlocked)
     {
-        GetMesh()->SetPlayRate(0.48f);
+        UpdateLocomotion(true);
         AddMovementInput(Direction, 1.0f, /*bForce=*/true);
         return;
     }
@@ -142,12 +214,12 @@ void ASurvivalZombie::Tick(float DeltaSeconds)
         const FVector Detour = Direction.RotateAngleAxis(Turn, FVector::UpVector);
         if (!ProbePath(GetActorLocation() + Detour * 100.0, Obstruction))
         {
-            GetMesh()->SetPlayRate(0.48f);
+            UpdateLocomotion(true);
             AddMovementInput(Detour, 1.0f, /*bForce=*/true);
             return;
         }
     }
-    GetMesh()->SetPlayRate(0.0f);
+    UpdateLocomotion(false);
 }
 
 void ASurvivalZombie::HitBySidearm()

@@ -18,5 +18,6 @@ For editor play, run `Tools/prepare_crossroads.py` and open Southern Crossroads.
 5. Toggle third person and check the textured survivor. During preparation, the generated sun and skylight are switched to movable. Check that the generated map no longer shows the unbuilt-light warning.
 6. After clearing the first wave, repair and press **G** again. Verify the next two waves have two and three zombies, with six rounds added when each begins. Pressing **G** during a wave leaves it unchanged. After all three waves, check that the HUD reports victory.
 7. Remove or finish the last plan and check that the requirements disappear from the HUD. Placing another plan should bring them back.
+8. Check that the new zombie faces its direction of travel and switches from walking to a swing at a barricade. Watch for wall health to drop during the swing. Step out of reach during the windup and check that the hit can miss.
 
 The material counts, plans, completed pieces, health and loot reset when the solo session restarts.

@@ -13,6 +13,7 @@ ART = "/Game/Art/Crossroads"
 SURFACES = ART + "/Surfaces"
 SURVIVOR = ART + "/Survivor"
 BUILDING = ART + "/Building"
+ZOMBIE = ART + "/Zombie"
 LEVEL = "/Game/Maps/L_SouthernCrossroads"
 
 
@@ -206,6 +207,45 @@ def import_building():
             raise RuntimeError(f"Could not save {path}.")
 
 
+def import_zombie():
+    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    names = ("SK_StationZombie", "StationZombieIdle", "StationZombieWalk", "StationZombieAttack")
+    if all(assets.does_asset_exist(f"{ZOMBIE}/{name}") for name in names):
+        return
+
+    source = SOURCE / "Enemy" / "zombie_rigged__animated.glb"
+    prepared = TOOLS.parent / "Saved" / "GeneratedArt" / "StationZombie.glb"
+    runpy.run_path(str(TOOLS / "prepare_zombie_glb.py"))["prepare_zombie_glb"](source, prepared)
+    task = unreal.AssetImportTask()
+    task.set_editor_property("filename", str(prepared))
+    task.set_editor_property("destination_path", ZOMBIE)
+    task.set_editor_property("automated", True)
+    task.set_editor_property("replace_existing", False)
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+    imported = task.get_objects()
+
+    for name in names:
+        path = f"{ZOMBIE}/{name}"
+        if assets.does_asset_exist(path):
+            continue
+        if name == names[0]:
+            matching = [item for item in imported if isinstance(item, unreal.SkeletalMesh)]
+        else:
+            matching = [item for item in imported
+                        if isinstance(item, unreal.AnimSequence) and name.lower() in item.get_name().lower()]
+        if len(matching) != 1 or not assets.rename_loaded_asset(matching[0], path):
+            raise RuntimeError(f"Could not resolve {name} from the zombie import.")
+
+    mesh = assets.load_asset(f"{ZOMBIE}/{names[0]}")
+    skeleton = mesh.get_editor_property("skeleton")
+    for name in names[1:]:
+        clip = assets.load_asset(f"{ZOMBIE}/{name}")
+        if clip.get_editor_property("skeleton") != skeleton:
+            raise RuntimeError(f"{name} does not use the imported zombie skeleton.")
+    if not assets.save_directory(ZOMBIE, only_if_is_dirty=True):
+        raise RuntimeError("Could not save the zombie assets.")
+
+
 def prepare():
     editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
     unreal.SystemLibrary.execute_console_command(
@@ -213,6 +253,7 @@ def prepare():
     )
     import_surfaces()
     import_survivor()
+    import_zombie()
     import_building()
     sidearm = SOURCE / "Weapons" / "SM_CrossroadsSidearm.glb"
     if sidearm.is_file():
