@@ -305,8 +305,7 @@ FText SSurvivalInventoryMenu::GetIngredientText() const
     for (const FSurvivalIngredient& Ingredient : Recipes[SelectedRecipe].Ingredients)
     {
         const int32 Held = Player.IsValid() ? Player->GetItemCount(Ingredient.Item) : 0;
-        Ingredients += FString::Printf(TEXT("%s   %d / %d
-"), SurvivalItemName(Ingredient.Item), Held, Ingredient.Count * Quantity);
+        Ingredients += FString::Printf(TEXT("%s   %d / %d\n"), SurvivalItemName(Ingredient.Item), Held, Ingredient.Count * Quantity);
     }
     return FText::FromString(Ingredients.TrimEnd());
 }
