@@ -27,4 +27,6 @@ Start with one occupied downtown block and a route from Southern Crossroads acro
 
 General Hospital has an enterable ground-floor wing with four rooms, a central corridor, textured beds, and a dressing supply crate. The region placement script imports the included bed and places the wing on the hospital pad. Rerun it with the hospital cell loaded to upgrade an earlier blockout.
 
-For the NY-H façade, select SM_BLDG_NYH_L1_A_Wall_01_N1, SM_BLDG_NYH_L1_A_CornerEx_01_N1 and SM_BLDG_NYH_L1_A_Column_01_N1 in the original City Sample project. Use **Asset Actions → Migrate** into the Content folder of a blank staging project. Preserve the hierarchy under Content/CitySampleBuildings so the meshes can find the shared material instances and textures. For example, the limestone material instance references T_Block_N and T_Block_PackedB. The Library ZIP contains level assemblies and packed blueprints. The three-mesh test uses the meshes and their dependencies. Share the migrated source assets privately with collaborators under their applicable license.
+The downtown nightlife blockout uses four textured window bays assembled from James Ray Cock’s CC0 Modular Urban Apartments Facade. The source GLB is included in the project and the region placement script imports it automatically. The bays provide exterior art while the blockout shell provides collision.
+
+Source and license details are in [DowntownFacadeAttribution.txt](DowntownFacadeAttribution.txt).

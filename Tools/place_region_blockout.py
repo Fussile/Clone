@@ -46,6 +46,8 @@ def place():
     import_asset = runpy.run_path(str(root / "Tools" / "prepare_crossroads.py"))["import_asset"]
     bed_mesh = import_asset(root / "SourceArt" / "Crossroads" / "World" / "SM_HospitalBed.glb",
                             "/Game/Art/Crossroads/World", unreal.StaticMesh)
+    bay_mesh = import_asset(root / "SourceArt" / "Crossroads" / "World" / "SM_DowntownWindowBay.glb",
+                            "/Game/Art/Crossroads/World", unreal.StaticMesh)
     crate_class = unreal.load_class(None, "/Script/Survival.SurvivalSupplyCrate")
     if not crate_class:
         raise RuntimeError("Build SurvivalEditor before placing hospital loot.")
@@ -113,6 +115,27 @@ def place():
             if not actors.destroy_actor(old_shell):
                 raise RuntimeError("Could not remove the old hospital blockout.")
 
+    def dress_downtown(key, x, y, floor):
+        bounds = bay_mesh.get_bounding_box()
+        size_x = bounds.max.x - bounds.min.x
+        size_y = bounds.max.y - bounds.min.y
+        width = max(size_x, size_y) / 100
+        yaw = 0 if size_x >= size_y else 90
+        # Clear the existing wall so the trim reads from both sides of the street.
+        wall_offset = max(abs(bounds.min.y), abs(bounds.max.y)) if yaw == 0 else max(
+            abs(bounds.min.x), abs(bounds.max.x))
+        street_edge = y - wall_offset / 100 - .02
+
+        def configure(actor):
+            component = actor.get_component_by_class(unreal.StaticMeshComponent)
+            component.set_static_mesh(bay_mesh)
+            component.set_collision_profile_name("NoCollision")
+            actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
+
+        for index in range(4):
+            spawn(unreal.StaticMeshActor, f"{key}_bay_{index}", f"Downtown window bay {index + 1}",
+                  x + (index - 1.5) * width, street_edge, floor, configure)
+
     has_start = any(isinstance(actor, unreal.PlayerStart) for actor in existing)
     for landscape in landscapes:
         tags = list(landscape.get_editor_property("tags"))
@@ -139,6 +162,8 @@ def place():
             place_hospital(key, x, y, z+.2)
         else:
             box(key+"_shell", name+" blockout", x, y+d*.12, z+.2, w*.85, d*.59, height)
+        if site["id"] == "city-nightlife":
+            dress_downtown(key, x, y + d*.12 - d*.59/2, z+.2)
         if site["id"] == "south-services" and not has_start:
             spawn(unreal.PlayerStart, key+"_start", "Start at Southern Crossroads",
                   x, y-d*.31, z+1.3, lambda actor: None, always_loaded=True)
