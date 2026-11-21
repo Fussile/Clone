@@ -277,7 +277,7 @@ def prepare():
         "SK_Survivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",
         "SurvivorCrouchIdle", "SurvivorCrouchMove", "SurvivorProneIdle", "SurvivorProneMove",
     ), SOURCE / "Survivor" / "SK_Survivor.glb")
-    sniper = ART + "/Sniper"
+    sniper = ART + "/SniperStable"
     import_skeletal_pack(sniper, ("SK_SniperViewmodel", "SniperHold", "SniperFire", "SniperReload"),
                          SOURCE / "Weapons" / "SK_SniperViewmodel.glb")
     world_rifle = SOURCE / "Weapons" / "SM_CrossroadsSniper.glb"

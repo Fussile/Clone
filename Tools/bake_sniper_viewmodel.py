@@ -19,7 +19,7 @@ arms = next(obj for obj in rig.children if obj.type == 'MESH')
 parts = ('base', 'scope', 'boltback', 'bolt', 'release', 'trigger', 'mag', 'bullet')
 nodes = {name: bpy.data.objects[name] for name in parts}
 clip_frames = {
-    'SniperHold': (0, 1),
+    'SniperHold': (0, 0),
     'SniperFire': range(0, 50),
     'SniperReload': range(49, 94),
 }
@@ -136,6 +136,9 @@ for clip, sequence in clip_frames.items():
     action = bpy.data.actions.new(clip)
     animation.action = action
     for key, source_frame in enumerate(sequence, 1):
+        # Start and end on the idle pose so fire and reload can return to it without a snap.
+        if key == 1 or key == len(sequence):
+            source_frame = 0
         pose, world_matrices = frames[source_frame]
         for name, basis in pose.items():
             rig.pose.bones[name].matrix_basis = basis

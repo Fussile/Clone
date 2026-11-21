@@ -390,7 +390,8 @@ void ASurvivalCharacter::Interact()
         {
             if (GameMode->FinishPlan(Target, Inventory))
             {
-                Progression.AwardPractice(ESurvivalSkill::Building, 12);
+                Progression.AwardPractice(ETraining::Construction, 12);
+                Progression.AwardXP(12);
             }
         }
     }
@@ -398,13 +399,17 @@ void ASurvivalCharacter::Interact()
     {
         const bool bFirstSearch = Crate->HasSupplies() || Crate->HasSidearm();
         FSurvivalLoot Loot = Crate->TakeLoot();
-        const int32 ScavengingBonus = Progression.Bonus(ESurvivalPerk::StockFinder);
+        constexpr int32 AppraisalBonus[] = {0, 1, 2, 4};
+        const int32 ScavengingBonus = (Progression.Rank(ETraining::Scavenging) - 1) / 25
+            + AppraisalBonus[Progression.Rank(ETraining::LootAppraisal)];
         Loot.Materials.Timber += FMath::Min(ScavengingBonus, Loot.Materials.Timber);
         Loot.Materials.Stone += FMath::Min(ScavengingBonus, Loot.Materials.Stone);
         Inventory.Add(Loot.Materials);
         if (bFirstSearch)
         {
-            Progression.AwardPractice(ESurvivalSkill::Scavenging, 16);
+            // The playtest has only a handful of caches, so each discovery is meaningful practice.
+            Progression.AwardPractice(ETraining::Scavenging, 140);
+            Progression.AwardXP(16);
         }
         Items.Add(Loot.Items);
         if (Loot.bRifle && !bHasRifle)
@@ -439,7 +444,8 @@ void ASurvivalCharacter::Interact()
                     else if (Items.TimberDoors > 0 && Chunk->TryInstallDoor(Hit))
                     {
                         --Items.TimberDoors;
-                        Progression.AwardPractice(ESurvivalSkill::Building, 12);
+                        Progression.AwardPractice(ETraining::Construction, 12);
+                        Progression.AwardXP(12);
                         return;
                     }
                     if (APlayerController* Player = Cast<APlayerController>(GetController()))
@@ -450,11 +456,13 @@ void ASurvivalCharacter::Interact()
                 }
                 else
                 {
-                    const int32 RepairHealth = 30 + Progression.Bonus(ESurvivalPerk::SoundRepairs)
-                        + Progression.Bonus(ESurvivalPerk::Workshop);
+                    const int32 RepairHealth = FMath::RoundToInt(30.0f * Progression.Effect(ETraining::Construction)
+                        * Progression.Effect(ETraining::Repair) * Progression.Effect(ETraining::BasicCraft));
                     if (Chunk->RepairFinished(Hit, Inventory, RepairHealth))
                     {
-                        Progression.AwardPractice(ESurvivalSkill::Building, 8);
+                        Progression.AwardPractice(ETraining::Construction, 8);
+                        Progression.AwardPractice(ETraining::Repair, 12);
+                        Progression.AwardXP(8);
                     }
                 }
             }
@@ -719,7 +727,7 @@ void ASurvivalCharacter::PrimaryAction()
     {
         Sidearm->PlayShotSound();
     }
-    AddControllerPitchInput(-0.65f * (1.0f - 0.01f * Progression.Bonus(ESurvivalPerk::SteadyHand)));
+    AddControllerPitchInput(-0.65f);
 }
 
 bool ASurvivalCharacter::FireRound(const FVector& Origin, double Range, bool bRifleRound)
@@ -758,9 +766,9 @@ bool ASurvivalCharacter::FireRound(const FVector& Origin, double Range, bool bRi
 void ASurvivalCharacter::LoadRifleViewmodel()
 {
     RifleWorldMesh->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,
-        TEXT("/Game/Art/Crossroads/Sniper/SM_CrossroadsSniper.SM_CrossroadsSniper")));
+        TEXT("/Game/Art/Crossroads/SniperStable/SM_CrossroadsSniper.SM_CrossroadsSniper")));
     USkeletalMesh* Arms = LoadObject<USkeletalMesh>(nullptr,
-        TEXT("/Game/Art/Crossroads/Sniper/SK_SniperViewmodel.SK_SniperViewmodel"));
+        TEXT("/Game/Art/Crossroads/SniperStable/SK_SniperViewmodel.SK_SniperViewmodel"));
     if (!Arms)
     {
         return;
@@ -784,11 +792,12 @@ void ASurvivalCharacter::LoadRifleViewmodel()
     const FRotator Alignment(0, -Barrel.Rotation().Yaw, 0);
     RifleViewmodel->SetRelativeRotation(Alignment);
     RifleViewmodel->SetRelativeScale3D(FVector(Scale));
-    RifleViewmodel->SetRelativeLocation(FVector(31, 12, -27) - Alignment.RotateVector(Rear * Scale));
+    // Keep the breech behind the camera and frame the grip and forward section.
+    RifleViewmodel->SetRelativeLocation(FVector(-12, 3, -24) - Alignment.RotateVector(Rear * Scale));
 
     const auto LoadClip = [](const TCHAR* Name)
     {
-        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Sniper/%s.%s"), Name, Name);
+        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/SniperStable/%s.%s"), Name, Name);
         return LoadObject<UAnimSequence>(nullptr, *Path);
     };
     RifleHold = LoadClip(TEXT("SniperHold"));
@@ -819,7 +828,7 @@ void ASurvivalCharacter::FireRifle()
     --RifleAmmo;
     CurrentRifleAnimation = nullptr;
     RifleReadyAt = Now + (RifleFire ? RifleFire->GetPlayLength() : 2.0);
-    AddControllerPitchInput(-1.35f * (1.0f - 0.01f * Progression.Bonus(ESurvivalPerk::SteadyHand)));
+    AddControllerPitchInput(-1.35f);
     if (USoundBase* Sound = LoadObject<USoundBase>(nullptr,
         TEXT("/Game/Audio/Weapons/SW_SidearmShot.SW_SidearmShot"), nullptr, LOAD_NoWarn))
     {
@@ -864,21 +873,21 @@ void ASurvivalCharacter::UpdateRifle()
     }
 }
 
-void ASurvivalCharacter::BuySkillPerk(ESurvivalPerk Perk, int32 TargetRank)
+void ASurvivalCharacter::BuyTraining(ETraining Entry, int32 TargetRank)
 {
-    if (bInventoryOpen && HealthPoints > 0 && Progression.CanBuyPerkThrough(Perk, TargetRank))
+    if (bInventoryOpen && HealthPoints > 0)
     {
-        while (Progression.PerkRank(Perk) < TargetRank && Progression.BuyPerk(Perk))
-        {
-        }
+        Progression.BuyThrough(Entry, TargetRank);
     }
 }
 
-void ASurvivalCharacter::NotifySidearmHit(bool bHitZombie)
+void ASurvivalCharacter::NotifyRoundHit(bool bHitZombie, bool bRifleRound)
 {
     if (bHitZombie && HealthPoints > 0)
     {
-        Progression.AwardPractice(ESurvivalSkill::Marksmanship, 10);
+        Progression.AwardPractice(bRifleRound ? ETraining::Rifles : ETraining::Pistols, 10);
+        Progression.AwardPractice(bRifleRound ? ETraining::RifleTechnique : ETraining::PistolTechnique, 10);
+        Progression.AwardXP(10);
     }
     HitMarkerUntil = GetWorld()->GetTimeSeconds() + 0.15;
 }
@@ -998,15 +1007,18 @@ void ASurvivalCharacter::UpdateVitals(float DeltaSeconds)
     const ASurvivalGameMode* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
     const float Ambient = Mode ? static_cast<float>(Mode->GetAmbientTemperature()) : 14.0f;
     const float Effort = static_cast<float>(FMath::Clamp(GetVelocity().Size2D() / WalkSpeed, 0.0, 1.5));
-    const float SprintCost = 1.0f - 0.01f * Progression.Bonus(ESurvivalPerk::SecondWind);
-    const int32 Damage = Vitals.Advance(DeltaSeconds, bSprinting, Effort, Ambient, SprintCost);
+    const int32 Damage = Vitals.Advance(DeltaSeconds, bSprinting, Effort, Ambient,
+        Progression.Effect(ETraining::Athletics), Progression.Effect(ETraining::Recovery),
+        Progression.Effect(ETraining::Nutrition), Progression.Effect(ETraining::Hydration));
     if (bSprinting)
     {
         constexpr float PracticeInterval = 8.0f;
         SprintPracticeTime += DeltaSeconds;
         const int32 Practices = FMath::FloorToInt(SprintPracticeTime / PracticeInterval);
         SprintPracticeTime -= Practices * PracticeInterval;
-        Progression.AwardPractice(ESurvivalSkill::Endurance, Practices * 10);
+        Progression.AwardPractice(ETraining::Athletics, Practices * 10);
+        Progression.AwardPractice(ETraining::Recovery, Practices * 10);
+        Progression.AwardXP(Practices * 10);
     }
     GetCharacterMovement()->MaxWalkSpeed = bSprintAllowed && Vitals.CanSprint() ? SprintSpeed : WalkSpeed;
     if (Damage > 0)
@@ -1077,7 +1089,7 @@ bool ASurvivalCharacter::CanUseItem(ESurvivalItem Item) const
     case ESurvivalItem::Food: return Vitals.Hunger < FSurvivalVitals::Max;
     case ESurvivalItem::Water: return Vitals.Thirst < FSurvivalVitals::Max;
     case ESurvivalItem::Bandage: return HealthPoints < 100;
-    case ESurvivalItem::BuilderGuide: return Progression.Rank(ESurvivalSkill::Building) < FSurvivalProgression::MaxRank;
+    case ESurvivalItem::BuilderGuide: return Progression.Rank(ETraining::Construction) < GetTrainingInfo(ETraining::Construction).MaxRank;
     default: return false;
     }
 }
@@ -1092,19 +1104,25 @@ void ASurvivalCharacter::UseItem(ESurvivalItem Item)
     {
     case ESurvivalItem::Food:
         --Items.Food;
+        Progression.AwardPractice(ETraining::Nutrition, FMath::FloorToInt(FMath::Min(34.0f, FSurvivalVitals::Max - Vitals.Hunger)));
         Vitals.Hunger = FMath::Min(FSurvivalVitals::Max, Vitals.Hunger + 34.0f);
         break;
     case ESurvivalItem::Water:
         --Items.Water;
+        Progression.AwardPractice(ETraining::Hydration, FMath::FloorToInt(FMath::Min(42.0f, FSurvivalVitals::Max - Vitals.Thirst)));
         Vitals.Thirst = FMath::Min(FSurvivalVitals::Max, Vitals.Thirst + 42.0f);
         break;
     case ESurvivalItem::Bandage:
+    {
         --Items.Bandages;
-        HealthPoints = FMath::Min(100, HealthPoints + 30);
+        const int32 Healed = FMath::Min(100 - HealthPoints, FMath::RoundToInt(30.0f * Progression.Effect(ETraining::Medicine)));
+        HealthPoints += Healed;
+        Progression.AwardPractice(ETraining::Medicine, Healed);
         break;
+    }
     case ESurvivalItem::BuilderGuide:
         --Items.BuilderGuides;
-        Progression.ReadGuide(ESurvivalSkill::Building);
+        Progression.ReadGuide(ETraining::Construction);
         break;
     default:
         break;
@@ -1166,6 +1184,7 @@ void ASurvivalCharacter::CraftRecipe(int32 RecipeIndex, int32 Quantity)
         ChangeItemCount(Ingredient.Item, -Ingredient.Count * Quantity);
     }
     ChangeItemCount(Recipe.Output, Quantity);
+    Progression.AwardPractice(ETraining::BasicCraft, 4 * Quantity);
     Progression.AwardXP(4 * Quantity);
 }
 

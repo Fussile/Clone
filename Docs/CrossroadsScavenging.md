@@ -56,6 +56,6 @@ The material counts, plans, completed pieces, health and loot reset when the sol
 
 ## M3 rifle, skills and night
 
-1. Open the dark rifle locker at the back of the station and select slot **5**. Fire to check the hands and bolt. Reload with **R** and check magazine motion. Press **V** to check the scoped rifle's third-person carry. Equip the pistol to check its original hands, sight alignment, and both reloads.
-2. Use the builder's guide from the pack. **I** then **View skills** should show one additional Construction rank. Finish construction, land hits, sprint, and search new caches to check action XP. On leveling, confirm six points are awarded. Preview perk ranks and confirm that cost, character level, and relevant action skill gate each purchase.
+1. Open the dark rifle locker at the back of the station and select slot **5**. Hold the camera still and check that the rifle rests steadily near center and the rear of the arms stays out of view. Check that the bolt and magazine move when firing and reloading. Press **V** to check third-person carry.
+2. Open **I**, then **View skills**. Use the builder's guide to raise Construction Tools by one rank. Sprint, land pistol and rifle hits, treat an injury, craft a basic item, and search new caches to check practice XP in the corresponding entries. Compare rank previews for Loot Appraisal and verify that planned systems cannot spend points.
 3. Use `SetTimeOfDay 21.9` to approach dusk and the first horde. Check that daylight begins at 04:00. A complete day takes 60 real minutes, including 15 minutes of darkness.

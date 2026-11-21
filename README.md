@@ -16,7 +16,7 @@ Scavenge food, water, and cloth from the provisions crates. Press **I** to open 
 
 The dark locker at the back of the shop holds a bolt-action rifle, rifle ammunition and a builder's guide. Slot **5** selects the rifle. **Left-click** fires and cycles the bolt, and **R** reloads from the rifle's separate reserve. The pistol and scoped rifle use their original first-person arm animations. The survivor carries the weapon in third person.
 
-Open **I**, then **View skills**. Hitting infected, building, sprinting, and searching new caches train action skills. Each character level awards six points. Select a perk to preview its ranks, costs, and requirements, then learn any rank you qualify for. Use the builder's guide from the pack to raise Construction by one rank.
+Open **I**, then **View skills**. The catalog uses rank caps and knowledge requirements from the archived [Alpha 16.4 progression data](https://github.com/tassoneroberto/7dtd-assets/blob/main/alpha16.4/Config/progression.xml). Physical, coordination, and basic crafting skills improve through practice. Each character level awards six points for knowledge perks. Search by skill or category. Entries for planned systems show their requirements before they become available in play.
 
 ## Build a playtest ZIP
 

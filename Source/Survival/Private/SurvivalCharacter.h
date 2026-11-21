@@ -67,9 +67,9 @@ public:
     int32 GetRifleReserve() const { return Items.RifleRounds; }
     bool IsRifleReloading() const { return RifleReloadAt >= 0.0; }
     bool ShowHitMarker() const;
-    void NotifySidearmHit(bool bHitZombie);
+    void NotifyRoundHit(bool bHitZombie, bool bRifleRound);
     const FSurvivalProgression& GetProgression() const { return Progression; }
-    void BuySkillPerk(ESurvivalPerk Perk, int32 TargetRank);
+    void BuyTraining(ETraining Entry, int32 TargetRank);
 
 protected:
     virtual void BeginPlay() override;

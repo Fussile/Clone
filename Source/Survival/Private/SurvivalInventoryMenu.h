@@ -36,6 +36,7 @@ private:
     int32 SelectedRecipe = INDEX_NONE;
     int32 Quantity = 1;
     bool bShowSkills = false;
+    FString TrainingSearch;
     int32 SelectedTraining = 0;
     int32 PreviewRank = 1;
     TMap<FName, FSlateBrush> ThemeBrushes;

@@ -51,6 +51,7 @@ void ASurvivalRound::BeginPlay()
 
 void ASurvivalRound::HandleImpact(const FHitResult& Hit)
 {
+    ASurvivalCharacter* Shooter = Cast<ASurvivalCharacter>(GetInstigator());
     bool bDamaged = false;
     bool bHitZombie = false;
     if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
@@ -74,14 +75,21 @@ void ASurvivalRound::HandleImpact(const FHitResult& Hit)
     }
     else if (ASurvivalZombie* Zombie = Cast<ASurvivalZombie>(Hit.GetActor()))
     {
-        Zombie->HitByShot(Cast<ASurvivalCharacter>(GetInstigator()), bRifleRound ? 70 : 32);
+        float Damage = bRifleRound ? 70.0f : 32.0f;
+        if (Shooter)
+        {
+            const FSurvivalProgression& Progress = Shooter->GetProgression();
+            Damage *= Progress.Effect(bRifleRound ? ETraining::Rifles : ETraining::Pistols);
+            Damage *= Progress.Effect(bRifleRound ? ETraining::RifleTechnique : ETraining::PistolTechnique);
+        }
+        Zombie->HitByShot(Shooter, FMath::RoundToInt(Damage));
         bDamaged = true;
         bHitZombie = true;
     }
 
-    if (ASurvivalCharacter* Shooter = Cast<ASurvivalCharacter>(GetInstigator()); bDamaged && Shooter)
+    if (bDamaged && Shooter)
     {
-        Shooter->NotifySidearmHit(bHitZombie);
+        Shooter->NotifyRoundHit(bHitZombie, bRifleRound);
     }
     Destroy();
 }

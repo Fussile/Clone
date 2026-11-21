@@ -1,65 +1,78 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/ArrayView.h"
 
-enum class ESurvivalSkill : uint8 { Marksmanship, Building, Endurance, Scavenging, Count };
-enum class ESurvivalPerk : uint8 { SteadyHand, SoundRepairs, SecondWind, StockFinder, Workshop, Count };
-
-struct FSurvivalSkillInfo
+enum class ETraining : uint8
 {
-    const TCHAR* Name;
-    const TCHAR* Practice;
-    const TCHAR* Icon;
+    Athletics, Conditioning, Recovery, Scavenging, QuickSearch,
+    LootAppraisal, TreasureTracking, ArmorUse, BluntWeapons, BluntTechnique,
+    Breaching, BladeWeapons, BladeTechnique, HeavyBladeTechnique, Mining,
+    EfficientMining, Construction, Workbench, ConcreteMixing, Steelworking,
+    ChemistryStation, Salvage, Pistols, PistolTechnique, PistolPrecision,
+    Shotguns, ShotgunTechnique, ShotgunPrecision, Rifles, RifleTechnique,
+    Archery, Medicine, WeaponCraft, HeavyBladeCraft, ToolCraft,
+    FirearmCraft, PistolAmmo, MagnumAmmo, ShotgunAmmo, RifleAmmo,
+    AppliedScience, ElectricalBasics, ElectricalControls, ContactTraps, RangedTraps,
+    Generators, BatteryStorage, PartsFabrication, ArmorCraft, BasicCraft,
+    DecorativePaint, FauxPaint, MasonryPaint, MetalPaint, WallCovering,
+    WoodFinish, Nutrition, Hydration, CraftSpeed, Repair,
+    Barter, TradeAccess, Count
 };
 
-struct FSurvivalPerkInfo
+struct FTrainingInfo
 {
     const TCHAR* Name;
-    const TCHAR* Effect;
+    const TCHAR* Category;
     const TCHAR* Icon;
-    ESurvivalSkill Skill;
-    int32 Ranks;
-    int32 AmountPerRank;
-    int32 FirstCost;
-    int32 CostStep;
-    int32 LevelStep;
-    int32 SkillStep;
+    const TCHAR* Description;
+    int32 InitialRank;
+    int32 MaxRank;
+    int32 BasePracticeXP;
+    int32 BasePointCost;
+    float PointCostMultiplier;
+    bool bAvailable;
 
-    int32 Cost(int32 Rank) const { return FirstCost + (Rank - 1) * CostStep; }
-    int32 RequiredLevel(int32 Rank) const { return 1 + (Rank - 1) * LevelStep; }
-    int32 RequiredSkill(int32 Rank) const { return 1 + Rank * SkillStep; }
+    bool IsPractice() const { return BasePracticeXP > 0; }
+    int32 PointCost(int32 Rank) const;
 };
 
-const FSurvivalSkillInfo& GetSurvivalSkillInfo(ESurvivalSkill Skill);
-const FSurvivalPerkInfo& GetSurvivalPerkInfo(ESurvivalPerk Perk);
+struct FTrainingGate
+{
+    ETraining Entry;
+    int32 Rank;
+    ETraining RequiredEntry;
+    int32 RequiredRank;
+};
+
+const FTrainingInfo& GetTrainingInfo(ETraining Entry);
+TConstArrayView<FTrainingGate> GetTrainingGates();
+float TrainingEffectAtRank(ETraining Entry, int32 Rank);
 
 struct FSurvivalProgression
 {
-    static constexpr int32 SkillCount = static_cast<int32>(ESurvivalSkill::Count);
-    static constexpr int32 PerkCount = static_cast<int32>(ESurvivalPerk::Count);
-    static constexpr int32 MaxRank = 100;
+    static constexpr int32 EntryCount = static_cast<int32>(ETraining::Count);
     static constexpr int32 PointsPerLevel = 6;
+    static constexpr int32 LevelCap = 200;
 
     int32 Points = 0;
     int32 CharacterLevel = 1;
 
-    int32 Rank(ESurvivalSkill Skill) const { return SkillRanks[static_cast<int32>(Skill)] + 1; }
-    int32 Practice(ESurvivalSkill Skill) const;
-    int32 PracticeRequired(ESurvivalSkill Skill) const { return 26 + 4 * Rank(Skill); }
+    int32 Rank(ETraining Entry) const;
+    int32 Practice(ETraining Entry) const;
+    int32 PracticeRequired(ETraining Entry) const;
+    float Effect(ETraining Entry) const { return TrainingEffectAtRank(Entry, Rank(Entry)); }
     int32 CharacterXP() const { return LevelProgress; }
     int32 LevelXPRequired() const { return 100 + 25 * (CharacterLevel - 1); }
-    void AwardPractice(ESurvivalSkill Skill, int32 Amount);
+    void AwardPractice(ETraining Entry, int32 Amount);
     void AwardXP(int32 Amount);
-    void ReadGuide(ESurvivalSkill Skill);
-    int32 PerkRank(ESurvivalPerk Perk) const { return Perks[static_cast<int32>(Perk)]; }
-    int32 Bonus(ESurvivalPerk Perk) const;
-    int32 PerkCostThrough(ESurvivalPerk Perk, int32 TargetRank) const;
-    bool CanBuyPerkThrough(ESurvivalPerk Perk, int32 TargetRank) const;
-    bool BuyPerk(ESurvivalPerk Perk);
+    void ReadGuide(ETraining Entry);
+    int32 PointCostThrough(ETraining Entry, int32 TargetRank) const;
+    bool CanBuyThrough(ETraining Entry, int32 TargetRank) const;
+    bool BuyThrough(ETraining Entry, int32 TargetRank);
 
 private:
-    int32 SkillProgress[SkillCount]{};
-    int32 SkillRanks[SkillCount]{};
-    int32 Perks[PerkCount]{};
+    int32 SkillProgress[EntryCount]{};
+    int32 EarnedRanks[EntryCount]{};
     int32 LevelProgress = 0;
 };

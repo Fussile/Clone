@@ -50,7 +50,7 @@ struct FSurvivalVitals
     float Stamina = Max;
 
     bool CanSprint() const { return !bExhausted; }
-    int32 Advance(float DeltaSeconds, bool bSprinting, float MovementEffort, float AmbientCelsius, float SprintCost = 1.0f);
+    int32 Advance(float DeltaSeconds, bool bSprinting, float MovementEffort, float AmbientCelsius, float SprintCost, float StaminaRecovery, float HungerDrain, float ThirstDrain);
 
 private:
     float DeprivationTime = 0.0f;

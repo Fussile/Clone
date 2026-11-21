@@ -273,66 +273,74 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
 TSharedRef<SWidget> SSurvivalInventoryMenu::MakeSkillsPanel()
 {
     TSharedRef<SScrollBox> Rows = SNew(SScrollBox);
-    for (int32 Index = 0; Index < FSurvivalProgression::SkillCount + FSurvivalProgression::PerkCount; ++Index)
+    const TCHAR* GroupNames[] = {TEXT("Learn by doing"), TEXT("Knowledge"), TEXT("Future systems")};
+    for (int32 Group = 0; Group < UE_ARRAY_COUNT(GroupNames); ++Group)
     {
-        const bool bPerk = Index >= FSurvivalProgression::SkillCount;
-        const auto Skill = static_cast<ESurvivalSkill>(Index);
-        const auto Perk = static_cast<ESurvivalPerk>(Index - FSurvivalProgression::SkillCount);
-        const TCHAR* Name = bPerk ? GetSurvivalPerkInfo(Perk).Name : GetSurvivalSkillInfo(Skill).Name;
-        const TCHAR* Icon = bPerk ? GetSurvivalPerkInfo(Perk).Icon : GetSurvivalSkillInfo(Skill).Icon;
-        if (Index == 0 || Index == FSurvivalProgression::SkillCount)
+        Rows->AddSlot().Padding(2, Group == 0 ? 0 : 14, 2, 6)
+        [
+            SNew(STextBlock).Text(FText::FromString(GroupNames[Group]))
+            .Font(FCoreStyle::GetDefaultFontStyle("Bold", 11)).ColorAndOpacity(FSlateColor(Muted))
+            .Visibility_Lambda([this]()
+            {
+                return TrainingSearch.IsEmpty() ? EVisibility::Visible : EVisibility::Collapsed;
+            })
+        ];
+        for (int32 Index = 0; Index < FSurvivalProgression::EntryCount; ++Index)
         {
-            Rows->AddSlot().Padding(2, Index == 0 ? 0 : 14, 2, 6)
+            const auto Entry = static_cast<ETraining>(Index);
+            const FTrainingInfo& Info = GetTrainingInfo(Entry);
+            const int32 EntryGroup = !Info.bAvailable ? 2 : Info.IsPractice() ? 0 : 1;
+            if (EntryGroup != Group)
+            {
+                continue;
+            }
+            Rows->AddSlot().Padding(0, 0, 6, 4)
             [
-                SNew(STextBlock).Text(FText::FromString(bPerk ? TEXT("Perks") : TEXT("Action skills")))
-                .Font(FCoreStyle::GetDefaultFontStyle("Bold", 11)).ColorAndOpacity(FSlateColor(Muted))
+                SNew(SButton).ButtonStyle(&MenuButtonStyle()).HAlign(HAlign_Fill).ContentPadding(FMargin(9, 7))
+                .ButtonColorAndOpacity_Lambda([this, Index]() { return FSlateColor(SelectedTraining == Index ? Chosen : Tile); })
+                .Visibility_Lambda([this, Entry]()
+                {
+                    const FTrainingInfo& Training = GetTrainingInfo(Entry);
+                    return TrainingSearch.IsEmpty() || FString(Training.Name).Contains(TrainingSearch)
+                        || FString(Training.Category).Contains(TrainingSearch)
+                        ? EVisibility::Visible : EVisibility::Collapsed;
+                })
+                .OnClicked_Lambda([this, Index, Entry]()
+                {
+                    SelectedTraining = Index;
+                    const FTrainingInfo& Training = GetTrainingInfo(Entry);
+                    PreviewRank = Player.IsValid()
+                        ? FMath::Min(Player->GetProgression().Rank(Entry) + 1, Training.MaxRank) : 1;
+                    return FReply::Handled();
+                })
+                [
+                    SNew(SHorizontalBox)
+                    + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 9, 0)
+                    [
+                        SNew(SImage).Image(FindThemeIcon(Info.Icon)).ColorAndOpacity(Accent)
+                    ]
+                    + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center)
+                    [
+                        SNew(STextBlock).Text(FText::FromString(Info.Name))
+                    ]
+                    + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(4, 0)
+                    [
+                        SNew(STextBlock).ColorAndOpacity(FSlateColor(Muted))
+                        .Text_Lambda([this, Entry]()
+                        {
+                            const FTrainingInfo& Training = GetTrainingInfo(Entry);
+                            return Training.bAvailable && Player.IsValid()
+                                ? FText::FromString(FString::Printf(TEXT("%d/%d"), Player->GetProgression().Rank(Entry), Training.MaxRank))
+                                : FText::FromString(TEXT("Planned"));
+                        })
+                    ]
+                ]
             ];
         }
-        Rows->AddSlot().Padding(0, 0, 6, 4)
-        [
-            SNew(SButton).ButtonStyle(&MenuButtonStyle()).HAlign(HAlign_Fill).ContentPadding(FMargin(9, 7))
-            .ButtonColorAndOpacity_Lambda([this, Index]() { return FSlateColor(SelectedTraining == Index ? Chosen : Tile); })
-            .OnClicked_Lambda([this, Index, bPerk, Perk]()
-            {
-                SelectedTraining = Index;
-                if (bPerk && Player.IsValid())
-                {
-                    PreviewRank = FMath::Min(Player->GetProgression().PerkRank(Perk) + 1, GetSurvivalPerkInfo(Perk).Ranks);
-                }
-                return FReply::Handled();
-            })
-            [
-                SNew(SHorizontalBox)
-                + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 9, 0)
-                [
-                    SNew(SImage).Image(FindThemeIcon(Icon)).ColorAndOpacity(Accent)
-                ]
-                + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center)
-                [
-                    SNew(STextBlock).Text(FText::FromString(Name))
-                ]
-                + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(4, 0)
-                [
-                    SNew(STextBlock).ColorAndOpacity(FSlateColor(Muted))
-                    .Text_Lambda([this, bPerk, Skill, Perk]()
-                    {
-                        if (!Player.IsValid())
-                        {
-                            return FText::GetEmpty();
-                        }
-                        const FSurvivalProgression& Progress = Player->GetProgression();
-                        return FText::FromString(bPerk
-                            ? FString::Printf(TEXT("%d/%d"), Progress.PerkRank(Perk), GetSurvivalPerkInfo(Perk).Ranks)
-                            : FString::Printf(TEXT("%d/%d"), Progress.Rank(Skill), FSurvivalProgression::MaxRank));
-                    })
-                ]
-            ]
-        ];
     }
 
-    const auto IsPerk = [this]() { return SelectedTraining >= FSurvivalProgression::SkillCount; };
-    const auto SelectedPerk = [this]() { return static_cast<ESurvivalPerk>(SelectedTraining - FSurvivalProgression::SkillCount); };
-    const auto SelectedSkill = [this]() { return static_cast<ESurvivalSkill>(SelectedTraining); };
+    const auto SelectedEntry = [this]() { return static_cast<ETraining>(SelectedTraining); };
+    const auto IsKnowledge = [SelectedEntry]() { return !GetTrainingInfo(SelectedEntry()).IsPractice(); };
     return SNew(SVerticalBox)
         .Visibility_Lambda([this]() { return bShowSkills ? EVisibility::Visible : EVisibility::Collapsed; })
         + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 12)
@@ -371,7 +379,16 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeSkillsPanel()
                 + SHorizontalBox::Slot().FillWidth(0.40f).Padding(0, 0, 12, 0)
                 [
                     SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).BorderBackgroundColor(PanelColor)
-                    .Padding(FMargin(10))[Rows]
+                    .Padding(FMargin(10))
+                    [
+                        SNew(SVerticalBox)
+                        + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)
+                        [
+                            SNew(SSearchBox).HintText(FText::FromString(TEXT("Search skills or categories")))
+                            .OnTextChanged_Lambda([this](const FText& Text) { TrainingSearch = Text.ToString().TrimStartAndEnd(); })
+                        ]
+                        + SVerticalBox::Slot().FillHeight(1)[Rows]
+                    ]
                 ]
                 + SHorizontalBox::Slot().FillWidth(0.60f)
                 [
@@ -382,52 +399,74 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeSkillsPanel()
                         + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 6)
                         [
                             SNew(STextBlock).ColorAndOpacity(FSlateColor(Accent))
-                            .Text_Lambda([IsPerk]() { return FText::FromString(IsPerk() ? TEXT("PERK") : TEXT("ACTION SKILL")); })
+                            .Text_Lambda([SelectedEntry]()
+                            {
+                                const FTrainingInfo& Info = GetTrainingInfo(SelectedEntry());
+                                return FText::FromString(FString::Printf(TEXT("%s  /  %s"), Info.Category,
+                                    Info.IsPractice() ? TEXT("Learn by doing") : TEXT("Knowledge")));
+                            })
                         ]
                         + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 18)
                         [
                             SNew(STextBlock).Font(FCoreStyle::GetDefaultFontStyle("Bold", 26))
-                            .Text_Lambda([IsPerk, SelectedPerk, SelectedSkill]()
+                            .Text_Lambda([SelectedEntry]()
                             {
-                                return FText::FromString(IsPerk() ? GetSurvivalPerkInfo(SelectedPerk()).Name
-                                    : GetSurvivalSkillInfo(SelectedSkill()).Name);
+                                return FText::FromString(GetTrainingInfo(SelectedEntry()).Name);
                             })
                         ]
                         + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 12)
                         [
-                            SNew(STextBlock).AutoWrapText(true).Text_Lambda([this, IsPerk, SelectedPerk, SelectedSkill]()
+                            SNew(STextBlock).AutoWrapText(true).Text_Lambda([SelectedEntry]()
                             {
-                                if (!IsPerk()) { return FText::FromString(GetSurvivalSkillInfo(SelectedSkill()).Practice); }
-                                const FSurvivalPerkInfo& Info = GetSurvivalPerkInfo(SelectedPerk());
-                                return FText::Format(FText::FromString(Info.Effect), FText::AsNumber(Info.AmountPerRank * PreviewRank));
+                                return FText::FromString(GetTrainingInfo(SelectedEntry()).Description);
                             })
                         ]
                         + SVerticalBox::Slot().AutoHeight()
                         [
                             SNew(STextBlock).ColorAndOpacity(FSlateColor(Muted)).AutoWrapText(true)
-                            .Text_Lambda([this, IsPerk, SelectedPerk, SelectedSkill]()
+                            .Text_Lambda([this, SelectedEntry]()
                             {
                                 if (!Player.IsValid()) { return FText::GetEmpty(); }
                                 const FSurvivalProgression& Progress = Player->GetProgression();
-                                if (!IsPerk())
+                                const ETraining Entry = SelectedEntry();
+                                const FTrainingInfo& Info = GetTrainingInfo(Entry);
+                                const int32 Rank = Progress.Rank(Entry);
+                                if (Info.IsPractice())
                                 {
-                                    const ESurvivalSkill Skill = SelectedSkill();
-                                    return Progress.Rank(Skill) == FSurvivalProgression::MaxRank
-                                        ? FText::FromString(TEXT("Maximum rank"))
-                                        : FText::FromString(FString::Printf(TEXT("Rank %d  •  %d / %d practice XP"),
-                                            Progress.Rank(Skill), Progress.Practice(Skill), Progress.PracticeRequired(Skill)));
+                                    if (!Info.bAvailable)
+                                    {
+                                        return FText::FromString(FString::Printf(TEXT("Available when its activity is added.  /  %d ranks"), Info.MaxRank));
+                                    }
+                                    return Rank == Info.MaxRank ? FText::FromString(TEXT("Maximum rank"))
+                                        : FText::FromString(FString::Printf(TEXT("Rank %d  /  %d of %d practice XP"),
+                                            Rank, Progress.Practice(Entry), Progress.PracticeRequired(Entry)));
                                 }
-                                const FSurvivalPerkInfo& Info = GetSurvivalPerkInfo(SelectedPerk());
-                                if (PreviewRank <= Progress.PerkRank(SelectedPerk()))
+                                FString Requirements;
+                                if (!Info.bAvailable)
+                                {
+                                    Requirements = TEXT("Available when its system is added.\n");
+                                }
+                                if (PreviewRank <= Rank && Info.bAvailable)
                                 {
                                     return FText::FromString(TEXT("Rank learned"));
                                 }
-                                FString Requirements = FString::Printf(TEXT("%d points to learn  •  Level %d"),
-                                    Progress.PerkCostThrough(SelectedPerk(), PreviewRank), Info.RequiredLevel(PreviewRank));
-                                if (Info.Skill != ESurvivalSkill::Count)
+                                const int32 Cost = Info.bAvailable ? Progress.PointCostThrough(Entry, PreviewRank) : Info.PointCost(PreviewRank);
+                                Requirements += FString::Printf(TEXT("%d points%s"), Cost,
+                                    Info.bAvailable ? TEXT(" to learn") : TEXT(" for this rank"));
+                                for (const FTrainingGate& Gate : GetTrainingGates())
                                 {
-                                    Requirements += FString::Printf(TEXT("  •  %s %d"),
-                                        GetSurvivalSkillInfo(Info.Skill).Name, Info.RequiredSkill(PreviewRank));
+                                    if (Gate.Entry == Entry && Gate.Rank == PreviewRank)
+                                    {
+                                        if (Gate.RequiredEntry == ETraining::Count)
+                                        {
+                                            Requirements += FString::Printf(TEXT("\nCharacter level %d"), Gate.RequiredRank);
+                                        }
+                                        else
+                                        {
+                                            Requirements += FString::Printf(TEXT("\n%s %d"),
+                                                GetTrainingInfo(Gate.RequiredEntry).Name, Gate.RequiredRank);
+                                        }
+                                    }
                                 }
                                 return FText::FromString(Requirements);
                             })
@@ -439,7 +478,7 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeSkillsPanel()
                         + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 10)
                         [
                             SNew(SHorizontalBox)
-                            .Visibility_Lambda([IsPerk]() { return IsPerk() ? EVisibility::Visible : EVisibility::Collapsed; })
+                            .Visibility_Lambda([IsKnowledge]() { return IsKnowledge() ? EVisibility::Visible : EVisibility::Collapsed; })
                             + SHorizontalBox::Slot().AutoWidth()
                             [
                                 SNew(SButton).ButtonStyle(&MenuButtonStyle()).ButtonColorAndOpacity(Tile)
@@ -449,19 +488,19 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeSkillsPanel()
                             ]
                             + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center).Padding(10, 0)
                             [
-                                SNew(STextBlock).Text_Lambda([this, IsPerk, SelectedPerk]()
+                                SNew(STextBlock).Text_Lambda([this, IsKnowledge, SelectedEntry]()
                                 {
-                                    return IsPerk() ? FText::FromString(FString::Printf(TEXT("Rank %d of %d"),
-                                        PreviewRank, GetSurvivalPerkInfo(SelectedPerk()).Ranks)) : FText::GetEmpty();
+                                    return IsKnowledge() ? FText::FromString(FString::Printf(TEXT("Rank %d of %d"),
+                                        PreviewRank, GetTrainingInfo(SelectedEntry()).MaxRank)) : FText::GetEmpty();
                                 })
                             ]
                             + SHorizontalBox::Slot().AutoWidth()
                             [
                                 SNew(SButton).ButtonStyle(&MenuButtonStyle()).ButtonColorAndOpacity(Tile)
                                 .Text(FText::FromString(TEXT("+")))
-                                .IsEnabled_Lambda([this, IsPerk, SelectedPerk]()
+                                .IsEnabled_Lambda([this, IsKnowledge, SelectedEntry]()
                                 {
-                                    return IsPerk() && PreviewRank < GetSurvivalPerkInfo(SelectedPerk()).Ranks;
+                                    return IsKnowledge() && PreviewRank < GetTrainingInfo(SelectedEntry()).MaxRank;
                                 })
                                 .OnClicked_Lambda([this]() { ++PreviewRank; return FReply::Handled(); })
                             ]
@@ -469,26 +508,26 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeSkillsPanel()
                         + SVerticalBox::Slot().AutoHeight()
                         [
                             SNew(SButton).ButtonStyle(&MenuButtonStyle()).ButtonColorAndOpacity(Chosen)
-                            .Visibility_Lambda([IsPerk]() { return IsPerk() ? EVisibility::Visible : EVisibility::Collapsed; })
-                            .Text_Lambda([this, IsPerk, SelectedPerk]()
+                            .Visibility_Lambda([IsKnowledge]() { return IsKnowledge() ? EVisibility::Visible : EVisibility::Collapsed; })
+                            .Text_Lambda([this, IsKnowledge, SelectedEntry]()
                             {
-                                if (!Player.IsValid() || !IsPerk()) { return FText::GetEmpty(); }
-                                const auto Perk = SelectedPerk();
-                                const int32 Owned = Player->GetProgression().PerkRank(Perk);
+                                if (!Player.IsValid() || !IsKnowledge()) { return FText::GetEmpty(); }
+                                const auto Entry = SelectedEntry();
+                                if (!GetTrainingInfo(Entry).bAvailable) { return FText::FromString(TEXT("Unavailable")); }
+                                const int32 Owned = Player->GetProgression().Rank(Entry);
                                 if (PreviewRank <= Owned) { return FText::FromString(TEXT("Learned")); }
                                 return FText::FromString(PreviewRank == Owned + 1 ? TEXT("Learn rank") : TEXT("Learn up to this rank"));
                             })
-                            .IsEnabled_Lambda([this, IsPerk, SelectedPerk]()
+                            .IsEnabled_Lambda([this, IsKnowledge, SelectedEntry]()
                             {
-                                if (!Player.IsValid() || !IsPerk()) { return false; }
-                                const FSurvivalProgression& Progress = Player->GetProgression();
-                                return Progress.CanBuyPerkThrough(SelectedPerk(), PreviewRank);
+                                return Player.IsValid() && IsKnowledge()
+                                    && Player->GetProgression().CanBuyThrough(SelectedEntry(), PreviewRank);
                             })
-                            .OnClicked_Lambda([this, SelectedPerk]()
+                            .OnClicked_Lambda([this, SelectedEntry]()
                             {
                                 if (ASurvivalCharacter* Character = Player.Get())
                                 {
-                                    Character->BuySkillPerk(SelectedPerk(), PreviewRank);
+                                    Character->BuyTraining(SelectedEntry(), PreviewRank);
                                 }
                                 return FReply::Handled();
                             })
