@@ -11,10 +11,12 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "SurvivalBuildChunk.h"
 #include "SurvivalGameMode.h"
+#include "SurvivalHUD.h"
 #include "SurvivalRound.h"
 #include "SurvivalSidearm.h"
 #include "SurvivalSupplyCrate.h"
@@ -165,10 +167,12 @@ void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
     PlayerInputComponent->BindAction(TEXT("Prone"), IE_Pressed, this, &ASurvivalCharacter::ToggleProne);
     PlayerInputComponent->BindAction(TEXT("Interact"), IE_Pressed, this, &ASurvivalCharacter::Interact);
     PlayerInputComponent->BindAction(TEXT("Inventory"), IE_Pressed, this, &ASurvivalCharacter::ToggleInventory);
-    PlayerInputComponent->BindAction(TEXT("EatFood"), IE_Pressed, this, &ASurvivalCharacter::EatFood);
-    PlayerInputComponent->BindAction(TEXT("DrinkWater"), IE_Pressed, this, &ASurvivalCharacter::DrinkWater);
-    PlayerInputComponent->BindAction(TEXT("UseBandage"), IE_Pressed, this, &ASurvivalCharacter::UseBandage);
-    PlayerInputComponent->BindAction(TEXT("CraftBandage"), IE_Pressed, this, &ASurvivalCharacter::CraftBandage);
+    PlayerInputComponent->BindAction(TEXT("HotbarOne"), IE_Pressed, this, &ASurvivalCharacter::HotbarOne);
+    PlayerInputComponent->BindAction(TEXT("HotbarTwo"), IE_Pressed, this, &ASurvivalCharacter::HotbarTwo);
+    PlayerInputComponent->BindAction(TEXT("HotbarThree"), IE_Pressed, this, &ASurvivalCharacter::HotbarThree);
+    PlayerInputComponent->BindAction(TEXT("HotbarFour"), IE_Pressed, this, &ASurvivalCharacter::HotbarFour);
+    PlayerInputComponent->BindAction(TEXT("HotbarFive"), IE_Pressed, this, &ASurvivalCharacter::HotbarFive);
+    PlayerInputComponent->BindAction(TEXT("HotbarSix"), IE_Pressed, this, &ASurvivalCharacter::HotbarSix);
     PlayerInputComponent->BindAction(TEXT("ToggleBuildMode"), IE_Pressed, this, &ASurvivalCharacter::ToggleBuildMode);
     PlayerInputComponent->BindAction(TEXT("RotatePiece"), IE_Pressed, this, &ASurvivalCharacter::RotatePiece);
     PlayerInputComponent->BindAction(TEXT("NextPiece"), IE_Pressed, this, &ASurvivalCharacter::NextPiece);
@@ -195,7 +199,7 @@ void ASurvivalCharacter::MoveRight(float Value)
 
 void ASurvivalCharacter::StartJump()
 {
-    if (!bIsCrouched)
+    if (!bIsCrouched && !bInventoryOpen)
     {
         Jump();
     }
@@ -224,7 +228,7 @@ void ASurvivalCharacter::ToggleProne()
 void ASurvivalCharacter::SetStance(EStance NewStance)
 {
     UCharacterMovementComponent* Movement = GetCharacterMovement();
-    if (HealthPoints <= 0 || !Movement->IsMovingOnGround())
+    if (HealthPoints <= 0 || bInventoryOpen || !Movement->IsMovingOnGround())
     {
         return;
     }
@@ -354,7 +358,7 @@ FSurvivalMaterials ASurvivalCharacter::GetPlannedCost() const
 
 void ASurvivalCharacter::Interact()
 {
-    if (HealthPoints <= 0)
+    if (HealthPoints <= 0 || bInventoryOpen)
     {
         return;
     }
@@ -384,7 +388,21 @@ void ASurvivalCharacter::Interact()
         {
             if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
             {
-                Chunk->RepairFinished(Hit, Inventory);
+                if (const FSurvivalFinishedPiece* Piece = Chunk->FindFinished(Hit);
+                    !bBuildMode && Piece && Piece->Placement.GetPiece().bDoor)
+                {
+                    if (!Chunk->TryToggleDoor(Hit))
+                    {
+                        if (APlayerController* Player = Cast<APlayerController>(GetController()))
+                        {
+                            Player->ClientMessage(TEXT("Door swing is blocked."));
+                        }
+                    }
+                }
+                else
+                {
+                    Chunk->RepairFinished(Hit, Inventory);
+                }
             }
         }
     }
@@ -415,7 +433,7 @@ void ASurvivalCharacter::EquipSidearm()
 
 void ASurvivalCharacter::UpdateSidearmView()
 {
-    const bool bVisible = !bBuildMode && !bInventoryOpen && HealthPoints > 0;
+    const bool bVisible = IsSidearmSelected() && !bBuildMode && !bInventoryOpen && HealthPoints > 0;
     SidearmViewmodel->SetHiddenInGame(!bVisible || bThirdPerson || !bViewmodelReady);
     if (!Sidearm)
     {
@@ -549,7 +567,7 @@ void ASurvivalCharacter::UpdateSidearmAnimation()
 
 bool ASurvivalCharacter::IsAimingSidearm() const
 {
-    return bAimHeld && bHasSidearm && !bThirdPerson && !bBuildMode && !bInventoryOpen && !IsReloading() && HealthPoints > 0;
+    return bAimHeld && bHasSidearm && IsSidearmSelected() && !bThirdPerson && !bBuildMode && !bInventoryOpen && !IsReloading() && HealthPoints > 0;
 }
 
 void ASurvivalCharacter::PressAim()
@@ -584,7 +602,7 @@ void ASurvivalCharacter::UpdateSidearmAim(float DeltaSeconds)
 void ASurvivalCharacter::StartReload()
 {
     const double Now = GetWorld()->GetTimeSeconds();
-    if (HealthPoints <= 0 || bInventoryOpen || !bHasSidearm || IsReloading() || Now < NextShotAt
+    if (HealthPoints <= 0 || bInventoryOpen || !bHasSidearm || !IsSidearmSelected() || IsReloading() || Now < NextShotAt
         || Ammo >= SidearmCapacity || Items.Rounds <= 0)
     {
         return;
@@ -612,6 +630,11 @@ void ASurvivalCharacter::PrimaryAction()
     if (bBuildMode)
     {
         PlacePlan();
+        return;
+    }
+    if (!IsSidearmSelected())
+    {
+        UseItem(Hotbar[ActiveHotbarSlot]);
         return;
     }
     const double Now = GetWorld()->GetTimeSeconds();
@@ -681,7 +704,7 @@ int32 ASurvivalCharacter::GetLivingAttackers() const
 
 void ASurvivalCharacter::StartDefense()
 {
-    if (HealthPoints <= 0 || DefenseWave >= DefenseWaveCount || GetLivingAttackers() > 0)
+    if (HealthPoints <= 0 || bInventoryOpen || DefenseWave >= DefenseWaveCount || GetLivingAttackers() > 0)
     {
         return;
     }
@@ -727,7 +750,7 @@ void ASurvivalCharacter::TakeSurvivalDamage(int32 Amount)
     HealthPoints = FMath::Max(0, HealthPoints - Amount);
     if (HealthPoints == 0)
     {
-        bInventoryOpen = false;
+        SetInventoryOpen(false);
         bBuildMode = false;
         ReloadCompleteAt = -1.0;
         UpdateSidearmView();
@@ -749,7 +772,10 @@ void ASurvivalCharacter::UpdateVitals(float DeltaSeconds)
     const bool bSprintAllowed = bSprintHeld && Stance == EStance::Standing && Vitals.CanSprint()
         && !IsAimingSidearm() && !bInventoryOpen;
     const bool bSprinting = bSprintAllowed && GetVelocity().SizeSquared2D() > FMath::Square(20.0);
-    const int32 Damage = Vitals.Advance(DeltaSeconds, bSprinting);
+    const ASurvivalGameMode* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
+    const float Ambient = Mode ? static_cast<float>(Mode->GetAmbientTemperature()) : 14.0f;
+    const float Effort = static_cast<float>(FMath::Clamp(GetVelocity().Size2D() / WalkSpeed, 0.0, 1.5));
+    const int32 Damage = Vitals.Advance(DeltaSeconds, bSprinting, Effort, Ambient);
     GetCharacterMovement()->MaxWalkSpeed = bSprintAllowed && Vitals.CanSprint() ? SprintSpeed : WalkSpeed;
     if (Damage > 0)
     {
@@ -761,37 +787,113 @@ void ASurvivalCharacter::ToggleInventory()
 {
     if (HealthPoints > 0)
     {
-        bInventoryOpen = !bInventoryOpen;
-        bBuildMode = false;
-        UpdateSidearmView();
+        SetInventoryOpen(!bInventoryOpen);
     }
 }
 
-void ASurvivalCharacter::EatFood()
+void ASurvivalCharacter::SetInventoryOpen(bool bOpen)
 {
-    if (HealthPoints > 0 && Items.Food > 0 && Vitals.Hunger < FSurvivalVitals::Max)
+    if (bInventoryOpen == bOpen)
     {
+        return;
+    }
+    bInventoryOpen = bOpen;
+    bAimHeld = false;
+    bSprintHeld = false;
+    if (bOpen)
+    {
+        bBuildMode = false;
+    }
+    if (APlayerController* Player = Cast<APlayerController>(GetController()))
+    {
+        if (ASurvivalHUD* HUD = Cast<ASurvivalHUD>(Player->GetHUD()))
+        {
+            HUD->SetInventoryVisible(*this, bOpen);
+        }
+    }
+    UpdateSidearmView();
+}
+
+int32 ASurvivalCharacter::GetItemCount(ESurvivalItem Item) const
+{
+    switch (Item)
+    {
+    case ESurvivalItem::Sidearm: return bHasSidearm ? 1 : 0;
+    case ESurvivalItem::Food: return Items.Food;
+    case ESurvivalItem::Water: return Items.Water;
+    case ESurvivalItem::Bandage: return Items.Bandages;
+    case ESurvivalItem::Timber: return Inventory.Timber;
+    case ESurvivalItem::Stone: return Inventory.Stone;
+    case ESurvivalItem::Cloth: return Items.Cloth;
+    case ESurvivalItem::Rounds: return Items.Rounds;
+    default: return 0;
+    }
+}
+
+bool ASurvivalCharacter::CanUseItem(ESurvivalItem Item) const
+{
+    if (HealthPoints <= 0 || GetItemCount(Item) <= 0)
+    {
+        return false;
+    }
+    switch (Item)
+    {
+    case ESurvivalItem::Food: return Vitals.Hunger < FSurvivalVitals::Max;
+    case ESurvivalItem::Water: return Vitals.Thirst < FSurvivalVitals::Max;
+    case ESurvivalItem::Bandage: return HealthPoints < 100;
+    default: return false;
+    }
+}
+
+void ASurvivalCharacter::UseItem(ESurvivalItem Item)
+{
+    if (!CanUseItem(Item))
+    {
+        return;
+    }
+    switch (Item)
+    {
+    case ESurvivalItem::Food:
         --Items.Food;
         Vitals.Hunger = FMath::Min(FSurvivalVitals::Max, Vitals.Hunger + 34.0f);
-    }
-}
-
-void ASurvivalCharacter::DrinkWater()
-{
-    if (HealthPoints > 0 && Items.Water > 0 && Vitals.Thirst < FSurvivalVitals::Max)
-    {
+        break;
+    case ESurvivalItem::Water:
         --Items.Water;
         Vitals.Thirst = FMath::Min(FSurvivalVitals::Max, Vitals.Thirst + 42.0f);
+        break;
+    case ESurvivalItem::Bandage:
+        --Items.Bandages;
+        HealthPoints = FMath::Min(100, HealthPoints + 30);
+        break;
+    default:
+        break;
     }
 }
 
-void ASurvivalCharacter::UseBandage()
+void ASurvivalCharacter::ChooseHotbarSlot(int32 Slot)
 {
-    if (HealthPoints > 0 && HealthPoints < 100 && Items.Bandages > 0)
+    if (Slot < 0 || Slot >= HotbarSize || HealthPoints <= 0)
     {
-        --Items.Bandages;
-        HealthPoints = FMath::Min(100, HealthPoints + 30);
+        return;
     }
+    if (bInventoryOpen)
+    {
+        if (SelectedInventoryItem != ESurvivalItem::None && GetItemCount(SelectedInventoryItem) <= 0)
+        {
+            return;
+        }
+        for (int32 Index = 0; Index < HotbarSize; ++Index)
+        {
+            if (Index != Slot && Hotbar[Index] == SelectedInventoryItem && SelectedInventoryItem != ESurvivalItem::None)
+            {
+                Hotbar[Index] = Hotbar[Slot];
+                break;
+            }
+        }
+        Hotbar[Slot] = SelectedInventoryItem;
+    }
+    ActiveHotbarSlot = Slot;
+    UpdateSidearmView();
 }
 
 void ASurvivalCharacter::CraftBandage()
@@ -804,7 +906,7 @@ void ASurvivalCharacter::CraftBandage()
 
 void ASurvivalCharacter::ToggleBuildMode()
 {
-    bInventoryOpen = false;
+    SetInventoryOpen(false);
     bBuildMode = HealthPoints > 0 && !bBuildMode;
     UpdateSidearmView();
 }
@@ -827,6 +929,10 @@ void ASurvivalCharacter::NextPiece()
     {
         SelectedPiece = (SelectedPiece + 1) % GetSurvivalBuildPieces().Num();
     }
+    else if (!bInventoryOpen)
+    {
+        ChooseHotbarSlot((ActiveHotbarSlot + 1) % HotbarSize);
+    }
 }
 
 void ASurvivalCharacter::PreviousPiece()
@@ -835,6 +941,10 @@ void ASurvivalCharacter::PreviousPiece()
     {
         const int32 Count = GetSurvivalBuildPieces().Num();
         SelectedPiece = (SelectedPiece + Count - 1) % Count;
+    }
+    else if (!bInventoryOpen)
+    {
+        ChooseHotbarSlot((ActiveHotbarSlot + HotbarSize - 1) % HotbarSize);
     }
 }
 
@@ -852,19 +962,28 @@ bool ASurvivalCharacter::IsFootprintClear(const FSurvivalBuildPlacement& Placeme
         Query.AddIgnoredActor(this);
     }
 
-    for (const FBox& Box : Placement.GetPiece().Boxes)
+    if (const ASurvivalGameMode* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
+        Mode && Mode->HasReservedCellConflict(Placement, bPlanning))
     {
-        // A small inset lets adjoining boxes touch without rejecting the placement.
+        return false;
+    }
+    const auto IsClear = [&](const FBox& Box)
+    {
+        // Inset the query so touching faces and a door resting in its frame remain valid.
         const FCollisionShape Shape = FCollisionShape::MakeBox(Box.GetExtent() - FVector(0.5));
         const FVector Center = Placement.WorldCenter(Box);
-        if (GetWorld()->OverlapBlockingTestByChannel(Center, Placement.Rotation, ECC_Pawn, Shape, Query)
-            || (bPlanning && GetWorld()->OverlapBlockingTestByChannel(
-                Center, Placement.Rotation, ECC_GameTraceChannel1, Shape, Query)))
+        return !GetWorld()->OverlapBlockingTestByChannel(Center, Placement.Rotation, ECC_Pawn, Shape, Query)
+            && (!bPlanning || !GetWorld()->OverlapBlockingTestByChannel(
+                Center, Placement.Rotation, ECC_GameTraceChannel1, Shape, Query));
+    };
+    for (const FBox& Box : Placement.GetPiece().Boxes)
+    {
+        if (!IsClear(Box))
         {
             return false;
         }
     }
-    return true;
+    return !Placement.GetPiece().bDoor || IsClear(FSurvivalBuildPlacement::ClosedDoor());
 }
 
 TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
@@ -938,7 +1057,7 @@ void ASurvivalCharacter::PlacePlan()
 
 void ASurvivalCharacter::RemovePlan()
 {
-    if (HealthPoints <= 0)
+    if (HealthPoints <= 0 || bInventoryOpen)
     {
         return;
     }

@@ -166,6 +166,18 @@ def import_building():
             raise RuntimeError(f"Could not save {path}.")
 
 
+def import_inventory_icons():
+    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    directory = ART + "/Inventory"
+    generate = runpy.run_path(str(TOOLS / "build_item_icons.py"))["write_item_icons"]
+    for source in generate(TOOLS.parent / "Saved" / "GeneratedArt" / "Inventory"):
+        texture = import_asset(source, directory, unreal.Texture2D)
+        texture.set_editor_property("filter", unreal.TextureFilter.TF_NEAREST)
+        texture.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_UI)
+        if not assets.save_loaded_asset(texture):
+            raise RuntimeError(f"Could not save {texture.get_path_name()}.")
+
+
 def import_skeletal_pack(directory, names, source, prepared=None, generator=None, *generator_inputs):
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     if all(assets.does_asset_exist(f"{directory}/{name}") for name in names):
@@ -236,6 +248,7 @@ def prepare():
     if not levels.save_current_level():
         raise RuntimeError(f"Could not save the surfaces in {LEVEL}.")
     import_building()
+    import_inventory_icons()
     generated = TOOLS.parent / "Saved" / "GeneratedArt"
     sidearm = SOURCE / "Weapons" / "SM_CrossroadsSidearm.glb"
     import_skeletal_pack(ZOMBIE,

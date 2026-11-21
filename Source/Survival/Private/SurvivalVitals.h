@@ -2,6 +2,13 @@
 
 #include "CoreMinimal.h"
 
+enum class ESurvivalItem : uint8
+{
+    Sidearm, Food, Water, Bandage, Timber, Stone, Cloth, Rounds, None
+};
+
+const TCHAR* SurvivalItemName(ESurvivalItem Item);
+
 struct FSurvivalItems
 {
     int32 Food = 0;
@@ -25,7 +32,7 @@ struct FSurvivalVitals
     float Stamina = Max;
 
     bool CanSprint() const { return !bExhausted; }
-    int32 Advance(float DeltaSeconds, bool bSprinting);
+    int32 Advance(float DeltaSeconds, bool bSprinting, float MovementEffort, float AmbientCelsius);
 
 private:
     float DeprivationTime = 0.0f;

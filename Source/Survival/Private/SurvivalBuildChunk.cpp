@@ -1,6 +1,8 @@
 #include "SurvivalBuildChunk.h"
 
+#include "CollisionQueryParams.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/HitResult.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
@@ -70,7 +72,7 @@ bool ASurvivalBuildChunk::AddInstances(UInstancedStaticMeshComponent& Component,
         return false;
     }
     constexpr double CubeHalfExtent = 50.0;
-    for (const FBox& Box : Placement.GetPiece().Boxes)
+    const auto AddBox = [&](const FBox& Box)
     {
         const int32 Index = Component.AddInstance(FTransform(Placement.Rotation, Placement.WorldCenter(Box),
             Box.GetExtent() / CubeHalfExtent), /*bWorldSpace=*/true);
@@ -83,8 +85,16 @@ bool ASurvivalBuildChunk::AddInstances(UInstancedStaticMeshComponent& Component,
             return false;
         }
         Indices.Add(Index);
+        return true;
+    };
+    for (const FBox& Box : Placement.GetPiece().Boxes)
+    {
+        if (!AddBox(Box))
+        {
+            return false;
+        }
     }
-    return true;
+    return &Component != Ghosts.Get() || !Placement.GetPiece().bDoor || AddBox(FSurvivalBuildPlacement::ClosedDoor());
 }
 
 bool ASurvivalBuildChunk::AddPlan(const FSurvivalBuildPlacement& Placement)
@@ -122,12 +132,104 @@ bool ASurvivalBuildChunk::FinishPlan(int32 Index, int32 StructureId)
     return true;
 }
 
+namespace
+{
+FTransform DoorTransform(const FSurvivalBuildPlacement& Placement, double Degrees)
+{
+    const FBox Leaf = FSurvivalBuildPlacement::ClosedDoor();
+    const FVector Center = Leaf.GetCenter();
+    const FVector Hinge(Leaf.Min.X, Center.Y, Center.Z);
+    const FQuat Swing = FRotator(0, Degrees, 0).Quaternion();
+    return FTransform(Placement.Rotation * Swing,
+        Placement.Base + Placement.Rotation.RotateVector(Hinge + Swing.RotateVector(Center - Hinge)),
+        Leaf.GetExtent() / 50.0);
+}
+}
+
+bool ASurvivalBuildChunk::AddDoorLeaf(FSurvivalFinishedPiece& Piece)
+{
+    if (!Timber->GetStaticMesh())
+    {
+        return false;
+    }
+    UStaticMeshComponent* Leaf = NewObject<UStaticMeshComponent>(this);
+    AddInstanceComponent(Leaf);
+    Leaf->SetupAttachment(GetRootComponent());
+    Leaf->SetMobility(EComponentMobility::Movable);
+    Leaf->SetStaticMesh(Timber->GetStaticMesh());
+    Leaf->SetMaterial(0, Timber->GetMaterial(0));
+    Leaf->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+    Leaf->SetCanEverAffectNavigation(false);
+    Leaf->SetWorldTransform(DoorTransform(Piece.Placement, 0.0));
+    Leaf->RegisterComponent();
+    Piece.Door = Leaf;
+    return true;
+}
+
+bool ASurvivalBuildChunk::TryToggleDoor(const FHitResult& Hit)
+{
+    const int32 Index = FindFinishedIndex(Hit);
+    if (!Finished.IsValidIndex(Index) || !Finished[Index].Door.IsValid())
+    {
+        return false;
+    }
+    FSurvivalFinishedPiece& Piece = Finished[Index];
+    UStaticMeshComponent* Leaf = Piece.Door.Get();
+    FCollisionQueryParams Query(SCENE_QUERY_STAT(DoorSwing), false);
+    Query.AddIgnoredComponent(Leaf);
+    const FCollisionShape Shape = FCollisionShape::MakeBox(FSurvivalBuildPlacement::ClosedDoor().GetExtent() - FVector(0.25));
+    for (int32 Step = 1; Step <= 18; ++Step)
+    {
+        const double Angle = (Piece.bDoorOpen ? 18 - Step : Step) * 5.0;
+        const FTransform Pose = DoorTransform(Piece.Placement, Angle);
+        if (GetWorld()->OverlapBlockingTestByChannel(Pose.GetLocation(), Pose.GetRotation(), ECC_Pawn, Shape, Query))
+        {
+            return false;
+        }
+    }
+    Piece.bDoorOpen = !Piece.bDoorOpen;
+    Leaf->SetWorldTransform(DoorTransform(Piece.Placement, Piece.bDoorOpen ? 90.0 : 0.0));
+    return true;
+}
+
+bool ASurvivalBuildChunk::HasReservedCellConflict(const FSurvivalBuildPlacement& Placement, bool bIncludePlans) const
+{
+    for (const FSurvivalFinishedPiece& Piece : Finished)
+    {
+        if (Placement.OverlapsReservedCells(Piece.Placement))
+        {
+            return true;
+        }
+    }
+    if (bIncludePlans)
+    {
+        for (const FSurvivalBuildPlacement& Plan : Plans)
+        {
+            if (Placement.OverlapsReservedCells(Plan))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool ASurvivalBuildChunk::AddFinishedPiece(const FSurvivalBuildPlacement& Placement, int32 StructureId)
 {
     const int32 MaxHealth = Placement.GetPiece().bStone ? 140 : 70;
     const int32 FinishedIndex = Finished.Add(FSurvivalFinishedPiece{Placement, MaxHealth, MaxHealth, StructureId});
+    if (Placement.GetPiece().bDoor && !AddDoorLeaf(Finished[FinishedIndex]))
+    {
+        Finished.Pop();
+        return false;
+    }
     if (!AddFinishedInstances(FinishedIndex))
     {
+        if (UStaticMeshComponent* Leaf = Finished[FinishedIndex].Door.Get())
+        {
+            RemoveInstanceComponent(Leaf);
+            Leaf->DestroyComponent();
+        }
         Finished.Pop();
         return false;
     }
@@ -162,8 +264,19 @@ int32 ASurvivalBuildChunk::FindFinishedIndex(const FHitResult& Hit) const
     {
         Owners = &TimberOwners;
     }
-    const int32* Index = Owners ? Owners->Find(Hit.Item) : nullptr;
-    return Index ? *Index : INDEX_NONE;
+    if (Owners)
+    {
+        const int32* Index = Owners->Find(Hit.Item);
+        return Index ? *Index : INDEX_NONE;
+    }
+    if (!Hit.GetComponent() || Hit.GetComponent() == Ghosts.Get())
+    {
+        return INDEX_NONE;
+    }
+    return Finished.IndexOfByPredicate([&Hit](const FSurvivalFinishedPiece& Piece)
+    {
+        return Piece.Door.Get() == Hit.GetComponent();
+    });
 }
 
 const FSurvivalFinishedPiece* ASurvivalBuildChunk::FindFinished(const FHitResult& Hit) const
@@ -201,6 +314,11 @@ void ASurvivalBuildChunk::RemoveFinishedPieces(const TSet<int32>& StructureIds, 
         if (!StructureIds.Contains(Piece.StructureId))
         {
             return false;
+        }
+        if (UStaticMeshComponent* Leaf = Piece.Door.Get())
+        {
+            RemoveInstanceComponent(Leaf);
+            Leaf->DestroyComponent();
         }
         if (DebrisSlots > 0)
         {

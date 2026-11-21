@@ -39,9 +39,15 @@ The material counts, plans, completed pieces, health and loot reset when the sol
 3. Equip the sidearm and fire a round. Press **R** to check the partial reload. Empty the magazine and press **R** again to check the empty reload. Hold **right mouse** to check sight alignment and release to return to hip fire.
 4. Close the build menu. Shoot a finished timber piece and check that its health drops on impact. Verify a completed wall stops a round and a blueprint lets it through.
 
+## Doors and the one-meter grid
+
+1. Stack two wood blocks. The resulting wall should measure 2 m high, with roof panels snapping flush to its top.
+2. Build a door frame beside the wall, including its upper block. The frame should be thin, leave an opening for the standing character, and reserve two stacked cells.
+3. Build a timber door. Press **E** to open and close it. Block its swing with a crate, another build piece, or the player and check that it stays in place. Test damage and dismantling against the leaf and frame.
+
 ## M2 survival loop
 
-1. A new run starts on Day 1 at 08:00. Watch the clock and sun advance. One full day takes 20 real minutes.
-2. Scavenge the provisions crate in the station and press **I**. Verify food, water and cloth are added only once. Sprint until exhausted, recover stamina, and use **1** and **2** as hunger and thirst drop.
-3. With the inventory open, press **4** to turn two cloth into a bandage. Take damage and press **3** to heal. Verify an empty meter eventually costs health.
-4. Approach the lone zombie east of the station. Retreat behind a finished block and verify the zombie attacks it. The **G** defense encounter remains available separately.
+1. A new run starts on Day 1 at 08:00. In the development console try `SetTimeOfDay 0`, `SetTimeOfDay 14`, and `SetTimeOfDay 21.5`. Check that the clock, sunlight, and temperature update while the day number stays the same.
+2. Scavenge the station provisions and press **I**. Use a mouse or **Tab** and **Enter** to select an item and use it. Assign food to a slot by clicking that slot or pressing **1–6**. Close the menu, select the slot, and left-click to consume it.
+3. Compare standing still at midday, standing still at midnight, and repeated sprinting. Food expenditure should rise with movement and cold. Thirst should drain slowly at rest, then accelerate while spending stamina.
+4. Craft a bandage from two cloth using the crafting pane. Take damage and use the bandage from the pack or hotbar. Approach the zombie east of the station, retreat behind a block, and check that it attacks the block.

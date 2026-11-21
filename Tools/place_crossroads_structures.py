@@ -26,21 +26,28 @@ def prepare_structures():
         if not canopy:
             raise RuntimeError("Could not place the utility canopy.")
     else:
-        old_layout = [(8, 0), (8, 300), (2, 0), (2, 100), (2, 300), (2, 200)]
+        old_layouts = [
+            [(8, 0), (8, 300), (2, 0), (2, 100), (2, 300), (2, 200)],
+            [(8, 0), (8, 660), (2, 0), (2, 220), (2, 660), (2, 440)],
+        ]
         current = [(part.get_editor_property("piece_index"), part.get_editor_property("offset").x)
                    for part in canopy.get_editor_property("parts")]
-        if current != old_layout:
+        if current not in old_layouts or any(
+                part.get_editor_property("offset").y != 0 or
+                part.get_editor_property("offset").z != (0 if part.get_editor_property("piece_index") == 8 else 220)
+                for part in canopy.get_editor_property("parts")):
             return
 
     parts = []
-    # Keep both end pillars and fit four panels on the common 220 cm cell.
-    for piece, x, z in ((8, 0, 0), (8, 660, 0), (2, 0, 220), (2, 220, 220), (2, 660, 220), (2, 440, 220)):
+    # Keep the end pillars and four panels across the 16 m chunk boundary.
+    for piece, x, z in ((8, 0, 0), (8, 300, 0), (2, 0, 200), (2, 100, 200), (2, 300, 200), (2, 200, 200)):
         part = unreal.SurvivalPrefabPart()
         part.set_editor_property("piece_index", piece)
         part.set_editor_property("offset", unreal.Vector(x, 0, z))
         parts.append(part)
     canopy.set_editor_property("parts", parts)
-    canopy.set_editor_property("tags", [tag])
+    if not canopy.actor_has_tag(tag):
+        canopy.set_editor_property("tags", [tag])
     canopy.set_actor_label("Destructible utility canopy")
 
 

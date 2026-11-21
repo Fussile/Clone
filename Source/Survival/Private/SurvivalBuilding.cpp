@@ -40,23 +40,25 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces()
     constexpr double Half = FSurvivalBuildPlacement::GridSize / 2;
     constexpr double Height = FSurvivalBuildPlacement::GridSize;
     constexpr double Rise = FSurvivalBuildPlacement::HalfWallHeight;
+    constexpr double DoorHeight = Height * 2;
+    static const TArray<FBox> Frame = {Box(-Half, -6, 0, -42, 6, DoorHeight),
+        Box(42, -6, 0, Half, 6, DoorHeight), Box(-42, -6, 192, 42, 6, DoorHeight)};
     static const FSurvivalBuildPiece Pieces[] = {
         {TEXT("Timber block"), {3, 0}, false, {Box(-Half, -Half, 0, Half, Half, Height)}, false, false, true},
         {TEXT("Half block"), {2, 0}, false, {Box(-Half, -Half, 0, Half, Half, Rise)}, false, false, true},
         {TEXT("Floor"), {2, 0}, false, {Box(-Half, -Half, 0, Half, Half, 18)}, true},
-        {TEXT("Door frame"), {4, 0}, false, {
-            Box(-Half, -Half, 0, -60, Half, Height), Box(60, -Half, 0, Half, Half, Height),
-            Box(-60, -Half, 200, 60, Half, Height)}, false, false, true},
-        {TEXT("Window block"), {4, 0}, false, {
-            Box(-Half, -Half, 0, Half, Half, 90), Box(-Half, -Half, 170, Half, Half, Height),
-            Box(-Half, -Half, 90, -70, Half, 170), Box(70, -Half, 90, Half, Half, 170)}, false, false, true},
+        {TEXT("Door frame"), {4, 0}, false, Frame, false, false, true, 2},
+        {TEXT("Window block"), {3, 0}, false, {
+            Box(-Half, -Half, 0, Half, Half, 25), Box(-Half, -Half, 85, Half, Half, Height),
+            Box(-Half, -Half, 25, -35, Half, 85), Box(35, -Half, 25, Half, Half, 85)}, false, false, true},
         {TEXT("Stairs"), {5, 0}, false, {
             Box(-Half, -Half, 0, Half, -Half / 2, Rise / 4), Box(-Half, -Half / 2, 0, Half, 0, Rise / 2),
             Box(-Half, 0, 0, Half, Half / 2, Rise * 3 / 4), Box(-Half, Half / 2, 0, Half, Half, Rise)},
             false, true},
         {TEXT("Stone block"), {0, 5}, true, {Box(-Half, -Half, 0, Half, Half, Height)}, false, false, true},
         {TEXT("Stone foundation"), {0, 4}, true, {Box(-Half, -Half, 0, Half, Half, 25)}},
-        {TEXT("Stone pillar"), {0, 3}, true, {Box(-25, -25, 0, 25, 25, Height)}},
+        {TEXT("Stone pillar"), {0, 3}, true, {Box(-25, -25, 0, 25, 25, DoorHeight)}, false, false, false, 2},
+        {TEXT("Timber door"), {6, 0}, false, Frame, false, false, true, 2, true},
     };
     return MakeArrayView(Pieces);
 }
@@ -70,6 +72,39 @@ FBox FSurvivalBuildPlacement::WorldBounds() const
         Bounds += Box.TransformBy(Transform);
     }
     return Bounds;
+}
+
+FBox FSurvivalBuildPlacement::ReservedBounds() const
+{
+    if (GetPiece().HeightCells == 1)
+    {
+        return WorldBounds();
+    }
+    constexpr double Half = GridSize / 2;
+    return FBox(Base - FVector(Half, Half, 0), Base + FVector(Half, Half, GridSize * GetPiece().HeightCells));
+}
+
+bool FSurvivalBuildPlacement::OverlapsReservedCells(const FSurvivalBuildPlacement& Other) const
+{
+    if (GetPiece().HeightCells == 1 && Other.GetPiece().HeightCells == 1)
+    {
+        return false;
+    }
+    const FBox A = ReservedBounds();
+    const FBox B = Other.ReservedBounds();
+    for (int32 Axis = 0; Axis < 3; ++Axis)
+    {
+        if (FMath::Min(A.Max[Axis], B.Max[Axis]) - FMath::Max(A.Min[Axis], B.Min[Axis]) <= 0.5)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+FBox FSurvivalBuildPlacement::ClosedDoor()
+{
+    return FBox(FVector(-39, -2.5, 2), FVector(39, 2.5, 190));
 }
 
 bool FSurvivalBuildPlacement::SnapTo(const FSurvivalBuildPlacement& Source, const FVector& Point,
@@ -102,6 +137,11 @@ bool FSurvivalBuildPlacement::SnapTo(const FSurvivalBuildPlacement& Source, cons
         {
             const FBox NewBounds = WorldBounds();
             Base.Z = Bounds.Max.Z - (NewBounds.Max.Z - Base.Z);
+        }
+        else if (Support.HeightCells > 1 && Piece.HeightCells == 1)
+        {
+            const double Layer = FMath::FloorToInt((Point.Z - Source.Base.Z) / GridSize);
+            Base.Z += FMath::Clamp(Layer, 0.0, static_cast<double>(Support.HeightCells - 1)) * GridSize;
         }
         return true;
     }
@@ -176,7 +216,12 @@ int32 FSurvivalBuildPlacement::SupportCostFrom(const FSurvivalBuildPlacement& Ot
                 {
                     return 1;
                 }
-                if (bLateral && FMath::Abs(Base.Z - Other.Base.Z) <= Contact)
+                const double HeightDifference = Base.Z - Other.Base.Z;
+                const bool bSameLayer = FMath::Abs(HeightDifference) <= Contact;
+                const bool bTallWallJoint = GetPiece().bWall && Other.GetPiece().bWall
+                    && (GetPiece().HeightCells > 1 || Other.GetPiece().HeightCells > 1)
+                    && FMath::Abs(HeightDifference - FMath::GridSnap(HeightDifference, GridSize)) <= Contact;
+                if (bLateral && (bSameLayer || bTallWallJoint))
                 {
                     BestCost = 2;
                 }

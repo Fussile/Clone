@@ -1,5 +1,21 @@
 #include "SurvivalVitals.h"
 
+const TCHAR* SurvivalItemName(ESurvivalItem Item)
+{
+    switch (Item)
+    {
+    case ESurvivalItem::Sidearm: return TEXT("Sidearm");
+    case ESurvivalItem::Food: return TEXT("Canned food");
+    case ESurvivalItem::Water: return TEXT("Bottled water");
+    case ESurvivalItem::Bandage: return TEXT("Bandage");
+    case ESurvivalItem::Timber: return TEXT("Timber");
+    case ESurvivalItem::Stone: return TEXT("Stone");
+    case ESurvivalItem::Cloth: return TEXT("Cloth");
+    case ESurvivalItem::Rounds: return TEXT("Pistol rounds");
+    default: return TEXT("Empty");
+    }
+}
+
 void FSurvivalItems::Add(const FSurvivalItems& Other)
 {
     Food += Other.Food;
@@ -20,11 +36,16 @@ bool FSurvivalItems::CraftBandage()
     return true;
 }
 
-int32 FSurvivalVitals::Advance(float DeltaSeconds, bool bSprinting)
+int32 FSurvivalVitals::Advance(float DeltaSeconds, bool bSprinting, float MovementEffort, float AmbientCelsius)
 {
-    Hunger = FMath::Max(0.0f, Hunger - DeltaSeconds * (bSprinting ? 0.22f : 0.10f));
-    Thirst = FMath::Max(0.0f, Thirst - DeltaSeconds * (bSprinting ? 0.34f : 0.16f));
+    const float ColdDegrees = FMath::Max(0.0f, 12.0f - AmbientCelsius);
+    const float CalorieUse = 0.013f + 0.043f * FMath::Square(MovementEffort) + 0.0035f * ColdDegrees;
+    const float Before = Stamina;
     Stamina = FMath::Clamp(Stamina + DeltaSeconds * (bSprinting ? -18.0f : 13.0f), 0.0f, Max);
+    const float StaminaSpent = FMath::Max(0.0f, Before - Stamina);
+
+    Hunger = FMath::Max(0.0f, Hunger - DeltaSeconds * CalorieUse);
+    Thirst = FMath::Max(0.0f, Thirst - (DeltaSeconds * 0.022f + StaminaSpent * 0.009f));
     if (Stamina <= 0.0f)
     {
         bExhausted = true;

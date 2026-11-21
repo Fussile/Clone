@@ -9,6 +9,7 @@
 #include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
 #include "SurvivalHUD.h"
+#include "SurvivalPlayerController.h"
 
 namespace
 {
@@ -16,6 +17,7 @@ const FName GroundTag(TEXT("StructuralGround"));
 const FName SunTag(TEXT("CrossroadsSun"));
 const FName MoonTag(TEXT("CrossroadsMoon"));
 constexpr double StartHour = 8.0;
+constexpr double BuildChunkSize = 1600.0;
 
 FIntVector StructureCell(const FVector& Base)
 {
@@ -31,6 +33,7 @@ ASurvivalGameMode::ASurvivalGameMode()
     PrimaryActorTick.TickInterval = 0.25f;
     DefaultPawnClass = ASurvivalCharacter::StaticClass();
     HUDClass = ASurvivalHUD::StaticClass();
+    PlayerControllerClass = ASurvivalPlayerController::StaticClass();
 }
 
 void ASurvivalGameMode::BeginPlay()
@@ -67,8 +70,27 @@ void ASurvivalGameMode::Tick(float DeltaSeconds)
 
 int32 ASurvivalGameMode::GetWorldMinutes() const
 {
-    return FMath::FloorToInt(StartHour * 60.0 + ElapsedSurvivalSeconds
-        * 1440.0 / FMath::Max(60.0f, DayLengthSeconds));
+    return FMath::FloorToInt32(StartHour * 60.0 + ElapsedSurvivalSeconds
+        * 1440.0 / FMath::Max(60.0f, DayLengthSeconds) + 1e-6);
+}
+
+double ASurvivalGameMode::GetAmbientTemperature() const
+{
+    const double Hours = StartHour + ElapsedSurvivalSeconds * 24.0 / FMath::Max(60.0f, DayLengthSeconds);
+    return 13.0 + 8.0 * FMath::Cos(FMath::DegreesToRadians((Hours - 14.0) * 15.0));
+}
+
+bool ASurvivalGameMode::SetTimeOfDay(double Hour)
+{
+    if (!FMath::IsFinite(Hour) || Hour < 0.0 || Hour >= 24.0)
+    {
+        return false;
+    }
+    const int32 Day = GetWorldMinutes() / 1440;
+    const int32 Minute = FMath::Min(1439, FMath::RoundToInt32(Hour * 60.0));
+    ElapsedSurvivalSeconds = (Day * 1440.0 + Minute - StartHour * 60.0) * FMath::Max(60.0f, DayLengthSeconds) / 1440.0;
+    UpdateDaylight();
+    return true;
 }
 
 void ASurvivalGameMode::UpdateDaylight()
@@ -95,12 +117,11 @@ void ASurvivalGameMode::UpdateDaylight()
 
 ASurvivalBuildChunk* ASurvivalGameMode::FindOrCreateChunk(const FVector& Base)
 {
-    constexpr double ChunkSize = 1600.0;
-    const FIntPoint Key(FMath::FloorToInt(Base.X / ChunkSize), FMath::FloorToInt(Base.Y / ChunkSize));
+    const FIntPoint Key(FMath::FloorToInt(Base.X / BuildChunkSize), FMath::FloorToInt(Base.Y / BuildChunkSize));
     ASurvivalBuildChunk* Chunk = BuildChunks.FindRef(Key).Get();
     if (!IsValid(Chunk))
     {
-        const FVector Origin(Key.X * ChunkSize, Key.Y * ChunkSize, 0.0);
+        const FVector Origin(Key.X * BuildChunkSize, Key.Y * BuildChunkSize, 0.0);
         Chunk = GetWorld()->SpawnActor<ASurvivalBuildChunk>(Origin, FRotator::ZeroRotator);
         if (Chunk)
         {
@@ -162,7 +183,7 @@ void ASurvivalGameMode::FindContacts(const FSurvivalBuildPlacement& Placement,
     TArray<FSurvivalSupportLink>& Supports, TArray<FSurvivalSupportLink>& Dependents) const
 {
     const FIntVector Cell = StructureCell(Placement.Base);
-    // Current pieces are one cell wide and at most 2.2 m tall.
+    // Current pieces are one cell wide and at most two cells tall.
     for (int32 X = -1; X <= 1; ++X)
     {
         for (int32 Y = -1; Y <= 1; ++Y)
@@ -199,6 +220,24 @@ bool ASurvivalGameMode::HasSupportedContact(const TArray<FSurvivalSupportLink>& 
     {
         return Structure.GetBudget(Link.Id) >= Link.Cost;
     });
+}
+
+bool ASurvivalGameMode::HasReservedCellConflict(const FSurvivalBuildPlacement& Placement, bool bIncludePlans) const
+{
+    const int32 X = FMath::FloorToInt32(Placement.Base.X / BuildChunkSize);
+    const int32 Y = FMath::FloorToInt32(Placement.Base.Y / BuildChunkSize);
+    for (int32 DX = -1; DX <= 1; ++DX)
+    {
+        for (int32 DY = -1; DY <= 1; ++DY)
+        {
+            const ASurvivalBuildChunk* Chunk = BuildChunks.FindRef(FIntPoint(X + DX, Y + DY)).Get();
+            if (Chunk && Chunk->HasReservedCellConflict(Placement, bIncludePlans))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 bool ASurvivalGameMode::CanSupport(const FSurvivalBuildPlacement& Placement) const

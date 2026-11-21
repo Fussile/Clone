@@ -35,7 +35,7 @@ bool FSurvivalContactsTest::RunTest(const FString& Parameters)
     Pillar.PieceIndex = 8;
     FSurvivalBuildPlacement Floor;
     Floor.PieceIndex = 2;
-    Floor.Base.Z = 220;
+    Floor.Base.Z = 2.0 * FSurvivalBuildPlacement::GridSize;
     TestEqual(TEXT("Pillar top supports the roof"), Floor.SupportCostFrom(Pillar), 1);
     TestEqual(TEXT("Roof cannot support a pillar below it"), Pillar.SupportCostFrom(Floor), INDEX_NONE);
 
@@ -82,7 +82,7 @@ bool FSurvivalEdgeSnapTest::RunTest(const FString& Parameters)
     FSurvivalBuildPlacement Roof;
     Roof.PieceIndex = 2;
     TestTrue(TEXT("A roof snaps alongside the wall"),
-        Roof.SnapTo(Wall, FVector(Cell / 2, 0, 150), FVector::ForwardVector, FVector::ForwardVector));
+        Roof.SnapTo(Wall, FVector(Cell / 2, 0, 80), FVector::ForwardVector, FVector::ForwardVector));
     const FBox WallBounds = Wall.WorldBounds();
     const FBox RoofBounds = Roof.WorldBounds();
     TestTrue(TEXT("The wall and roof top surfaces meet flush"),
@@ -94,7 +94,7 @@ bool FSurvivalEdgeSnapTest::RunTest(const FString& Parameters)
 
     FSurvivalBuildPlacement NextRoof = Roof;
     TestTrue(TEXT("A roof extends by one cell along the exposed edge"),
-        NextRoof.SnapTo(Roof, FVector(RoofBounds.Max.X, 0, 210),
+        NextRoof.SnapTo(Roof, FVector(RoofBounds.Max.X, 0, 90),
             FVector::ForwardVector, FVector::ForwardVector));
     TestTrue(TEXT("Adjacent roof panels stay level"),
         NextRoof.Base.Equals(Roof.Base + FVector(Cell, 0, 0), Tolerance));
@@ -103,8 +103,22 @@ bool FSurvivalEdgeSnapTest::RunTest(const FString& Parameters)
     FSurvivalBuildPlacement Door;
     Door.PieceIndex = 3;
     Door.Rotation = FRotator(0, 90, 0).Quaternion();
-    TestTrue(TEXT("A door frame occupies the common cell footprint"),
-        Door.WorldBounds().GetExtent().Equals(FVector(Cell / 2, Cell / 2, Cell / 2), Tolerance));
+    TestTrue(TEXT("The thin frame reserves two cells after rotating"),
+        Door.ReservedBounds().GetExtent().Equals(FVector(Cell / 2, Cell / 2, Cell), Tolerance));
+    TestTrue(TEXT("The frame is physically thin"),
+        FMath::Abs(Door.WorldBounds().GetExtent().X - 6.0) < Tolerance);
+    TestTrue(TEXT("The doorway opening clears the standing survivor"),
+        Door.GetPiece().Boxes.Last().Min.Z > 176.0 && Door.GetPiece().Boxes.Last().GetExtent().X > 34.0);
+    FSurvivalBuildPlacement Upper = Wall;
+    Upper.Base.Z = Cell;
+    TestTrue(TEXT("A cube cannot be placed in a reserved upper doorway cell"),
+        Door.OverlapsReservedCells(Upper));
+    Upper.Base.Y = Cell;
+    TestTrue(TEXT("A cube can use the cell beside the doorway"),
+        !Door.OverlapsReservedCells(Upper));
+    TestEqual(TEXT("The adjacent upper cube touches the tall door jamb"), Upper.SupportCostFrom(Door), 2);
+    TestTrue(TEXT("A wall reaches two meters with two cubes"),
+        FMath::Abs(Upper.WorldBounds().Max.Z - 2.0 * Cell) < Tolerance);
     return true;
 }
 #endif

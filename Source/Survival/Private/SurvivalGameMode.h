@@ -19,11 +19,14 @@ public:
     bool AddPlan(const FSurvivalBuildPlacement& Placement);
     void RemovePlan(const FSurvivalPlanTarget& Target);
     bool FinishPlan(const FSurvivalPlanTarget& Target, FSurvivalMaterials& Inventory);
+    bool HasReservedCellConflict(const FSurvivalBuildPlacement& Placement, bool bIncludePlans) const;
     bool CanSupport(const FSurvivalBuildPlacement& Placement) const;
     bool AddAuthoredPiece(const FSurvivalBuildPlacement& Placement);
     void RemoveStructure(int32 Id);
     const FSurvivalMaterials& GetPlannedCost() const { return PlannedCost; }
     int32 GetWorldMinutes() const;
+    double GetAmbientTemperature() const;
+    bool SetTimeOfDay(double Hour);
 
 protected:
     virtual void BeginPlay() override;

@@ -33,6 +33,10 @@ def prepare_if_needed():
         "/Game/Art/Crossroads/Building/M_BuildPlan",
         "/Game/Art/Crossroads/Building/M_CrossroadsTimber",
     )
+    required += tuple(
+        f"/Game/Art/Crossroads/Inventory/T_Item_{name}"
+        for name in ("Sidearm", "Food", "Water", "Bandage", "Timber", "Stone", "Cloth", "Rounds")
+    )
     if (stamp.is_file() and stamp.read_text(encoding="utf-8") == revision
             and all(assets.does_asset_exist(path) for path in required)):
         return

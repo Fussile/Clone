@@ -1,11 +1,16 @@
 #include "SurvivalHUD.h"
 
+#include "Components/StaticMeshComponent.h"
 #include "Engine/Canvas.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/LocalPlayer.h"
+#include "Engine/Texture2D.h"
+#include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
 #include "SurvivalGameMode.h"
-#include "Engine/World.h"
+#include "SurvivalInventoryMenu.h"
 #include "SurvivalSupplyCrate.h"
 
 namespace
@@ -14,6 +19,108 @@ const FLinearColor Panel(0.02f, 0.04f, 0.05f, 0.88f);
 const FLinearColor Cyan(0.42f, 0.88f, 1.0f);
 const FLinearColor Muted(0.72f, 0.76f, 0.78f);
 const FLinearColor Blocked(1.0f, 0.51f, 0.36f);
+}
+
+void ASurvivalHUD::BeginPlay()
+{
+    Super::BeginPlay();
+    static const TCHAR* Names[] = {
+        TEXT("Sidearm"), TEXT("Food"), TEXT("Water"), TEXT("Bandage"), TEXT("Timber"),
+        TEXT("Stone"), TEXT("Cloth"), TEXT("Rounds")
+    };
+    static_assert(UE_ARRAY_COUNT(Names) == static_cast<int32>(ESurvivalItem::None));
+    for (const TCHAR* Name : Names)
+    {
+        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Inventory/T_Item_%s.T_Item_%s"), Name, Name);
+        ItemIcons.Add(LoadObject<UTexture2D>(nullptr, *Path, nullptr, LOAD_NoWarn));
+    }
+}
+
+UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item) const
+{
+    const int32 Index = static_cast<int32>(Item);
+    return ItemIcons.IsValidIndex(Index) ? ItemIcons[Index].Get() : nullptr;
+}
+
+void ASurvivalHUD::SetInventoryVisible(ASurvivalCharacter& Character, bool bVisible)
+{
+    ULocalPlayer* LocalPlayer = PlayerOwner ? PlayerOwner->GetLocalPlayer() : nullptr;
+    UGameViewportClient* Viewport = LocalPlayer ? LocalPlayer->ViewportClient : nullptr;
+    if (!LocalPlayer || !Viewport || bVisible == InventoryWidget.IsValid())
+    {
+        return;
+    }
+
+    if (bVisible)
+    {
+        InventoryWidget = SNew(SSurvivalInventoryMenu).Player(&Character).HUD(this);
+        Viewport->AddViewportWidgetForPlayer(LocalPlayer, InventoryWidget.ToSharedRef(), 10);
+        FInputModeGameAndUI Mode;
+        Mode.SetWidgetToFocus(InventoryWidget);
+        Mode.SetHideCursorDuringCapture(false);
+        PlayerOwner->SetInputMode(Mode);
+    }
+    else
+    {
+        RemoveInventoryWidget();
+        PlayerOwner->SetInputMode(FInputModeGameOnly());
+    }
+    PlayerOwner->bShowMouseCursor = bVisible;
+    PlayerOwner->SetIgnoreLookInput(bVisible);
+    PlayerOwner->SetIgnoreMoveInput(bVisible);
+}
+
+void ASurvivalHUD::RemoveInventoryWidget()
+{
+    if (InventoryWidget && PlayerOwner)
+    {
+        if (ULocalPlayer* LocalPlayer = PlayerOwner->GetLocalPlayer(); LocalPlayer && LocalPlayer->ViewportClient)
+        {
+            LocalPlayer->ViewportClient->RemoveViewportWidgetForPlayer(LocalPlayer, InventoryWidget.ToSharedRef());
+        }
+    }
+    InventoryWidget.Reset();
+}
+
+void ASurvivalHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    RemoveInventoryWidget();
+    Super::EndPlay(EndPlayReason);
+}
+
+void ASurvivalHUD::DrawHotbar(const ASurvivalCharacter& Character)
+{
+    constexpr float SlotSize = 55.0f;
+    constexpr float Gap = 4.0f;
+    const float Start = (Canvas->SizeX - (SlotSize + Gap) * ASurvivalCharacter::HotbarSize + Gap) * 0.5f;
+    const float Y = Canvas->SizeY - SlotSize - 18.0f;
+    for (int32 Index = 0; Index < ASurvivalCharacter::HotbarSize; ++Index)
+    {
+        const float X = Start + Index * (SlotSize + Gap);
+        const bool bSelected = Index == Character.GetActiveHotbarSlot();
+        if (bSelected)
+        {
+            DrawRect(Cyan, X - 2.0f, Y - 2.0f, SlotSize + 4.0f, SlotSize + 4.0f);
+        }
+        DrawRect(Panel, X, Y, SlotSize, SlotSize);
+        const ESurvivalItem Item = Character.GetHotbarItem(Index);
+        const int32 Count = Character.GetItemCount(Item);
+        if (UTexture2D* Icon = GetItemIcon(Item))
+        {
+            DrawTexture(Icon, X + 7.0f, Y + 7.0f, 40.0f, 40.0f, 0, 0, 1, 1,
+                FLinearColor(1, 1, 1, Count > 0 ? 1.0f : 0.25f));
+        }
+        DrawText(FString::FromInt(Index + 1), bSelected ? Cyan : Muted, X + 5.0f, Y + 3.0f);
+        if (Item != ESurvivalItem::None)
+        {
+            DrawText(FString::FromInt(Count), FLinearColor::White, X + 35.0f, Y + 36.0f);
+        }
+    }
+    const FString Active = SurvivalItemName(Character.GetHotbarItem(Character.GetActiveHotbarSlot()));
+    float LabelWidth = 0.0f;
+    float LabelHeight = 0.0f;
+    GetTextSize(Active, LabelWidth, LabelHeight);
+    DrawText(Active, FLinearColor::White, (Canvas->SizeX - LabelWidth) * 0.5f, Y - LabelHeight - 7.0f);
 }
 
 void ASurvivalHUD::DrawHUD()
@@ -56,6 +163,8 @@ void ASurvivalHUD::DrawHUD()
         const int32 Minutes = Mode->GetWorldMinutes();
         DrawText(FString::Printf(TEXT("Day %d   %02d:%02d"), Minutes / 1440 + 1, (Minutes / 60) % 24, Minutes % 60),
             FLinearColor::White, 325.0f, 28.0f);
+        const int32 Temperature = FMath::RoundToInt32(Mode->GetAmbientTemperature());
+        DrawText(FString::Printf(TEXT("%d C"), Temperature), Temperature < 12 ? Cyan : Muted, 325.0f, 48.0f);
     }
     const FSurvivalVitals& Vitals = Character->GetVitals();
     DrawText(FString::Printf(TEXT("Food %d%%   Water %d%%   Stamina %d%%"), FMath::CeilToInt(Vitals.Hunger), FMath::CeilToInt(Vitals.Thirst),
@@ -87,11 +196,16 @@ void ASurvivalHUD::DrawHUD()
         return;
     }
 
+    if (Character->IsInventoryOpen())
+    {
+        return;
+    }
+    DrawHotbar(*Character);
     const FSurvivalMaterials Inventory = Character->GetInventory();
     const FSurvivalMaterials PlannedCost = Character->GetPlannedCost();
     const bool bHasPlans = !PlannedCost.IsEmpty();
     const float PanelHeight = bHasPlans ? 92.0f : 52.0f;
-    const float PanelY = Canvas->SizeY - PanelHeight - 20.0f;
+    const float PanelY = Canvas->SizeY - PanelHeight - 100.0f;
     DrawRect(Panel, 20.0f, PanelY, 322.0f, PanelHeight);
     DrawText(FString::Printf(TEXT("Inventory   %d timber / %d stone"), Inventory.Timber, Inventory.Stone),
         FLinearColor::White, 32.0f, PanelY + 10.0f);
@@ -104,21 +218,6 @@ void ASurvivalHUD::DrawHUD()
         DrawText(Status, Shortage.IsEmpty() ? Muted : Blocked, 32.0f, PanelY + 50.0f);
     }
     DrawText(TEXT("[B] Build   [I] Inventory   [V] View"), Muted, 32.0f, PanelY + PanelHeight - 22.0f);
-
-    if (Character->IsInventoryOpen())
-    {
-        const FSurvivalItems& Items = Character->GetItems();
-        DrawRect(Panel, 20.0f, 106.0f, 310.0f, 147.0f);
-        DrawText(TEXT("INVENTORY"), Cyan, 32.0f, 118.0f, nullptr, 1.25f);
-        DrawText(FString::Printf(TEXT("[1] Food  %d    [2] Water  %d"), Items.Food, Items.Water),
-            FLinearColor::White, 32.0f, 147.0f);
-        DrawText(FString::Printf(TEXT("[3] Bandages  %d    Cloth  %d"), Items.Bandages, Items.Cloth),
-            FLinearColor::White, 32.0f, 170.0f);
-        DrawText(FString::Printf(TEXT("Reserve pistol rounds  %d"), Items.Rounds), Muted, 32.0f, 193.0f);
-        DrawText(FString::Printf(TEXT("[4] Craft bandage  (%d cloth)"), FSurvivalItems::BandageCloth),
-            Items.Cloth >= FSurvivalItems::BandageCloth ? Cyan : Muted, 32.0f, 220.0f);
-        return;
-    }
 
     if (Character->IsBuilding())
     {
@@ -165,7 +264,12 @@ void ASurvivalHUD::DrawHUD()
         {
             DrawText(TEXT("[K] Dismantle"), Muted, CenterX + 14.0f, CenterY + 52.0f);
         }
-        if (Piece->Health < Piece->MaxHealth)
+        if (!Character->IsBuilding() && Piece->Door.IsValid())
+        {
+            DrawText(Piece->bDoorOpen ? TEXT("[E] Close door") : TEXT("[E] Open door"),
+                Cyan, CenterX + 14.0f, CenterY + 32.0f);
+        }
+        else if (Piece->Health < Piece->MaxHealth)
         {
             const FSurvivalMaterials Cost = Piece->RepairCost();
             const bool bCanRepair = Cost.MissingFrom(Inventory).IsEmpty();

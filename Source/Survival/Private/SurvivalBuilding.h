@@ -27,6 +27,8 @@ struct FSurvivalBuildPiece
     bool bCarriesLateralSupport = false;
     bool bStairs = false;
     bool bWall = false;
+    int32 HeightCells = 1;
+    bool bDoor = false;
 
     int32 SupportCapacity() const { return bStone ? 9 : 5; }
 };
@@ -35,7 +37,7 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces();
 
 struct FSurvivalBuildPlacement
 {
-    static constexpr double GridSize = 220.0;
+    static constexpr double GridSize = 100.0;
     static constexpr double HalfWallHeight = GridSize / 2;
 
     FVector Base = FVector::ZeroVector;
@@ -46,6 +48,9 @@ struct FSurvivalBuildPlacement
     const FSurvivalBuildPiece& GetPiece() const { return GetSurvivalBuildPieces()[PieceIndex]; }
     FVector WorldCenter(const FBox& Box) const { return Base + Rotation.RotateVector(Box.GetCenter()); }
     FBox WorldBounds() const;
+    FBox ReservedBounds() const;
+    bool OverlapsReservedCells(const FSurvivalBuildPlacement& Other) const;
+    static FBox ClosedDoor();
     bool SnapTo(const FSurvivalBuildPlacement& Source, const FVector& Point,
         const FVector& Normal, const FVector& TowardViewer);
     FVector StairContinuation() const;

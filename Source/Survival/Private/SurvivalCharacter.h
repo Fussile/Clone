@@ -27,8 +27,18 @@ public:
     FSurvivalPlanTarget FindPlan() const;
     FSurvivalMaterials GetPlannedCost() const;
     const FSurvivalMaterials& GetInventory() const { return Inventory; }
-    const FSurvivalItems& GetItems() const { return Items; }
     const FSurvivalVitals& GetVitals() const { return Vitals; }
+    static constexpr int32 HotbarSize = 6;
+    ESurvivalItem GetHotbarItem(int32 Slot) const { return Hotbar[Slot]; }
+    int32 GetActiveHotbarSlot() const { return ActiveHotbarSlot; }
+    int32 GetItemCount(ESurvivalItem Item) const;
+    bool CanUseItem(ESurvivalItem Item) const;
+    ESurvivalItem GetSelectedInventoryItem() const { return SelectedInventoryItem; }
+    void SetSelectedInventoryItem(ESurvivalItem Item) { SelectedInventoryItem = Item; }
+    void ChooseHotbarSlot(int32 Slot);
+    void UseItem(ESurvivalItem Item);
+    void CraftBandage();
+    void ToggleInventory();
     bool IsInventoryOpen() const { return bInventoryOpen; }
     bool IsBuilding() const { return bBuildMode; }
     int32 GetSelectedPiece() const { return SelectedPiece; }
@@ -72,11 +82,14 @@ private:
     void SetStance(EStance NewStance);
     void UpdateMovementPresentation();
     void Interact();
-    void ToggleInventory();
-    void EatFood();
-    void DrinkWater();
-    void UseBandage();
-    void CraftBandage();
+    void SetInventoryOpen(bool bOpen);
+    void HotbarOne() { ChooseHotbarSlot(0); }
+    void HotbarTwo() { ChooseHotbarSlot(1); }
+    void HotbarThree() { ChooseHotbarSlot(2); }
+    void HotbarFour() { ChooseHotbarSlot(3); }
+    void HotbarFive() { ChooseHotbarSlot(4); }
+    void HotbarSix() { ChooseHotbarSlot(5); }
+    bool IsSidearmSelected() const { return Hotbar[ActiveHotbarSlot] == ESurvivalItem::Sidearm; }
     void UpdateVitals(float DeltaSeconds);
     void ToggleBuildMode();
     void RotatePiece();
@@ -113,6 +126,12 @@ private:
     FSurvivalItems Items;
     FSurvivalVitals Vitals;
     bool bInventoryOpen = false;
+    int32 ActiveHotbarSlot = 0;
+    ESurvivalItem SelectedInventoryItem = ESurvivalItem::Food;
+    ESurvivalItem Hotbar[HotbarSize] = {
+        ESurvivalItem::Sidearm, ESurvivalItem::Food, ESurvivalItem::Water,
+        ESurvivalItem::Bandage, ESurvivalItem::None, ESurvivalItem::None
+    };
     double ReloadCompleteAt = -1.0;
     double NextShotAt = 0.0;
     bool bViewmodelReady = false;
