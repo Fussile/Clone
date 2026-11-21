@@ -201,16 +201,37 @@ def import_skeletal_pack(directory, names, source, prepared=None, generator=None
         raise RuntimeError(f"Could not save {directory}.")
 
 
+def apply_blockout_surfaces():
+    roles = ("Ground036", "Asphalt021", "Concrete034")
+    materials = [(unreal.Name(f"CrossroadsSurface_{role}"), unreal.load_asset(f"{SURFACES}/M_{role}"))
+                 for role in roles]
+    actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    for actor in actors.get_all_level_actors():
+        if not isinstance(actor, unreal.StaticMeshActor):
+            continue
+        component = actor.get_component_by_class(unreal.StaticMeshComponent)
+        mesh = component.get_editor_property("static_mesh")
+        if not mesh or component.get_material(0) != mesh.get_material(0):
+            continue
+        for tag, material in materials:
+            if material and actor.actor_has_tag(tag):
+                component.set_material(0, material)
+                break
+
+
 def prepare():
-    editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
-    unreal.SystemLibrary.execute_console_command(
-        editor.get_editor_world(), "Interchange.FeatureFlags.Import.FBX 0"
-    )
+    # Save the playable map before importing art. A failed import must leave a world to play.
+    runpy.run_path(str(TOOLS / "build_crossroads.py"), run_name="__main__")
+    runpy.run_path(str(TOOLS / "place_crossroads_supplies.py"), run_name="__main__")
+    runpy.run_path(str(TOOLS / "place_crossroads_structures.py"), run_name="__main__")
+    levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+    if not levels.save_current_level():
+        raise RuntimeError(f"Could not save {LEVEL}.")
+
     import_surfaces()
-    import_skeletal_pack(PLAYER, (
-        "SK_Survivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",
-        "SurvivorCrouchIdle", "SurvivorCrouchMove", "SurvivorProneIdle", "SurvivorProneMove",
-    ), SOURCE / "Survivor" / "SK_Survivor.glb")
+    apply_blockout_surfaces()
+    if not levels.save_current_level():
+        raise RuntimeError(f"Could not save the surfaces in {LEVEL}.")
     generated = TOOLS.parent / "Saved" / "GeneratedArt"
     for directory, file, generator, source, names in (
         (ZOMBIE, "StationZombie.glb", "prepare_zombie_glb",
@@ -228,18 +249,10 @@ def prepare():
     shot = SOURCE / "Audio" / "SW_SidearmShot.wav"
     if shot.is_file():
         import_asset(shot, WEAPON_AUDIO, unreal.SoundWave, replace_existing=True)
-    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
-    levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
-    if assets.does_asset_exist(LEVEL):
-        world = editor.get_editor_world()
-        if world.get_path_name().split(".")[0] != LEVEL and not levels.load_level(LEVEL):
-            raise RuntimeError(f"Could not open {LEVEL}.")
-    else:
-        runpy.run_path(str(TOOLS / "build_crossroads.py"), run_name="__main__")
-    runpy.run_path(str(TOOLS / "place_crossroads_supplies.py"), run_name="__main__")
-    runpy.run_path(str(TOOLS / "place_crossroads_structures.py"), run_name="__main__")
-    if not levels.save_current_level():
-        raise RuntimeError(f"Could not save {LEVEL}.")
+    import_skeletal_pack(PLAYER, (
+        "SK_Survivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",
+        "SurvivorCrouchIdle", "SurvivorCrouchMove", "SurvivorProneIdle", "SurvivorProneMove",
+    ), SOURCE / "Survivor" / "SK_Survivor.glb")
     if marker := os.environ.get("SURVIVAL_PREPARED_MARKER"):
         Path(marker).write_text(LEVEL, encoding="utf-8")
 

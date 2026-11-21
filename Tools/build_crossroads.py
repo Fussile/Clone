@@ -3,7 +3,6 @@ import unreal
 
 LEVEL = "/Game/Maps/L_SouthernCrossroads"
 CUBE = "/Engine/BasicShapes/Cube.Cube"
-MATERIAL_ROOT = "/Game/Art/Crossroads/Surfaces"
 
 
 def build():
@@ -11,18 +10,19 @@ def build():
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     if assets.does_asset_exist(LEVEL):
-        raise RuntimeError(f"{LEVEL} already exists. Open it to continue editing.")
+        editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
+        world = editor.get_editor_world()
+        if (not world or world.get_path_name().split(".")[0] != LEVEL) and not levels.load_level(LEVEL):
+            raise RuntimeError(f"Could not open {LEVEL}.")
+        # An interrupted first build can leave the empty package created by new_level().
+        if any(isinstance(actor, (unreal.PlayerStart, unreal.StaticMeshActor))
+               for actor in actors.get_all_level_actors()):
+            return
+    elif not levels.new_level(LEVEL):
+        raise RuntimeError(f"Could not create {LEVEL}.")
     cube = unreal.load_asset(CUBE)
     if cube is None:
         raise RuntimeError("Could not load the engine blockout cube.")
-    materials = {}
-    for role in ("Ground036", "Asphalt021", "Concrete034"):
-        path = f"{MATERIAL_ROOT}/M_{role}"
-        if assets.does_asset_exist(path):
-            materials[role] = unreal.load_asset(path)
-    if not levels.new_level(LEVEL):
-        raise RuntimeError(f"Could not create {LEVEL}.")
-
     def spawn(cls, label, x, y, z, rotation=None):
         location = unreal.Vector(x * 100, y * 100, z * 100)
         actor = actors.spawn_actor_from_class(cls, location, rotation or unreal.Rotator())
@@ -36,8 +36,7 @@ def build():
         comp = actor.get_component_by_class(unreal.StaticMeshComponent)
         comp.set_static_mesh(cube)
         comp.set_collision_profile_name("BlockAll")
-        if surface in materials:
-            comp.set_material(0, materials[surface])
+        actor.set_editor_property("tags", [unreal.Name(f"CrossroadsSurface_{surface}")])
         actor.set_actor_scale3d(unreal.Vector(width, depth, height))
 
     def shell(name, x, y, width, depth, height, door):
@@ -83,9 +82,14 @@ def build():
     box("Warehouse side lane", -438, -102, 0, 6, 56, 0.06, "Asphalt021")
     box("Warehouse loading apron", -461, -122, 0, 52, 14, 0.06, "Asphalt021")
     spawn(unreal.PlayerStart, "Start by gas station", 34, 12, 1.15, unreal.Rotator(yaw=90))
-    spawn(unreal.DirectionalLight, "Sun", 0, 0, 20, unreal.Rotator(pitch=-45, yaw=-35))
+    sun = spawn(unreal.DirectionalLight, "Sun", 0, 0, 20, unreal.Rotator(pitch=-45, yaw=-35))
+    sun_light = sun.get_component_by_class(unreal.DirectionalLightComponent)
+    sun_light.set_mobility(unreal.ComponentMobility.MOVABLE)
+    sun_light.set_editor_property("atmosphere_sun_light", True)
     sky = spawn(unreal.SkyLight, "Sky light", 0, 0, 20)
-    sky.get_component_by_class(unreal.SkyLightComponent).set_editor_property("real_time_capture", True)
+    sky_light = sky.get_component_by_class(unreal.SkyLightComponent)
+    sky_light.set_mobility(unreal.ComponentMobility.MOVABLE)
+    sky_light.set_editor_property("real_time_capture", True)
     spawn(unreal.SkyAtmosphere, "Sky atmosphere", 0, 0, 0)
 
     if not levels.save_current_level():

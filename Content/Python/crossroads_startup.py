@@ -9,10 +9,6 @@ import unreal
 
 
 def prepare_if_needed():
-    # Packaging already runs preparation explicitly, and cook commandlets use saved assets.
-    if os.environ.get("SURVIVAL_PREPARED_MARKER") or "-run=" in unreal.SystemLibrary.get_command_line().lower():
-        return
-
     project = Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()))
     stamp = project / "Saved" / "CrossroadsPreparation.sha256"
     sources = list((project / "Tools").glob("*.py"))
@@ -38,9 +34,28 @@ def prepare_if_needed():
             and all(assets.does_asset_exist(path) for path in required)):
         return
 
+    unreal.log("Crossroads: preparing the editor map and assets.")
     runpy.run_path(str(project / "Tools" / "prepare_crossroads.py"), run_name="__main__")
     stamp.parent.mkdir(parents=True, exist_ok=True)
     stamp.write_text(revision, encoding="utf-8")
 
 
-prepare_if_needed()
+def schedule_preparation():
+    # Packaging runs the same preparation itself before cooking.
+    command_line = unreal.SystemLibrary.get_command_line()
+    _, switches, params = unreal.SystemLibrary.parse_command_line(command_line)
+    if (os.environ.get("SURVIVAL_PREPARED_MARKER")
+            or any(key.lower() == "run" for key in params)
+            or any(switch.lower() == "game" for switch in switches)):
+        return
+
+    def prepare_after_editor_load(_delta_seconds):
+        editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
+        registry = unreal.AssetRegistryHelpers.get_asset_registry()
+        if not editor.get_editor_world() or registry.is_loading_assets():
+            return
+
+        unreal.unregister_slate_post_tick_callback(handle)
+        prepare_if_needed()
+
+    handle = unreal.register_slate_post_tick_callback(prepare_after_editor_load)
