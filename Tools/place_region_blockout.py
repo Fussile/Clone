@@ -1,5 +1,6 @@
 """In Unreal Editor, place the baked Crossroads region around an imported Landscape."""
 import json
+import runpy
 from pathlib import Path
 
 import unreal
@@ -41,7 +42,13 @@ def place():
     if not cube:
         raise RuntimeError("Could not load the engine blockout cube.")
 
-    actor_tags = {str(tag) for actor in existing for tag in actor.get_editor_property("tags")}
+    actor_tags = {str(tag): actor for actor in existing for tag in actor.get_editor_property("tags")}
+    import_asset = runpy.run_path(str(root / "Tools" / "prepare_crossroads.py"))["import_asset"]
+    bed_mesh = import_asset(root / "SourceArt" / "Crossroads" / "World" / "SM_HospitalBed.glb",
+                            "/Game/Art/Crossroads/World", unreal.StaticMesh)
+    crate_class = unreal.load_class(None, "/Script/Survival.SurvivalSupplyCrate")
+    if not crate_class:
+        raise RuntimeError("Build SurvivalEditor before placing hospital loot.")
 
     def spawn(kind, key, label, x, y, z, configure, tags=(), always_loaded=False):
         if key in actor_tags:
@@ -59,7 +66,7 @@ def place():
         except Exception:
             actors.destroy_actor(actor)
             raise
-        actor_tags.add(key)
+        actor_tags[key] = actor
 
     def box(key, label, x, y, z, w, d, h, ground=False):
         def configure(actor):
@@ -69,6 +76,42 @@ def place():
             actor.set_actor_scale3d(unreal.Vector(w, d, h))
         spawn(unreal.StaticMeshActor, key, label, x, y, z + h/2, configure,
               ("StructuralGround",) if ground else ())
+
+    def place_hospital(key, x, y, floor):
+        def wall(label, dx, dy, w, d):
+            box(f"{key}_{label}", f"Hospital {label}", x+dx, y+dy, floor, w, d, 3.2)
+
+        # First wing measures 18 by 14 meters, with a 3 m south entrance.
+        wall("west wall", -8.875, 0, .25, 14)
+        wall("east wall", 8.875, 0, .25, 14)
+        wall("rear wall", 0, 6.875, 17.5, .25)
+        for sign, side in ((-1, "west"), (1, "east")):
+            wall(f"{side} entrance wall", sign*5.125, -6.875, 7.25, .25)
+            for index, (center, length) in enumerate(((-4.75, 4.5), (0, 2), (4.75, 4.5))):
+                wall(f"{side} hall wall {index}", sign*2.1, center, .25, length)
+            wall(f"{side} room divider", sign*5.425, 0, 6.4, .25)
+        box(f"{key}_roof", "Hospital wing roof", x, y, floor+3.2, 18, 14, .3)
+
+        def furnish_bed(actor):
+            component = actor.get_component_by_class(unreal.StaticMeshComponent)
+            component.set_static_mesh(bed_mesh)
+            component.set_collision_profile_name("NoCollision")
+
+        for index, (dx, dy) in enumerate(((-5, -3), (5, -3), (-5, 3), (5, 3)), 1):
+            spawn(unreal.StaticMeshActor, f"{key}_bed_{index}", f"Hospital bed {index}",
+                  x+dx, y+dy, floor, furnish_bed)
+
+        def fill_crate(actor):
+            for name, amount in (("timber_amount", 0), ("stone_amount", 0), ("cloth_amount", 5),
+                                 ("dressing_schematic_amount", 1)):
+                actor.set_editor_property(name, amount)
+
+        spawn(crate_class, f"{key}_supplies", "Hospital dressing supplies", x+5, y+5.6, floor+.41, fill_crate)
+
+        # Remove the previous generated mass only after the wing is ready.
+        if old_shell := actor_tags.get(f"{key}_shell"):
+            if not actors.destroy_actor(old_shell):
+                raise RuntimeError("Could not remove the old hospital blockout.")
 
     has_start = any(isinstance(actor, unreal.PlayerStart) for actor in existing)
     for landscape in landscapes:
@@ -92,7 +135,10 @@ def place():
         name = site["name"]
         box(key+"_slab", name+" slab", x, y, z-.6, w, d, .8, ground=True)
         # Leave a walkable pad at the front, including the initial spawn.
-        box(key+"_shell", name+" blockout", x, y+d*.12, z+.2, w*.85, d*.59, height)
+        if site["id"] == "city-hospital":
+            place_hospital(key, x, y, z+.2)
+        else:
+            box(key+"_shell", name+" blockout", x, y+d*.12, z+.2, w*.85, d*.59, height)
         if site["id"] == "south-services" and not has_start:
             spawn(unreal.PlayerStart, key+"_start", "Start at Southern Crossroads",
                   x, y-d*.31, z+1.3, lambda actor: None, always_loaded=True)

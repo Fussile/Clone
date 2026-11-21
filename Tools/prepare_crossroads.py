@@ -291,4 +291,5 @@ def prepare():
         Path(marker).write_text(LEVEL, encoding="utf-8")
 
 
-prepare()
+if __name__ == "__main__":
+    prepare()
