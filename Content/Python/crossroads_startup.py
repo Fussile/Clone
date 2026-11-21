@@ -11,7 +11,8 @@ import unreal
 def prepare_if_needed():
     project = Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()))
     stamp = project / "Saved" / "CrossroadsPreparation.sha256"
-    sources = list((project / "Tools").glob("*.py"))
+    sources = list(path for path in (project / "Tools").iterdir() if path.suffix in (".py", ".json"))
+    sources.extend(path for path in (project / "Source" / "SurvivalWorldEditor").rglob("*") if path.is_file())
     sources.extend(path for path in (project / "SourceArt" / "Crossroads").rglob("*") if path.is_file())
     medicine_sheet = project / "SourceArt" / "Local" / "MedicineSheet.png"
     if medicine_sheet.is_file():
@@ -28,6 +29,9 @@ def prepare_if_needed():
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     required = (
         "/Game/Maps/L_SouthernCrossroads",
+        "/Game/Maps/L_Crossroads",
+        "/Game/Art/Crossroads/World/SM_WarehouseExterior",
+        "/Game/Art/Crossroads/World/SM_PanelHousingExterior",
         "/Game/Art/Crossroads/Player/SK_Survivor",
         "/Game/Art/Crossroads/SniperSurface/SK_SniperViewmodel",
         "/Game/Art/Crossroads/SniperSurface/SM_CrossroadsSniper",
@@ -56,7 +60,7 @@ def prepare_if_needed():
             and all(assets.does_asset_exist(path) for path in required)):
         return
 
-    unreal.log("Crossroads: preparing the editor map and assets.")
+    unreal.log("Crossroads: preparing the default region map and assets.")
     runpy.run_path(str(project / "Tools" / "prepare_crossroads.py"), run_name="__main__")
     stamp.parent.mkdir(parents=True, exist_ok=True)
     stamp.write_text(revision, encoding="utf-8")

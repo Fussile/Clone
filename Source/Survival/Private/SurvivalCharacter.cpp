@@ -13,7 +13,9 @@
 #include "Engine/HitResult.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/TargetPoint.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -1044,12 +1046,33 @@ void ASurvivalCharacter::StartDefense()
 
 bool ASurvivalCharacter::SpawnAttackers(int32 Count, TArray<TWeakObjectPtr<ASurvivalZombie>>& Group)
 {
-    const FVector SpawnPoints[] = {
+    FVector SpawnPoints[] = {
         FVector(3700.0, 1650.0, 112.0),
         FVector(3490.0, 1410.0, 112.0),
         FVector(3920.0, 1240.0, 112.0)
     };
     static_assert(UE_ARRAY_COUNT(SpawnPoints) == DefenseWaveCount);
+    if (GetWorld()->GetMapName().EndsWith(TEXT("L_Crossroads")))
+    {
+        int32 Found = 0;
+        for (TActorIterator<ATargetPoint> Marker(GetWorld()); Marker; ++Marker)
+        {
+            for (int32 Index = 0; Index < Count; ++Index)
+            {
+                if (Marker->ActorHasTag(FName(*FString::Printf(TEXT("CrossroadsDefenseSpawn%d"), Index + 1))))
+                {
+                    SpawnPoints[Index] = Marker->GetActorLocation();
+                    ++Found;
+                    break;
+                }
+            }
+        }
+        // The station encounter is local. Retry if its terrain is out of streaming range.
+        if (Found != Count || FVector::DistSquared2D(GetActorLocation(), SpawnPoints[0]) > FMath::Square(5000.0))
+        {
+            return false;
+        }
+    }
     Group.Reset();
     FActorSpawnParameters SpawnParameters;
     SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;

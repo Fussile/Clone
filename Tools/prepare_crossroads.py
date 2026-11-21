@@ -292,8 +292,10 @@ def prepare():
         import_asset(icon, ART + "/Interface", unreal.Texture2D)
     if not os.environ.get("SURVIVAL_PREPARED_MARKER"):
         import_local_medicine_sheet()
+    prepare_region = runpy.run_path(str(TOOLS / "prepare_region.py"))["prepare_region"]
+    map_path = prepare_region(TOOLS, unreal.load_asset(f"{SURFACES}/M_Ground036"))
     if marker := os.environ.get("SURVIVAL_PREPARED_MARKER"):
-        Path(marker).write_text(LEVEL, encoding="utf-8")
+        Path(marker).write_text(map_path, encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -42,7 +42,9 @@ try {
     $env:SURVIVAL_PREPARED_MARKER = $marker
     $prepare = Join-Path $PSScriptRoot 'prepare_crossroads.py'
     & $editor $project "-ExecutePythonScript=$prepare" "-abslog=$editorLog" -unattended -nosplash -nullrhi
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $marker)) {
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $marker) -or
+        (Get-Content -LiteralPath $marker -Raw).Trim() -ne '/Game/Maps/L_Crossroads' -or
+        -not (Test-Path -LiteralPath (Join-Path $projectRoot 'Content\Maps\L_Crossroads.umap') -PathType Leaf)) {
         throw "Crossroads preparation failed. Check $editorLog."
     }
 
@@ -71,6 +73,10 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Docs\SidearmViewmodelAttribution.txt') -Destination $package[0]
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Docs\MagazineAttribution.txt') -Destination $package[0]
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Docs\RifleAttribution.txt') -Destination $package[0]
+
+    foreach ($credit in @('HospitalBedAttribution.txt', 'DowntownFacadeAttribution.txt', 'M4WorldArt.txt')) {
+        Copy-Item -LiteralPath (Join-Path $projectRoot "Docs\$credit") -Destination $package[0]
+    }
 
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $temporaryZip = Join-Path $work $zipName

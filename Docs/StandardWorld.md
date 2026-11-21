@@ -4,16 +4,17 @@ The first M4 world pass translates the sketch into a 5 km east–west by 4 km no
 
 The city center reserves plots for a general hospital, police headquarters, civic center, towers, a parking garage and a restaurant and bar strip. Outlying districts include the winter village and northern lakes, the Great Lake and wetlands, the southwest and southeast industrial districts, the airport and the dry southern towns. Site IDs carry through to the baked manifest. Travel routes, bridge sites and plot footprints are provisional so they can be revised as the districts take shape.
 
-## Build the editor blockout
+## Open the region
 
-1. Run `python Tools/generate_world.py Saved/WorldBake/world.json --bake` at the project root. The command writes a manifest, a 16-bit Unreal Landscape heightmap and an overview map. Keep the authored edits in `Tools/world_layout.json`. The default seed varies the broad relief and keeps the district anchors.
-2. Create an Open World level as `/Game/Maps/L_CrossroadsRegion`. Remove the template Landscape and Player Start from the new level. Keep its sky and lighting. Import `Saved/WorldBake/crossroads-height.png` as a level, unrotated Landscape. Use the X/Y/Z scales from the manifest (about `248.015873 / 198.412698 / 100` cm), 63 quads per section, 2 × 2 sections and 16 × 16 components. Import with the top of the PNG at negative world Y.
-3. Load the entire Landscape in the World Partition editor for placement. Use Unreal's **Tools → Execute Python Script** to run `Tools/place_region_blockout.py`, then Save All. It places the first building masses and pads, tags the terrain for the build system, and supplies a Player Start at Southern Crossroads and three regional temperature markers. You can reopen the level and rerun placement with its actor cells loaded. Existing placements keep their edits.
-4. Play the new level from its Player Start. Play the station, warehouse, and hospital route as an editor preview. The river channel has a crossing deck. Water rendering, vegetation, and radiation behavior still need a world content pass. The separate Southern Crossroads test map remains the packaged startup map.
+Build the UE 5.8 editor target and open `Survival.uproject`. On the first launch, Crossroads prepares its assets, bakes the terrain from `Tools/world_layout.json`, creates the World Partition map at `/Game/Maps/L_Crossroads`, and saves the roads, buildings, and external actors. Press Play once the editor logs that the region was stamped. The Windows packaging script runs the same preparation before cooking. The older `L_SouthernCrossroads` map is available in the editor for the original defense test.
+
+The revised road sketch is the basis for the regional highways and arterials. Downtown has an inner loop with west and east highway connections. Two elevated branches end at missing spans and one remains open. Short approaches connect the station, warehouse and General Hospital. Add local streets and alleys when the actual blocks and building entrances are laid out.
+
+To export just the overview and the Landscape heightmap for editing, run `python Tools/generate_world.py Saved/WorldBake/world.json --bake` from the project root. The normal first launch needs no separate landscape import. Water rendering, vegetation, and radiation gameplay still need a world content pass.
 
 ## Runtime performance
 
-Use World Partition to load around the player from cooked data. Start with 256 m cells and a 768 m loading range and profile before tuning. Those two values are planning defaults in the manifest. Configure the runtime grid when setting up the level. Give the skyline and other large scenery HLOD proxies. Use instanced meshes for recurring street props and foliage, and keep collision, interiors, loot, navigation, and AI in the nearby cells. Preserve the existing 16 m construction chunks for runtime pieces. They serve a different purpose from the larger World Partition cells.
+Use World Partition to load around the player from cooked data. Start profiling with 256 m cells and a 768 m loading range. Those two values are planning defaults in the manifest. Configure the runtime grid when setting up the level. Give the skyline and other large scenery HLOD proxies. Use instanced meshes for recurring street props and foliage, and keep collision, interiors, loot, navigation, and AI in the nearby cells. Preserve the existing 16 m construction chunks for runtime pieces. They serve a different purpose from the larger World Partition cells.
 
 Keep authoritative loot, destruction and construction changes keyed by stable site, section and piece IDs. A cell unload should preserve these deltas. Cook and test the baseline before implementing save migration or seeded world variants. Profile a drive into downtown, a bridge crossing, several cell unload/reload cycles, and two co-op players traveling apart. Record memory, frame-time spikes and the number of active AI during each route.
 
@@ -39,6 +40,6 @@ The same station layout is used at each fuel stop. Southwest Apartments has an a
 
 ## M4 editor playtest
 
-Rebake the layout and run region placement after updating. Load the previous shell actors as well so the script can replace them. From Southern Crossroads, collect the starter sidearm and follow the station road. The east spur leads to the warehouse repair cache and runner encounter. The north leg crosses the river to General Hospital and its dressing supplies.
+Open the generated Crossroads region and play from its Player Start. From Southern Crossroads, collect the starter sidearm and follow the station approach. The industrial spur leads to the warehouse repair cache and runner encounter. Follow the northbound arterial to the highway and the city loop for the hospital road and dressing supplies.
 
 At the warehouse, damage the two-block infill and place a repair in the gap. Remove an end pillar and check that only the unsupported end of the roof drops. Return after streaming out the warehouse cell and confirm the bay layout is still in its damaged state. Runtime building chunks currently hold changes for the session. Cross-session saves and restoration of looted containers or defeated enemies on stream-in are pending.

@@ -7,6 +7,6 @@ public class SurvivalEditorTarget : TargetRules
     {
         Type = TargetType.Editor;
         DefaultBuildSettings = BuildSettingsVersion.Latest;
-        ExtraModuleNames.Add("Survival");
+        ExtraModuleNames.AddRange(new[] { "Survival", "SurvivalWorldEditor" });
     }
 }

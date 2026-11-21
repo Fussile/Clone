@@ -6,7 +6,7 @@ from pathlib import Path
 
 import unreal
 
-LEVEL = "/Game/Maps/L_CrossroadsRegion"
+LEVEL = "/Game/Maps/L_Crossroads"
 MASS_HEIGHT = {
     "hospital": 22, "highrise": 58, "garage": 14, "civic": 17, "police": 11,
     "industry": 10, "airport": 12, "shops": 5, "clinic": 5, "services": 5,
@@ -17,7 +17,7 @@ MASS_HEIGHT = {
 def place():
     root = Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()))
     plan = json.loads((root / "Saved" / "WorldBake" / "world.json").read_text(encoding="utf-8"))
-    if plan.get("version", 0) < 4:
+    if plan.get("version", 0) != 5:
         raise RuntimeError("Rebake Saved/WorldBake/world.json with Tools/generate_world.py before stamping the M4 route.")
     site_tools = runpy.run_path(str(root / "Tools" / "place_region_sites.py"))
     editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
@@ -162,6 +162,9 @@ def place():
             spawn(unreal.StaticMeshActor, key, "Bridge deck" if bridge else "Scavenging route",
                   x, y, z-thickness/2, lambda actor: road_actor(actor, (length+.5, width, thickness), material),
                   ("StructuralGround",))
+            if "pier_base_z_m" in segment:
+                base = segment["pier_base_z_m"]
+                box(key+"_pier", "Bridge pier", x, y, base, 1.2, 2.4, z-thickness-base, material=concrete)
             if bridge:
                 for side in (-1, 1):
                     offset = side*(width/2-.12)
@@ -263,6 +266,14 @@ def place():
             cache(key+"_provisions", "Station provisions", x+3, y+3, z+.2, food_amount=2, water_amount=3)
             if site["id"] == "south-services":
                 cache(key+"_sidearm", "Station sidearm case", x+2, y+2, z+.2, contains_sidearm=True)
+                cache(key+"_rifle", "Station rifle locker", x+4.8, y+2.4, z+.2,
+                      contains_rifle=True, builder_guide_amount=1)
+                cache(key+"_building", "Station building materials", x-4.6, y+1.6, z+.2,
+                      timber_amount=24, stone_amount=12)
+                for index, offset in enumerate((-4, 0, 4), 1):
+                    tag = f"CrossroadsDefenseSpawn{index}"
+                    spawn(unreal.TargetPoint, tag, tag, x+offset, y-d*.43, z+1.32,
+                          lambda actor: None, always_loaded=True)
             remove_blockout(key)
         else:
             style = site["architecture"]
@@ -282,7 +293,9 @@ def place():
             dress_downtown(key, x, y + d*.12 - d*.59/2, z+.2)
         if site["id"] == "south-services" and not has_start:
             spawn(unreal.PlayerStart, key+"_start", "Start at Southern Crossroads",
-                  x, y-d*.31, z+1.3, lambda actor: None, always_loaded=True)
+                  x, y-d*.31, z+1.3,
+                  lambda actor: actor.set_actor_rotation(unreal.Rotator(yaw=-90), False),
+                  always_loaded=True)
 
     for route in plan["m4_route"]:
         place_route(route)
@@ -292,4 +305,5 @@ def place():
     unreal.log(f"Stamped {LEVEL}. Save external actors with Save All.")
 
 
-place()
+if __name__ == "__main__":
+    place()

@@ -104,7 +104,7 @@ def generate(seed):
             for index, point in enumerate(sorted(hits), 1):
                 bridges.append({"id": f'{road["id"]}-{river["id"]}-{index}', "xy_m": point,
                                 "road": road["id"], "river": river["id"]})
-    plan.update(version=4, seed=seed, bridge_candidates=bridges, stream_cell_m=256, stream_radius_m=768,
+    plan.update(version=5, seed=seed, bridge_candidates=bridges, stream_cell_m=256, stream_radius_m=768,
                 climate_celsius_offset={"north_edge": -15, "city": 0, "south_edge": 14},
                 terrain={"resolution": RESOLUTION, "xyz_scale_cm": [width*100/(RESOLUTION-1),
                                                                   depth*100/(RESOLUTION-1), 100]})
@@ -134,7 +134,7 @@ def generate(seed):
     return plan, height
 
 
-def write_heightmap(path, plan, height):
+def write_heightmap(path, plan, height, raw_path=None):
     width, depth = plan["size_m"]
     columns, rows = 500, 400
     stride_x, stride_y = width/columns, depth/rows
@@ -143,14 +143,20 @@ def write_heightmap(path, plan, height):
     x_samples = [(min(int(value), columns-1), value) for value in x_fractions]
     compressor = zlib.compressobj(level=6)
     output = []
+    raw_rows = []
     for y in range(RESOLUTION):
         fraction_y = y*rows/(RESOLUTION-1)
         iy = min(int(fraction_y), rows-1)
         north, south = coarse[iy:iy+2]
         row = [a+(b-a)*(fraction_y-iy) for a,b in zip(north,south)]
-        values = (round(32768 + 128*(row[ix] + (row[ix+1]-row[ix])*(f-ix))) for ix,f in x_samples)
+        values = [max(0, min(65535, round(32768 + 128*(row[ix] + (row[ix+1]-row[ix])*(f-ix)))))
+                  for ix, f in x_samples]
+        if raw_path:
+            raw_rows.append(struct.pack(f"<{RESOLUTION}H", *values))
         output.append(compressor.compress(b"\0" + struct.pack(f">{RESOLUTION}H", *values)))
     output.append(compressor.flush())
+    if raw_path:
+        raw_path.write_bytes(b"".join(raw_rows))
 
     def chunk(kind, data):
         return struct.pack(">I", len(data))+kind+data+struct.pack(">I", zlib.crc32(kind+data))
@@ -203,9 +209,16 @@ def write_map(path, plan):
         color = "#f5d280" if road["id"] == "east-west-highway" else "#c4c3ad"
         lines.append(f'<polyline points="{points(road["points_m"])}" fill="none" stroke="{color}" stroke-width="{max(2, road["width_m"]/6)}"/>')
     for route in plan["m4_route"]:
-        legs = route["segments"]
-        line = [legs[0]["start"], *(segment["end"] for segment in legs)]
-        lines.append(f'<polyline points="{points(line)}" fill="none" stroke="#ebf78b" stroke-width="2.8" stroke-linejoin="round"/>')
+        if not route["id"].startswith("downtown-") and not route["id"].endswith("_access"):
+            continue
+        runs = []
+        for segment in route["segments"]:
+            if not runs or runs[-1][-1] != segment["start"]:
+                runs.append([segment["start"]])
+            runs[-1].append(segment["end"])
+        color = "#ed956d" if "overpass" in route["id"] else "#ebf78b"
+        for line in runs:
+            lines.append(f'<polyline points="{points(line)}" fill="none" stroke="{color}" stroke-width="2.8" stroke-linejoin="round"/>')
     for bridge in plan["bridge_candidates"]:
         x, y = svg_xy(bridge["xy_m"])
         lines.append(f'<rect x="{x-3}" y="{y-3}" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>')
@@ -219,7 +232,7 @@ def write_map(path, plan):
     lines += ['<g fill="#e1e8dc" font-family="sans-serif" font-size="14">',
               '<text x="925" y="39">N ↑</text><text x="0" y="907">20 km²  ·  5 km east–west  ·  4 km north–south</text>',
               '<text x="0" y="936">Gold highway  ·  Grey proposed roads  ·  Squares mark candidate bridges  ·  Salmon marks the Great Fissure</text>',
-              '<text x="0" y="959">Lime marks the first playable route. Grid lines every 500 m.</text></g></svg>']
+              '<text x="0" y="959">Lime marks the city loop and site approaches. Orange marks the elevated decks.</text></g></svg>']
     path.write_text("\n".join(lines)+"\n", encoding="utf-8")
 
 
