@@ -3,7 +3,9 @@
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
+#include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
 
 ASurvivalSidearm::ASurvivalSidearm()
@@ -41,6 +43,8 @@ ASurvivalSidearm::ASurvivalSidearm()
 void ASurvivalSidearm::BeginPlay()
 {
     Super::BeginPlay();
+    ShotSound = LoadObject<USoundBase>(nullptr,
+        TEXT("/Game/Audio/Weapons/SW_SidearmShot.SW_SidearmShot"), nullptr, LOAD_NoWarn);
     TInlineComponentArray<UStaticMeshComponent*> Parts(this);
     UStaticMesh* SidearmAsset = LoadObject<UStaticMesh>(nullptr,
         TEXT("/Game/Art/Crossroads/Building/SM_CrossroadsSidearm.SM_CrossroadsSidearm"), nullptr, LOAD_NoWarn);
@@ -74,5 +78,13 @@ void ASurvivalSidearm::BeginPlay()
         {
             Part->SetMaterial(0, Steel);
         }
+    }
+}
+
+void ASurvivalSidearm::PlayShotSound()
+{
+    if (ShotSound)
+    {
+        UGameplayStatics::PlaySoundAtLocation(this, ShotSound.Get(), GetActorLocation());
     }
 }

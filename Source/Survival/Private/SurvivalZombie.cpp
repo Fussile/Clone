@@ -35,7 +35,7 @@ void ASurvivalZombie::BeginPlay()
 {
     Super::BeginPlay();
     USkeletalMesh* ZombieAsset = LoadObject<USkeletalMesh>(nullptr,
-        TEXT("/Game/Art/Crossroads/Zombie/SK_StationZombie.SK_StationZombie"), nullptr, LOAD_NoWarn);
+        TEXT("/Game/Art/Crossroads/StationZombie/SK_StationZombie.SK_StationZombie"), nullptr, LOAD_NoWarn);
     const bool bHasImportedBody = ZombieAsset != nullptr;
     if (!bHasImportedBody)
     {
@@ -49,19 +49,23 @@ void ASurvivalZombie::BeginPlay()
     USkeletalMeshComponent* Body = GetMesh();
     Body->SetSkeletalMesh(ZombieAsset);
     const FBoxSphereBounds Bounds = ZombieAsset->GetBounds();
-    const double Scale = 175.0 / FMath::Max(1.0, 2.0 * Bounds.BoxExtent.Z);
-    const double Bottom = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * Scale;
+    // The imported asset's static bounds can describe the unposed mesh in a different basis.
+    // Use the prepared GLB's measured skinned reference height and floor in Unreal centimeters.
+    const double ReferenceHeight = bHasImportedBody ? 131.1 : FMath::Max(1.0, 2.0 * Bounds.BoxExtent.Z);
+    const double ReferenceBottom = bHasImportedBody ? 1.3 : Bounds.Origin.Z - Bounds.BoxExtent.Z;
+    const double Scale = 175.0 / ReferenceHeight;
+    const double Bottom = ReferenceBottom * Scale;
     Body->SetRelativeScale3D(FVector(Scale));
     Body->SetRelativeLocation(FVector(0, 0, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - Bottom));
     Body->SetRelativeRotation(FRotator(0, -90, 0));
     if (bHasImportedBody)
     {
         IdleAnimation = LoadObject<UAnimSequence>(nullptr,
-            TEXT("/Game/Art/Crossroads/Zombie/StationZombieIdle.StationZombieIdle"));
+            TEXT("/Game/Art/Crossroads/StationZombie/StationZombieIdle.StationZombieIdle"));
         WalkAnimation = LoadObject<UAnimSequence>(nullptr,
-            TEXT("/Game/Art/Crossroads/Zombie/StationZombieWalk.StationZombieWalk"));
+            TEXT("/Game/Art/Crossroads/StationZombie/StationZombieWalk.StationZombieWalk"));
         AttackAnimation = LoadObject<UAnimSequence>(nullptr,
-            TEXT("/Game/Art/Crossroads/Zombie/StationZombieAttack.StationZombieAttack"));
+            TEXT("/Game/Art/Crossroads/StationZombie/StationZombieAttack.StationZombieAttack"));
     }
     else
     {

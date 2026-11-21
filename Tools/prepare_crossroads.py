@@ -13,16 +13,17 @@ ART = "/Game/Art/Crossroads"
 SURFACES = ART + "/Surfaces"
 SURVIVOR = ART + "/Survivor"
 BUILDING = ART + "/Building"
-ZOMBIE = ART + "/Zombie"
+ZOMBIE = ART + "/StationZombie"
+WEAPON_AUDIO = "/Game/Audio/Weapons"
 LEVEL = "/Game/Maps/L_SouthernCrossroads"
 
 
-def import_asset(source, directory, asset_type, options=None):
+def import_asset(source, directory, asset_type, options=None, *, replace_existing=False):
     name = source.stem
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     path = f"{directory}/{name}"
     asset = assets.load_asset(path) if assets.does_asset_exist(path) else None
-    if asset is None:
+    if asset is None or replace_existing:
         if not source.is_file():
             raise FileNotFoundError(source)
         task = unreal.AssetImportTask()
@@ -30,7 +31,7 @@ def import_asset(source, directory, asset_type, options=None):
         task.set_editor_property("destination_path", directory)
         task.set_editor_property("destination_name", name)
         task.set_editor_property("automated", True)
-        task.set_editor_property("replace_existing", False)
+        task.set_editor_property("replace_existing", replace_existing)
         if options is not None:
             task.set_editor_property("options", options)
         unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
@@ -258,6 +259,9 @@ def prepare():
     sidearm = SOURCE / "Weapons" / "SM_CrossroadsSidearm.glb"
     if sidearm.is_file():
         import_asset(sidearm, BUILDING, unreal.StaticMesh)
+    shot = SOURCE / "Audio" / "SW_SidearmShot.wav"
+    if shot.is_file():
+        import_asset(shot, WEAPON_AUDIO, unreal.SoundWave, replace_existing=True)
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     if assets.does_asset_exist(LEVEL):

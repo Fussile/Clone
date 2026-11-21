@@ -326,6 +326,10 @@ void ASurvivalCharacter::PrimaryAction()
     }
 
     --Ammo;
+    if (Sidearm)
+    {
+        Sidearm->PlayShotSound();
+    }
     AddControllerPitchInput(-0.65f);
     constexpr double Range = 4000.0;
     FHitResult Aim;

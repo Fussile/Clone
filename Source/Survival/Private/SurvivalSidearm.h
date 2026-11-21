@@ -4,6 +4,7 @@
 #include "SurvivalSidearm.generated.h"
 
 class UStaticMeshComponent;
+class USoundBase;
 
 UCLASS()
 class ASurvivalSidearm : public AActor
@@ -12,6 +13,7 @@ class ASurvivalSidearm : public AActor
 
 public:
     ASurvivalSidearm();
+    void PlayShotSound();
 
 protected:
     virtual void BeginPlay() override;
@@ -19,4 +21,7 @@ protected:
 private:
     UPROPERTY()
     TObjectPtr<UStaticMeshComponent> ImportedVisual;
+
+    UPROPERTY(Transient)
+    TObjectPtr<USoundBase> ShotSound;
 };
