@@ -31,5 +31,8 @@ protected:
 
 private:
     UPROPERTY(EditAnywhere, Category = "Structure")
+    FName PrefabId;
+
+    UPROPERTY(EditAnywhere, Category = "Structure")
     TArray<FSurvivalPrefabPart> Parts;
 };

@@ -61,6 +61,11 @@ def make_material(directory, name, textures, tint=None):
     if material is None:
         raise RuntimeError(f"Could not create {path}.")
     editing = unreal.MaterialEditingLibrary
+    if not textures and tint is not None:
+        color = editing.create_material_expression(material, unreal.MaterialExpressionConstant3Vector, -300, 0)
+        color.set_editor_property("constant", tint)
+        if not editing.connect_material_property(color, "", unreal.MaterialProperty.MP_BASE_COLOR):
+            raise RuntimeError(f"Could not color {path}.")
     for index, (texture, sampler, output, prop) in enumerate(textures):
         sample = editing.create_material_expression(
             material, unreal.MaterialExpressionTextureSample, -320, index * 240

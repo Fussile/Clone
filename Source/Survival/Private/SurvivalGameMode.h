@@ -21,6 +21,7 @@ public:
     bool FinishPlan(const FSurvivalPlanTarget& Target, FSurvivalMaterials& Inventory);
     bool HasReservedCellConflict(const FSurvivalBuildPlacement& Placement, bool bIncludePlans) const;
     bool CanSupport(const FSurvivalBuildPlacement& Placement) const;
+    bool BeginAuthoredPrefab(FName PrefabId);
     bool AddAuthoredPiece(const FSurvivalBuildPlacement& Placement);
     void RemoveStructure(int32 Id);
     const FSurvivalMaterials& GetPlannedCost() const { return PlannedCost; }
@@ -68,5 +69,6 @@ private:
     FSurvivalStructure Structure;
     TMap<int32, FRegisteredPiece> RegisteredPieces;
     TMap<FIntVector, TArray<int32>> PiecesByCell;
+    TSet<FName> InitializedPrefabs;
     int32 NextStructureId = 1;
 };

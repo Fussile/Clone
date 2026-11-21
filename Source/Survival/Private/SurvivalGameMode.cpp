@@ -341,6 +341,21 @@ bool ASurvivalGameMode::FinishPlan(const FSurvivalPlanTarget& Target, FSurvivalM
     return true;
 }
 
+bool ASurvivalGameMode::BeginAuthoredPrefab(FName PrefabId)
+{
+    if (PrefabId.IsNone())
+    {
+        return true;
+    }
+    if (InitializedPrefabs.Contains(PrefabId))
+    {
+        return false;
+    }
+    // Runtime build chunks retain the current pieces and any repairs after the level cell unloads.
+    InitializedPrefabs.Add(PrefabId);
+    return true;
+}
+
 bool ASurvivalGameMode::AddAuthoredPiece(const FSurvivalBuildPlacement& Placement)
 {
     const bool bGrounded = HasGroundFooting(Placement);

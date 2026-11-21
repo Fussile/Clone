@@ -41,4 +41,6 @@ The full map will add a shared seasonal cycle with regional weather variation.
 M3: small playable world, first horde, one assembled rifle, practice skills and books.
 Later co-op milestone: add gameplay replication, session handling, two-process host/join and packaged Steam validation.
 
-M4+: traders, quests, content expansion, art, future terrain work.
+M4: a connected scavenging route, repeated POI layouts, structural damage and rebuilding in an authored location, and a runner encounter.
+
+Later: factions, content expansion, art, and terrain work. NPCs and traders are deferred. Scavenging, traversal, and survival drive the route.

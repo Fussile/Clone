@@ -13,7 +13,7 @@ void ASurvivalStructurePrefab::BeginPlay()
 {
     Super::BeginPlay();
     ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
-    if (!GameMode)
+    if (!GameMode || !GameMode->BeginAuthoredPrefab(PrefabId))
     {
         return;
     }

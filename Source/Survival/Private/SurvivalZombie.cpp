@@ -34,6 +34,11 @@ void ASurvivalZombie::BeginPlay()
 {
     Super::BeginPlay();
     Home = GetActorLocation();
+    if (bIsRunner)
+    {
+        GetCharacterMovement()->MaxWalkSpeed = 430.0f;
+        Health = 55;
+    }
     USkeletalMesh* ZombieAsset = LoadObject<USkeletalMesh>(nullptr,
         TEXT("/Game/Art/Crossroads/StationZombie/SK_StationZombie.SK_StationZombie"), nullptr, LOAD_NoWarn);
     if (!ZombieAsset)
@@ -73,7 +78,8 @@ void ASurvivalZombie::UpdateLocomotion(bool bMoving)
         ActiveAnimation = Sequence;
         GetMesh()->PlayAnimation(Sequence, true);
     }
-    GetMesh()->SetPlayRate(IdleAnimation ? 1.0f : 0.48f);
+    const float Pace = bMoving && bIsRunner ? 1.65f : 1.0f;
+    GetMesh()->SetPlayRate((IdleAnimation ? 1.0f : 0.48f) * Pace);
 }
 
 void ASurvivalZombie::ApplyAttack()

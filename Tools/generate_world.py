@@ -7,6 +7,8 @@ from pathlib import Path
 import struct
 import zlib
 
+from region_route import bake_route
+
 LAYOUT = Path(__file__).with_name("world_layout.json")
 RESOLUTION = 2017
 # East/west and north/south footprints for the first blockout, in meters.
@@ -102,7 +104,7 @@ def generate(seed):
             for index, point in enumerate(sorted(hits), 1):
                 bridges.append({"id": f'{road["id"]}-{river["id"]}-{index}', "xy_m": point,
                                 "road": road["id"], "river": river["id"]})
-    plan.update(version=3, seed=seed, bridge_candidates=bridges, stream_cell_m=256, stream_radius_m=768,
+    plan.update(version=4, seed=seed, bridge_candidates=bridges, stream_cell_m=256, stream_radius_m=768,
                 climate_celsius_offset={"north_edge": -15, "city": 0, "south_edge": 14},
                 terrain={"resolution": RESOLUTION, "xyz_scale_cm": [width*100/(RESOLUTION-1),
                                                                   depth*100/(RESOLUTION-1), 100]})
@@ -120,6 +122,8 @@ def generate(seed):
             blend = max(0., min(1., (clearance+28-distance)/22))
             base += (z-base)*blend
         return base
+
+    plan["m4_route"] = bake_route(plan, ground_height, height)
 
     # Assign static content to planned cells. IDs persist when exact coordinates change.
     cells = {}
@@ -170,7 +174,7 @@ def write_map(path, plan):
                "shops": "#e0b88e", "industry": "#e2a773", "highrise": "#f1f4de"}
     labels = {"crater-town", "winter-village", "north-industry", "hill-town", "city-hospital",
               "city-police", "city-towers", "west-factory", "university", "airport", "south-base",
-              "south-services", "west-entertainment", "east-clinic", "farms", "western-estates", "east-factory"}
+              "south-services", "warehouses", "west-entertainment", "east-clinic", "farms", "western-estates", "east-factory"}
     lines = ['<svg xmlns="http://www.w3.org/2000/svg" width="1064" height="982" viewBox="-32 0 1064 982">',
              '<rect x="-32" width="1064" height="982" fill="#131b20"/>',
              '<text x="0" y="39" fill="#edf1e5" font-family="sans-serif" font-size="26" font-weight="bold">Crossroads region</text>',
@@ -198,6 +202,10 @@ def write_map(path, plan):
     for road in plan["roads"]:
         color = "#f5d280" if road["id"] == "east-west-highway" else "#c4c3ad"
         lines.append(f'<polyline points="{points(road["points_m"])}" fill="none" stroke="{color}" stroke-width="{max(2, road["width_m"]/6)}"/>')
+    for route in plan["m4_route"]:
+        legs = route["segments"]
+        line = [legs[0]["start"], *(segment["end"] for segment in legs)]
+        lines.append(f'<polyline points="{points(line)}" fill="none" stroke="#ebf78b" stroke-width="2.8" stroke-linejoin="round"/>')
     for bridge in plan["bridge_candidates"]:
         x, y = svg_xy(bridge["xy_m"])
         lines.append(f'<rect x="{x-3}" y="{y-3}" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>')
@@ -211,7 +219,7 @@ def write_map(path, plan):
     lines += ['<g fill="#e1e8dc" font-family="sans-serif" font-size="14">',
               '<text x="925" y="39">N ↑</text><text x="0" y="907">20 km²  ·  5 km east–west  ·  4 km north–south</text>',
               '<text x="0" y="936">Gold highway  ·  Grey proposed roads  ·  Squares mark candidate bridges  ·  Salmon marks the Great Fissure</text>',
-              '<text x="0" y="959">Grid lines every 500 m. Points show planned sites and first blockout plots.</text></g></svg>']
+              '<text x="0" y="959">Lime marks the first playable route. Grid lines every 500 m.</text></g></svg>']
     path.write_text("\n".join(lines)+"\n", encoding="utf-8")
 
 

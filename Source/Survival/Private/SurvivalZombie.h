@@ -31,6 +31,9 @@ private:
     UPROPERTY(EditAnywhere, Category = "Survival", meta = (ClampMin = "0"))
     float AggroRange = 0.0f;
 
+    UPROPERTY(EditAnywhere, Category = "Survival")
+    bool bIsRunner = false;
+
     FVector Home = FVector::ZeroVector;
     FVector LastKnownLocation = FVector::ZeroVector;
     double SearchUntil = -1.0;
