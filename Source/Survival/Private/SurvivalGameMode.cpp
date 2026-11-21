@@ -4,6 +4,7 @@
 #include "Components/DirectionalLightComponent.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/HitResult.h"
+#include "Engine/TargetPoint.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
@@ -59,6 +60,29 @@ void ASurvivalGameMode::BeginPlay()
             }
         }
     }
+    TOptional<double> North;
+    TOptional<double> City;
+    TOptional<double> South;
+    for (TActorIterator<ATargetPoint> It(GetWorld()); It; ++It)
+    {
+        const double Y = It->GetActorLocation().Y;
+        if (It->ActorHasTag(FName(TEXT("CrossroadsClimateNorth"))))
+        {
+            North = Y;
+        }
+        else if (It->ActorHasTag(FName(TEXT("CrossroadsClimateCity"))))
+        {
+            City = Y;
+        }
+        else if (It->ActorHasTag(FName(TEXT("CrossroadsClimateSouth"))))
+        {
+            South = Y;
+        }
+    }
+    if (North.IsSet() && City.IsSet() && South.IsSet() && North.GetValue() < City.GetValue() && City.GetValue() < South.GetValue())
+    {
+        ClimateBoundaries.Emplace(North.GetValue(), City.GetValue(), South.GetValue());
+    }
     UpdateDaylight();
 }
 
@@ -87,10 +111,18 @@ int32 ASurvivalGameMode::GetWorldMinutes() const
         * 1440.0 / FMath::Max(60.0f, DayLengthSeconds) + 1e-6);
 }
 
-double ASurvivalGameMode::GetAmbientTemperature() const
+double ASurvivalGameMode::GetAmbientTemperature(const FVector& Position) const
 {
     const double Hours = StartHour + ElapsedSurvivalSeconds * 24.0 / FMath::Max(60.0f, DayLengthSeconds);
-    return 13.0 + 8.0 * FMath::Cos(FMath::DegreesToRadians((Hours - 14.0) * 15.0));
+    double RegionalOffset = 0.0;
+    if (ClimateBoundaries.IsSet())
+    {
+        const FVector& Bounds = ClimateBoundaries.GetValue();
+        RegionalOffset = Position.Y < Bounds.Y
+            ? FMath::GetMappedRangeValueClamped(FVector2D(Bounds.X, Bounds.Y), FVector2D(-15, 0), Position.Y)
+            : FMath::GetMappedRangeValueClamped(FVector2D(Bounds.Y, Bounds.Z), FVector2D(0, 14), Position.Y);
+    }
+    return 13.0 + RegionalOffset + 8.0 * FMath::Cos(FMath::DegreesToRadians((Hours - 14.0) * 15.0));
 }
 
 bool ASurvivalGameMode::SetTimeOfDay(double Hour)

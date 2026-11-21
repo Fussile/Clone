@@ -1,32 +1,24 @@
-# Standard world
+# Crossroads region
 
-The first planning pass covers 5 km east–west by 4 km north–south. The 100 m planning grid allocates 5 km² to the urban core, 7 km² to the suburban belt and 8 km² to rural land, foothills and the boundary. These are land-use areas. The eastern hazard corridor overlaps them.
+The first M4 world pass translates the sketch into a 5 km east–west by 4 km north–south region. [The planning map](CrossroadsRegion.svg) shows the anchored locations, the east–west highway, proposed secondary roads, candidate bridge crossings, lakes L1 through L7 and the Great Fissure. The rectangle is 20 km². Mountains, water, the fissure and the radiation corridors reduce the usable land. At the current top walking speed of 6 m/s, a straight 5 km crossing takes about 14 minutes. A 1 km walk takes about three minutes.
 
-| Area | Layout and character |
-| --- | --- |
-| Center | Closely packed city blocks, towers and apartment districts. Reserve broad arterials and smaller service streets. |
-| Suburban belt | Broad tracts of housing broken by commercial strips and arterial roads. Density falls outward. |
-| North | Estates, farms, three lake-house villages and a gas-station village at a country-road junction. |
-| South | Farms, a gas-station village, a slaughterhouse, warehouses and a derelict factory. |
-| West | Foothills rise into the mountain boundary. |
-| East | A major highway starts downtown and runs through the suburbs into a bombed-out, irradiated strip near the eastern edge. |
+The city center reserves plots for a general hospital, police headquarters, civic center, towers, a parking garage and a restaurant and bar strip. Outlying districts include the winter village and northern lakes, the Great Lake and wetlands, the southwest and southeast industrial districts, the airport and the dry southern towns. Site IDs carry through to the baked manifest. Travel routes, bridge sites and plot footprints are provisional so they can be revised as the districts take shape.
 
-Use the references for scale and mood. Develop original streets, landmarks and assets, with weathered concrete, overgrown asphalt, rusted metal and muted color.
+## Build the editor blockout
 
-Run `python Tools/generate_world.py standard-layout.json --seed 1729` from the repository root. Coordinates are meters east and north from the southwest corner. Seed 1729 is a provisional starting point. The district footprints and main landmarks are anchored. The seed varies secondary rural sites. Each site has an ID for manual revisions.
+1. Run `python Tools/generate_world.py Saved/WorldBake/world.json --bake` at the project root. The command writes a manifest, a 16-bit Unreal Landscape heightmap and an overview map. Keep the authored edits in `Tools/world_layout.json`. The default seed varies the broad relief and keeps the district anchors.
+2. Create an Open World level as `/Game/Maps/L_CrossroadsRegion`. Remove the template Landscape and Player Start from the new level. Keep its sky and lighting. Import `Saved/WorldBake/crossroads-height.png` as a level, unrotated Landscape. Use the X/Y/Z scales from the manifest (about `248.015873 / 198.412698 / 100` cm), 63 quads per section, 2 × 2 sections and 16 × 16 components. Import with the top of the PNG at negative world Y.
+3. Load the entire Landscape in the World Partition editor for placement. Use Unreal's **Tools → Execute Python Script** to run `Tools/place_region_blockout.py`, then Save All. It places the first building masses and pads, tags the terrain for the build system, and supplies a Player Start at Southern Crossroads and three regional temperature markers. You can reopen the level and rerun placement with its actor cells loaded. Existing placements keep their edits.
+4. Play the new level from its Player Start. Its building masses and terrain are the first editor preview. Roads, bridge decks, water rendering, interiors, vegetation, and radiation behavior still need a world content pass. The separate Southern Crossroads test map remains the packaged startup map.
 
-Keep the generated baseline and the curated copy separate. For a revision, generate a new candidate file and compare it with the existing edited copy. The JSON is a planning format. Terrain elevation, road meshes, buildings, radiation gameplay and the UE editor import and bake still need implementation.
+## Runtime performance
 
-## Construction approach
+Use World Partition to load around the player from cooked data. Start with 256 m cells and a 768 m loading range and profile before tuning. Those two values are planning defaults in the manifest. Configure the runtime grid when setting up the level. Give the skyline and other large scenery HLOD proxies. Use instanced meshes for recurring street props and foliage, and keep collision, interiors, loot, navigation, and AI in the nearby cells. Preserve the existing 16 m construction chunks for runtime pieces. They serve a different purpose from the larger World Partition cells.
 
-Use a hybrid layout. A small set of structural recipes can produce houses, shops, and repeated tower bays. Landmarks can have their own exterior and interior art. Assign the landmark art to destructible sections with structural connections, so opening a wall changes both what the player sees and what blocks them. The underlying section can be replaced using shared parts when the attachment points line up.
+Keep authoritative loot, destruction and construction changes keyed by stable site, section and piece IDs. A cell unload should preserve these deltas. Cook and test the baseline before implementing save migration or seeded world variants. Profile a drive into downtown, a bridge crossing, several cell unload/reload cycles, and two co-op players traveling apart. Record memory, frame-time spikes and the number of active AI during each route.
 
-Each generated site has a stable ID, a type, a position, and a proposed `construction` mode. `shared_kit` selects reusable prefab families. `custom_shell_shared_structure` identifies sites whose visual sections are hand-authored. Treat that output as input for editor placement and manual overrides. Later save data can store changes against site and piece IDs while leaving the curated baseline intact.
+## Build a district with shared construction
 
-The playable prototype is the utility canopy east of the Crossroads station. It has one authored descriptor and uses the player-build stone pillars and timber floors. Both its rendering and collision use the chunk system. The permanent blockout buildings and custom landmark sections still need conversion.
+Use kit walls, floors and stairs where the current grid fits. Give major landmarks their own art and divide each into purpose-built sections, such as a storefront panel, concrete bay or stair core. A section should own its render mesh, collision and health. A broken section must remove its blocking collision and expose attachment points for replacement pieces. Put the structural component in the support graph wherever its neighbors can depend on it. Bridge decks, terrain, and the first skyline blockouts can start as static geometry. The existing utility canopy is the test case for player-kit pieces, projectile damage and collapse.
 
-## Support rules
-
-- Only finished pieces carry support. Pieces with a full footing on tagged ground start with capacity five for timber or nine for stone. Ground and foundation slabs for authored sites can be marked `StructuralGround`.
-- Contact on a top face spends one capacity step. Edge-to-edge contact between floors spends two. A piece takes its best viable path, capped by its own material capacity.
-- A destroyed piece triggers reevaluation through its dependents, including across chunk boundaries. An alternate path can keep pieces standing. Unsupported pieces lose collision and collapse, with a cap of twelve short-lived debris actors per event.
+Start with one occupied downtown block and a route from Southern Crossroads across one river. The first asset batch should cover a modular concrete and storefront kit, road and bridge segments, and one enterable landmark such as the hospital. Supply original or licensed assets with source files and textures. Separate the load-bearing modules from glazing, doors, and props. Offer walkable interiors, metric dimensions, usable pivots, clean collision, and reusable materials. A small kit that can be broken and rebuilt in game will test the pipeline sooner than a complete city pack.

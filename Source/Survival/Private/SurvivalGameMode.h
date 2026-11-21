@@ -25,7 +25,7 @@ public:
     void RemoveStructure(int32 Id);
     const FSurvivalMaterials& GetPlannedCost() const { return PlannedCost; }
     int32 GetWorldMinutes() const;
-    double GetAmbientTemperature() const;
+    double GetAmbientTemperature(const FVector& Position) const;
     bool SetTimeOfDay(double Hour);
 
 protected:
@@ -51,6 +51,8 @@ private:
     TMap<FIntPoint, TObjectPtr<ASurvivalBuildChunk>> BuildChunks;
 
     void UpdateDaylight();
+
+    TOptional<FVector> ClimateBoundaries;
 
     UPROPERTY(EditDefaultsOnly, Category = "Survival", meta = (ClampMin = "60"))
     float DayLengthSeconds = 3600.0f;

@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1064" height="982" viewBox="-32 0 1064 982">
+<rect x="-32" width="1064" height="982" fill="#131b20"/>
+<text x="0" y="39" fill="#edf1e5" font-family="sans-serif" font-size="26" font-weight="bold">Crossroads region</text>
+<defs><linearGradient id="region" x2="0%" y2="100%"><stop stop-color="#3b5461"/><stop offset=".51" stop-color="#425046"/><stop offset="1" stop-color="#655344"/></linearGradient></defs>
+<rect y="74" width="1000" height="800" fill="url(#region)"/>
+<path d="M0.0 74v800" stroke="#d8eddf" opacity=".14"/>
+<path d="M100.0 74v800" stroke="#d8eddf" opacity=".14"/>
+<path d="M200.0 74v800" stroke="#d8eddf" opacity=".14"/>
+<path d="M300.0 74v800" stroke="#d8eddf" opacity=".14"/>
+<path d="M400.0 74v800" stroke="#d8eddf" opacity=".14"/>
+<path d="M500.0 74v800" stroke="#d8eddf" opacity=".14"/>
+<path d="M600.0 74v800" stroke="#d8eddf" opacity=".14"/>
+<path d="M700.0 74v800" stroke="#d8eddf" opacity=".14"/>
+<path d="M800.0 74v800" stroke="#d8eddf" opacity=".14"/>
+<path d="M900.0 74v800" stroke="#d8eddf" opacity=".14"/>
+<path d="M1000.0 74v800" stroke="#d8eddf" opacity=".14"/>
+<path d="M0 874.0h1000" stroke="#d8eddf" opacity=".14"/>
+<path d="M0 774.0h1000" stroke="#d8eddf" opacity=".14"/>
+<path d="M0 674.0h1000" stroke="#d8eddf" opacity=".14"/>
+<path d="M0 574.0h1000" stroke="#d8eddf" opacity=".14"/>
+<path d="M0 474.0h1000" stroke="#d8eddf" opacity=".14"/>
+<path d="M0 374.0h1000" stroke="#d8eddf" opacity=".14"/>
+<path d="M0 274.0h1000" stroke="#d8eddf" opacity=".14"/>
+<path d="M0 174.0h1000" stroke="#d8eddf" opacity=".14"/>
+<path d="M0 74.0h1000" stroke="#d8eddf" opacity=".14"/>
+<rect x="0.0" y="450.0" width="36.0" height="34.0" fill="#a27b56"/>
+<rect x="944.0" y="450.0" width="56.0" height="34.0" fill="#a27b56"/>
+<polyline points="65.4,312.2 105.4,323.2 143.4,312.2 170.4,343.4 231.8,360.8 308.2,383.0 375.2,396.8 436.8,429.8 480.2,509.0" fill="none" stroke="#83c9e4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8"/>
+<polyline points="152.2,126.4 184.6,102.6 192.8,170.6 194.6,269.0 219.8,353.6" fill="none" stroke="#83c9e4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8"/>
+<polyline points="456.6,88.8 456.6,142.0 472.6,189.0 475.2,256.0 496.2,299.2 507.2,332.4" fill="none" stroke="#83c9e4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8"/>
+<polyline points="633.0,110.8 611.6,177.0 583.6,240.4 562.0,296.6 533.0,280.8 505.4,334.2 486.2,395.0 443.4,432.6" fill="none" stroke="#83c9e4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8"/>
+<polyline points="562.0,296.6 586.8,306.6 590.6,360.8 584.0,405.0 546.2,436.2 545.6,464.8 525.2,499.8 493.4,511.8" fill="none" stroke="#83c9e4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8"/>
+<polyline points="482.4,509.8 502.2,517.2 538.4,537.4 576.4,567.8 609.8,629.4 637.4,692.8 662.6,764.6 677.4,814.2" fill="none" stroke="#83c9e4" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.4"/>
+<polyline points="22.0,520.8 85.2,515.4 156.0,528.2 206.6,552.2 237.4,584.4 238.0,816.0" fill="none" stroke="#83c9e4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8"/>
+<polyline points="763.8,119.0 757.2,184.4 756.6,239.6 781.4,300.2 807.6,320.4 839.6,270.8 881.8,299.2 921.4,226.6" fill="none" stroke="#83c9e4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8"/>
+<polyline points="834.6,135.6 836.8,188.0 824.8,215.6 797.8,215.6 780.2,240.4" fill="none" stroke="#83c9e4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8"/>
+<polyline points="366.0,90.6 354.4,124.6 323.0,188.0" fill="none" stroke="#83c9e4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8"/>
+<ellipse cx="142.8" cy="311.2" rx="35.8" ry="60.6" fill="#76b2cf"/>
+<text x="142.8" y="315.2" text-anchor="middle" fill="#112b38" font-family="sans-serif" font-size="12">L1</text>
+<ellipse cx="562.0" cy="297.4" rx="23.6" ry="21.2" fill="#76b2cf"/>
+<text x="562.0" y="301.4" text-anchor="middle" fill="#112b38" font-family="sans-serif" font-size="12">L2</text>
+<ellipse cx="150.0" cy="125.4" rx="12.6" ry="13.8" fill="#76b2cf"/>
+<text x="150.0" y="129.4" text-anchor="middle" fill="#112b38" font-family="sans-serif" font-size="12">L3</text>
+<ellipse cx="470.4" cy="255.2" rx="20.8" ry="19.4" fill="#76b2cf"/>
+<text x="470.4" y="259.2" text-anchor="middle" fill="#112b38" font-family="sans-serif" font-size="12">L4</text>
+<ellipse cx="160.4" cy="571.4" rx="11.0" ry="13.8" fill="#76b2cf"/>
+<text x="160.4" y="575.4" text-anchor="middle" fill="#112b38" font-family="sans-serif" font-size="12">L5</text>
+<ellipse cx="323.0" cy="188.0" rx="12.6" ry="21.2" fill="#76b2cf"/>
+<text x="323.0" y="192.0" text-anchor="middle" fill="#112b38" font-family="sans-serif" font-size="12">L6</text>
+<ellipse cx="760.4" cy="257.0" rx="38.4" ry="69.0" fill="#76b2cf"/>
+<text x="760.4" y="261.0" text-anchor="middle" fill="#112b38" font-family="sans-serif" font-size="12">L7</text>
+<polyline points="13.8,726.8 90.2,814.2 235.8,834.4 428.6,853.8 577.0,852.8 686.8,841.8 843.4,833.6 972.6,784.8" fill="none" stroke="#e09a81" stroke-width="5"/>
+<polyline points="22.0,468.4 186.2,468.4 373.6,468.4 533.0,468.4 703.2,468.4 945.0,468.4" fill="none" stroke="#f5d280" stroke-width="4.333333333333333"/>
+<polyline points="522.0,468.4 519.8,414.2 511.6,358.2 514.2,307.6 525.8,254.2 527.0,162.2" fill="none" stroke="#c4c3ad" stroke-width="2"/>
+<polyline points="474.2,468.4 468.2,531.0 470.8,615.6 491.8,691.0 492.4,766.4" fill="none" stroke="#c4c3ad" stroke-width="2"/>
+<polyline points="193.4,468.4 201.0,408.8 222.6,364.6 183.0,338.0 175.2,280.0 157.2,225.8 107.6,194.4 84.0,161.4" fill="none" stroke="#c4c3ad" stroke-width="2"/>
+<polyline points="201.0,408.8 252.8,372.0 285.2,291.0 342.8,245.0 378.0,189.0 413.2,150.4 448.4,166.0 527.0,162.2" fill="none" stroke="#c4c3ad" stroke-width="2"/>
+<polyline points="702.8,468.4 722.0,407.8 738.0,355.4 783.0,346.2 819.8,370.0 879.2,342.6 891.2,268.0 873.0,244.2" fill="none" stroke="#c4c3ad" stroke-width="2"/>
+<polyline points="781.4,468.4 781.4,534.6 764.8,557.6 752.8,632.2 737.4,693.8 708.2,771.0" fill="none" stroke="#c4c3ad" stroke-width="2"/>
+<polyline points="152.8,468.4 171.4,506.2 246.8,514.4 338.0,569.6 470.8,615.6 536.2,611.0 563.8,640.4 683.0,673.6 737.4,693.8" fill="none" stroke="#c4c3ad" stroke-width="2"/>
+<polyline points="392.4,463.8 396.8,411.4 427.0,372.8 472.0,379.2 520.4,412.4 536.2,460.2 514.8,513.6 471.4,531.0 421.4,519.0 392.4,463.8" fill="none" stroke="#c4c3ad" stroke-width="2"/>
+<polyline points="781.4,534.6 840.2,573.4 927.4,570.6 945.0,634.0 947.2,712.2" fill="none" stroke="#c4c3ad" stroke-width="2"/>
+<polyline points="492.0,691.0 508.0,700.0 518.0,701.2" fill="none" stroke="#c4c3ad" stroke-width="2"/>
+<rect x="455.0" y="465.4" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<rect x="540.6" y="465.4" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<rect x="510.6" y="315.2" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<rect x="468.8" y="490.6" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<rect x="203.2" y="350.6" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<rect x="251.6" y="364.4" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<rect x="461.6" y="162.2" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<rect x="885.0" y="284.8" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<rect x="618.6" y="653.4" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<rect x="395.4" y="406.2" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<rect x="484.8" y="387.0" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<rect x="516.4" y="499.0" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<rect x="500.8" y="515.0" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>
+<circle cx="81.8" cy="155.8" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<text x="87.8" y="150.8" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">Crater Town</text>
+<circle cx="244.0" cy="158.6" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="229.2" cy="221.2" r="3.2" fill="#e2a773" stroke="#1b2524"/>
+<circle cx="97.2" cy="271.8" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="227.0" cy="337.0" r="3.2" fill="#e0b88e" stroke="#1b2524"/>
+<circle cx="95.0" cy="405.0" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<text x="101.0" y="400.0" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">Western Farms</text>
+<circle cx="295.6" cy="246.8" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="411.6" cy="145.4" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<text x="417.6" y="140.4" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">Winter Village</text>
+<circle cx="495.8" cy="158.6" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="532.4" cy="169.6" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="578.0" cy="155.0" r="3.2" fill="#b39bf2" stroke="#1b2524"/>
+<circle cx="442.4" cy="214.6" r="3.2" fill="#e0b88e" stroke="#1b2524"/>
+<circle cx="517.8" cy="206.6" r="3.2" fill="#e6b7eb" stroke="#1b2524"/>
+<circle cx="564.2" cy="212.0" r="3.2" fill="#e6b7eb" stroke="#1b2524"/>
+<circle cx="391.2" cy="258.0" r="3.2" fill="#e0b88e" stroke="#1b2524"/>
+<circle cx="320.4" cy="297.4" r="3.2" fill="#e0b88e" stroke="#1b2524"/>
+<circle cx="267.6" cy="319.4" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="373.0" cy="338.8" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<text x="379.0" y="333.8" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">Western Estates</text>
+<circle cx="242.4" cy="397.6" r="3.2" fill="#e6b7eb" stroke="#1b2524"/>
+<circle cx="539.6" cy="397.6" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="654.4" cy="149.4" r="3.2" fill="#e2a773" stroke="#1b2524"/>
+<text x="660.4" y="144.4" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">Light Industrial Park</text>
+<circle cx="663.2" cy="218.4" r="3.2" fill="#f1f4de" stroke="#1b2524"/>
+<circle cx="643.4" cy="279.0" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="636.2" cy="413.4" r="3.2" fill="#f1f4de" stroke="#1b2524"/>
+<circle cx="718.2" cy="385.8" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<text x="724.2" y="380.8" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">East Clinic</text>
+<circle cx="725.2" cy="429.8" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="812.6" cy="164.2" r="3.2" fill="#e2a773" stroke="#1b2524"/>
+<circle cx="878.6" cy="242.8" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<text x="884.6" y="237.8" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">Rural Hill Town</text>
+<circle cx="847.2" cy="337.0" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="444.0" cy="354.4" r="3.2" fill="#ed8f93" stroke="#1b2524"/>
+<text x="450.0" y="349.4" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">General Hospital</text>
+<circle cx="387.4" cy="432.6" r="3.2" fill="#b39bf2" stroke="#1b2524"/>
+<text x="393.4" y="427.6" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">Police Headquarters</text>
+<circle cx="485.2" cy="427.2" r="3.2" fill="#e6b7eb" stroke="#1b2524"/>
+<circle cx="511.8" cy="428.4" r="3.2" fill="#f1f4de" stroke="#1b2524"/>
+<text x="517.8" y="423.4" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">Downtown Towers</text>
+<circle cx="469.2" cy="450.0" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="504.4" cy="446.4" r="3.2" fill="#e0b88e" stroke="#1b2524"/>
+<circle cx="428.4" cy="511.2" r="3.2" fill="#f1f4de" stroke="#1b2524"/>
+<circle cx="253.0" cy="507.4" r="3.2" fill="#e2a773" stroke="#1b2524"/>
+<text x="259.0" y="502.4" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">West Factory</text>
+<circle cx="90.2" cy="602.8" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="174.2" cy="668.0" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="263.2" cy="619.2" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="283.0" cy="729.6" r="3.2" fill="#e2a773" stroke="#1b2524"/>
+<circle cx="333.8" cy="573.4" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="377.0" cy="683.6" r="3.2" fill="#ed8f93" stroke="#1b2524"/>
+<circle cx="430.8" cy="613.8" r="3.2" fill="#e0b88e" stroke="#1b2524"/>
+<text x="436.8" y="608.8" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">West Entertainment District</text>
+<circle cx="599.4" cy="519.0" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="530.2" cy="592.6" r="3.2" fill="#e2a773" stroke="#1b2524"/>
+<text x="536.2" y="587.6" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">East Factory</text>
+<circle cx="570.8" cy="632.6" r="3.2" fill="#e2a773" stroke="#1b2524"/>
+<circle cx="679.2" cy="532.8" r="3.2" fill="#e0b88e" stroke="#1b2524"/>
+<circle cx="767.6" cy="522.8" r="3.2" fill="#e6b7eb" stroke="#1b2524"/>
+<text x="773.6" y="517.8" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">University</text>
+<circle cx="851.0" cy="535.6" r="3.2" fill="#ed8f93" stroke="#1b2524"/>
+<circle cx="918.6" cy="531.0" r="3.2" fill="#b39bf2" stroke="#1b2524"/>
+<circle cx="954.4" cy="489.6" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="675.2" cy="584.4" r="3.2" fill="#e0b88e" stroke="#1b2524"/>
+<circle cx="777.2" cy="603.6" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<text x="783.2" y="598.6" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">Domestic Airport</text>
+<circle cx="724.4" cy="703.2" r="3.2" fill="#e2a773" stroke="#1b2524"/>
+<circle cx="677.4" cy="661.6" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="523.6" cy="704.8" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<text x="529.6" y="699.8" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">Southern Crossroads</text>
+<circle cx="497.8" cy="760.8" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="956.0" cy="716.8" r="3.2" fill="#d8dfc1" stroke="#1b2524"/>
+<circle cx="708.2" cy="790.4" r="3.2" fill="#e6b7eb" stroke="#1b2524"/>
+<text x="714.2" y="785.4" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">Southern Base</text>
+<circle cx="809.4" cy="765.4" r="3.2" fill="#e2a773" stroke="#1b2524"/>
+<g fill="#e1e8dc" font-family="sans-serif" font-size="14">
+<text x="925" y="39">N ↑</text><text x="0" y="907">20 km²  ·  5 km east–west  ·  4 km north–south</text>
+<text x="0" y="936">Gold highway  ·  Grey proposed roads  ·  Squares mark candidate bridges  ·  Salmon marks the Great Fissure</text>
+<text x="0" y="959">Grid lines every 500 m. Points show planned sites and first blockout plots.</text></g></svg>

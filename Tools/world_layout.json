@@ -1,0 +1,1384 @@
+{
+  "size_m": [
+    5000,
+    4000
+  ],
+  "downtown_xy_m": [
+    2451,
+    2069
+  ],
+  "sites": [
+    {
+      "id": "crater-town",
+      "name": "Crater Town",
+      "xy_m": [
+        409,
+        3591
+      ],
+      "kind": "village"
+    },
+    {
+      "id": "upscale-ranch",
+      "name": "North Ranch",
+      "xy_m": [
+        1220,
+        3577
+      ],
+      "kind": "ranch"
+    },
+    {
+      "id": "slaughterhouse",
+      "name": "Slaughterhouse",
+      "xy_m": [
+        1146,
+        3264
+      ],
+      "kind": "industry"
+    },
+    {
+      "id": "lakehouse-west",
+      "name": "Lakehouse Village",
+      "xy_m": [
+        486,
+        3011
+      ],
+      "kind": "village"
+    },
+    {
+      "id": "dock-strip",
+      "name": "Dockside Shops",
+      "xy_m": [
+        1135,
+        2685
+      ],
+      "kind": "shops"
+    },
+    {
+      "id": "farms",
+      "name": "Western Farms",
+      "xy_m": [
+        475,
+        2345
+      ],
+      "kind": "ranch"
+    },
+    {
+      "id": "north-lowlands",
+      "name": "North Lowlands",
+      "xy_m": [
+        1478,
+        3136
+      ],
+      "kind": "ranch"
+    },
+    {
+      "id": "winter-village",
+      "name": "Winter Village",
+      "xy_m": [
+        2058,
+        3623
+      ],
+      "kind": "village"
+    },
+    {
+      "id": "north-clinic",
+      "name": "North Clinic",
+      "xy_m": [
+        2475,
+        3568
+      ],
+      "kind": "clinic"
+    },
+    {
+      "id": "north-services",
+      "name": "North Gas Station",
+      "xy_m": [
+        2632,
+        3522
+      ],
+      "kind": "services"
+    },
+    {
+      "id": "north-police",
+      "name": "North Police Station",
+      "xy_m": [
+        2890,
+        3595
+      ],
+      "kind": "police"
+    },
+    {
+      "id": "mall",
+      "name": "Regional Mall",
+      "xy_m": [
+        2212,
+        3297
+      ],
+      "kind": "shops"
+    },
+    {
+      "id": "school",
+      "name": "Major School",
+      "xy_m": [
+        2607,
+        3329
+      ],
+      "kind": "civic"
+    },
+    {
+      "id": "stadium",
+      "name": "Stadium",
+      "xy_m": [
+        2821,
+        3310
+      ],
+      "kind": "civic"
+    },
+    {
+      "id": "car-lot",
+      "name": "Car Dealership",
+      "xy_m": [
+        1956,
+        3080
+      ],
+      "kind": "shops"
+    },
+    {
+      "id": "supermarket",
+      "name": "Supermarket",
+      "xy_m": [
+        1602,
+        2883
+      ],
+      "kind": "shops"
+    },
+    {
+      "id": "west-services",
+      "name": "West Gas Station",
+      "xy_m": [
+        1352,
+        2759
+      ],
+      "kind": "services"
+    },
+    {
+      "id": "western-estates",
+      "name": "Western Estates",
+      "xy_m": [
+        1865,
+        2676
+      ],
+      "kind": "suburbs"
+    },
+    {
+      "id": "sporting-club",
+      "name": "Sporting Club",
+      "xy_m": [
+        1212,
+        2382
+      ],
+      "kind": "civic"
+    },
+    {
+      "id": "middle-suburbs",
+      "name": "Middle Suburbs",
+      "xy_m": [
+        2698,
+        2382
+      ],
+      "kind": "suburbs"
+    },
+    {
+      "id": "north-industry",
+      "name": "Light Industrial Park",
+      "xy_m": [
+        3272,
+        3623
+      ],
+      "kind": "industry"
+    },
+    {
+      "id": "north-apartments",
+      "name": "North Apartments",
+      "xy_m": [
+        3316,
+        3278
+      ],
+      "kind": "highrise"
+    },
+    {
+      "id": "wetlands",
+      "name": "Lowland Wetlands",
+      "xy_m": [
+        3217,
+        2975
+      ],
+      "kind": "natural"
+    },
+    {
+      "id": "east-offices",
+      "name": "East Office District",
+      "xy_m": [
+        3181,
+        2303
+      ],
+      "kind": "highrise"
+    },
+    {
+      "id": "east-clinic",
+      "name": "East Clinic",
+      "xy_m": [
+        3591,
+        2441
+      ],
+      "kind": "clinic"
+    },
+    {
+      "id": "east-services",
+      "name": "East Gas Station",
+      "xy_m": [
+        3626,
+        2221
+      ],
+      "kind": "services"
+    },
+    {
+      "id": "power-northeast",
+      "name": "Eastern Power Plant",
+      "xy_m": [
+        4063,
+        3549
+      ],
+      "kind": "industry"
+    },
+    {
+      "id": "hill-town",
+      "name": "Rural Hill Town",
+      "xy_m": [
+        4365,
+        3145
+      ],
+      "kind": "village"
+    },
+    {
+      "id": "lakehouse-east",
+      "name": "Great Lake Estates",
+      "xy_m": [
+        4236,
+        2685
+      ],
+      "kind": "suburbs"
+    },
+    {
+      "id": "city-hospital",
+      "name": "General Hospital",
+      "xy_m": [
+        2220,
+        2598
+      ],
+      "kind": "hospital"
+    },
+    {
+      "id": "city-police",
+      "name": "Police Headquarters",
+      "xy_m": [
+        1937,
+        2207
+      ],
+      "kind": "police"
+    },
+    {
+      "id": "city-hall",
+      "name": "Civic Center",
+      "xy_m": [
+        2426,
+        2234
+      ],
+      "kind": "civic"
+    },
+    {
+      "id": "city-towers",
+      "name": "Downtown Towers",
+      "xy_m": [
+        2566,
+        2221
+      ],
+      "kind": "highrise"
+    },
+    {
+      "id": "city-parking",
+      "name": "Downtown Parking Garage",
+      "xy_m": [
+        2346,
+        2120
+      ],
+      "kind": "garage"
+    },
+    {
+      "id": "city-nightlife",
+      "name": "Restaurant and Bar Row",
+      "xy_m": [
+        2522,
+        2138
+      ],
+      "kind": "shops"
+    },
+    {
+      "id": "southwest-apartments",
+      "name": "Southwest Apartments",
+      "xy_m": [
+        2107,
+        1779
+      ],
+      "kind": "highrise"
+    },
+    {
+      "id": "west-factory",
+      "name": "West Factory",
+      "xy_m": [
+        1247,
+        1825
+      ],
+      "kind": "industry"
+    },
+    {
+      "id": "west-plateau",
+      "name": "Western Plateau",
+      "xy_m": [
+        451,
+        1356
+      ],
+      "kind": "natural"
+    },
+    {
+      "id": "south-ranch",
+      "name": "South Ranch",
+      "xy_m": [
+        871,
+        1030
+      ],
+      "kind": "ranch"
+    },
+    {
+      "id": "lakehouse-southwest",
+      "name": "South Lakehouse Village",
+      "xy_m": [
+        1316,
+        1274
+      ],
+      "kind": "village"
+    },
+    {
+      "id": "power-southwest",
+      "name": "Western Power Plant",
+      "xy_m": [
+        1415,
+        722
+      ],
+      "kind": "industry"
+    },
+    {
+      "id": "southwest-services",
+      "name": "Southwest Gas Station",
+      "xy_m": [
+        1679,
+        1503
+      ],
+      "kind": "services"
+    },
+    {
+      "id": "southwest-hospital",
+      "name": "Southwest Hospital",
+      "xy_m": [
+        1885,
+        952
+      ],
+      "kind": "hospital"
+    },
+    {
+      "id": "west-entertainment",
+      "name": "West Entertainment District",
+      "xy_m": [
+        2154,
+        1301
+      ],
+      "kind": "shops"
+    },
+    {
+      "id": "south-suburbs",
+      "name": "South Suburbs",
+      "xy_m": [
+        2997,
+        1775
+      ],
+      "kind": "suburbs"
+    },
+    {
+      "id": "east-factory",
+      "name": "East Factory",
+      "xy_m": [
+        2651,
+        1407
+      ],
+      "kind": "industry"
+    },
+    {
+      "id": "warehouses",
+      "name": "Warehouse District",
+      "xy_m": [
+        2819,
+        1172
+      ],
+      "kind": "industry"
+    },
+    {
+      "id": "east-entertainment",
+      "name": "East Entertainment District",
+      "xy_m": [
+        3396,
+        1706
+      ],
+      "kind": "shops"
+    },
+    {
+      "id": "university",
+      "name": "University",
+      "xy_m": [
+        3838,
+        1756
+      ],
+      "kind": "civic"
+    },
+    {
+      "id": "east-hospital",
+      "name": "East Hospital",
+      "xy_m": [
+        4255,
+        1692
+      ],
+      "kind": "hospital"
+    },
+    {
+      "id": "east-police",
+      "name": "East Police Station",
+      "xy_m": [
+        4593,
+        1715
+      ],
+      "kind": "police"
+    },
+    {
+      "id": "interchange",
+      "name": "Damaged East Interchange",
+      "xy_m": [
+        4772,
+        1922
+      ],
+      "kind": "natural"
+    },
+    {
+      "id": "airport-hotels",
+      "name": "Airport Hotels",
+      "xy_m": [
+        3376,
+        1448
+      ],
+      "kind": "shops"
+    },
+    {
+      "id": "airport",
+      "name": "Domestic Airport",
+      "xy_m": [
+        3816,
+        1352
+      ],
+      "kind": "airport"
+    },
+    {
+      "id": "hangars",
+      "name": "Airport Hangars",
+      "xy_m": [
+        3640,
+        846
+      ],
+      "kind": "industry"
+    },
+    {
+      "id": "airport-services",
+      "name": "Airport Gas Station",
+      "xy_m": [
+        3387,
+        1062
+      ],
+      "kind": "services"
+    },
+    {
+      "id": "south-services",
+      "name": "Southern Crossroads",
+      "xy_m": [
+        2618,
+        846
+      ],
+      "kind": "services"
+    },
+    {
+      "id": "dry-town-west",
+      "name": "Dry Creek",
+      "xy_m": [
+        2459,
+        566
+      ],
+      "kind": "village"
+    },
+    {
+      "id": "dry-town-east",
+      "name": "East Dry Town",
+      "xy_m": [
+        4780,
+        786
+      ],
+      "kind": "village"
+    },
+    {
+      "id": "south-base",
+      "name": "Southern Base",
+      "xy_m": [
+        3541,
+        418
+      ],
+      "kind": "civic"
+    },
+    {
+      "id": "south-depot",
+      "name": "South Depot",
+      "xy_m": [
+        4047,
+        543
+      ],
+      "kind": "industry"
+    }
+  ],
+  "lakes": [
+    {
+      "id": "L1",
+      "xy_m": [
+        714,
+        2814
+      ],
+      "radii_m": [
+        179,
+        303
+      ]
+    },
+    {
+      "id": "L2",
+      "xy_m": [
+        2810,
+        2883
+      ],
+      "radii_m": [
+        118,
+        106
+      ]
+    },
+    {
+      "id": "L3",
+      "xy_m": [
+        750,
+        3743
+      ],
+      "radii_m": [
+        63,
+        69
+      ]
+    },
+    {
+      "id": "L4",
+      "xy_m": [
+        2352,
+        3094
+      ],
+      "radii_m": [
+        104,
+        97
+      ]
+    },
+    {
+      "id": "L5",
+      "xy_m": [
+        802,
+        1513
+      ],
+      "radii_m": [
+        55,
+        69
+      ]
+    },
+    {
+      "id": "L6",
+      "xy_m": [
+        1615,
+        3430
+      ],
+      "radii_m": [
+        63,
+        106
+      ]
+    },
+    {
+      "id": "L7",
+      "xy_m": [
+        3802,
+        3085
+      ],
+      "radii_m": [
+        192,
+        345
+      ]
+    }
+  ],
+  "rivers": [
+    {
+      "id": "west-fork",
+      "points_m": [
+        [
+          327,
+          2809
+        ],
+        [
+          527,
+          2754
+        ],
+        [
+          717,
+          2809
+        ],
+        [
+          852,
+          2653
+        ],
+        [
+          1159,
+          2566
+        ],
+        [
+          1541,
+          2455
+        ],
+        [
+          1876,
+          2386
+        ],
+        [
+          2184,
+          2221
+        ],
+        [
+          2401,
+          1825
+        ]
+      ],
+      "width_m": 14
+    },
+    {
+      "id": "northwest-tributary",
+      "points_m": [
+        [
+          761,
+          3738
+        ],
+        [
+          923,
+          3857
+        ],
+        [
+          964,
+          3517
+        ],
+        [
+          973,
+          3025
+        ],
+        [
+          1099,
+          2602
+        ]
+      ],
+      "width_m": 14
+    },
+    {
+      "id": "winter-fork",
+      "points_m": [
+        [
+          2283,
+          3926
+        ],
+        [
+          2283,
+          3660
+        ],
+        [
+          2363,
+          3425
+        ],
+        [
+          2376,
+          3090
+        ],
+        [
+          2481,
+          2874
+        ],
+        [
+          2536,
+          2708
+        ]
+      ],
+      "width_m": 14
+    },
+    {
+      "id": "north-fork",
+      "points_m": [
+        [
+          3165,
+          3816
+        ],
+        [
+          3058,
+          3485
+        ],
+        [
+          2918,
+          3168
+        ],
+        [
+          2810,
+          2887
+        ],
+        [
+          2665,
+          2966
+        ],
+        [
+          2527,
+          2699
+        ],
+        [
+          2431,
+          2395
+        ],
+        [
+          2217,
+          2207
+        ]
+      ],
+      "width_m": 14
+    },
+    {
+      "id": "east-fork",
+      "points_m": [
+        [
+          2810,
+          2887
+        ],
+        [
+          2934,
+          2837
+        ],
+        [
+          2953,
+          2566
+        ],
+        [
+          2920,
+          2345
+        ],
+        [
+          2731,
+          2189
+        ],
+        [
+          2728,
+          2046
+        ],
+        [
+          2626,
+          1871
+        ],
+        [
+          2467,
+          1811
+        ]
+      ],
+      "width_m": 14
+    },
+    {
+      "id": "south-main",
+      "points_m": [
+        [
+          2412,
+          1821
+        ],
+        [
+          2511,
+          1784
+        ],
+        [
+          2692,
+          1683
+        ],
+        [
+          2882,
+          1531
+        ],
+        [
+          3049,
+          1223
+        ],
+        [
+          3187,
+          906
+        ],
+        [
+          3313,
+          547
+        ],
+        [
+          3387,
+          299
+        ]
+      ],
+      "width_m": 22
+    },
+    {
+      "id": "west-dry-river",
+      "points_m": [
+        [
+          110,
+          1766
+        ],
+        [
+          426,
+          1793
+        ],
+        [
+          780,
+          1729
+        ],
+        [
+          1033,
+          1609
+        ],
+        [
+          1187,
+          1448
+        ],
+        [
+          1190,
+          290
+        ]
+      ],
+      "width_m": 14
+    },
+    {
+      "id": "great-lake-inlet",
+      "points_m": [
+        [
+          3819,
+          3775
+        ],
+        [
+          3786,
+          3448
+        ],
+        [
+          3783,
+          3172
+        ],
+        [
+          3907,
+          2869
+        ],
+        [
+          4038,
+          2768
+        ],
+        [
+          4198,
+          3016
+        ],
+        [
+          4409,
+          2874
+        ],
+        [
+          4607,
+          3237
+        ]
+      ],
+      "width_m": 14
+    },
+    {
+      "id": "great-lake-spur",
+      "points_m": [
+        [
+          4173,
+          3692
+        ],
+        [
+          4184,
+          3430
+        ],
+        [
+          4124,
+          3292
+        ],
+        [
+          3989,
+          3292
+        ],
+        [
+          3901,
+          3168
+        ]
+      ],
+      "width_m": 14
+    },
+    {
+      "id": "lake-six-inlet",
+      "points_m": [
+        [
+          1830,
+          3917
+        ],
+        [
+          1772,
+          3747
+        ],
+        [
+          1615,
+          3430
+        ]
+      ],
+      "width_m": 14
+    }
+  ],
+  "roads": [
+    {
+      "id": "east-west-highway",
+      "points_m": [
+        [
+          110,
+          2028
+        ],
+        [
+          931,
+          2028
+        ],
+        [
+          1868,
+          2028
+        ],
+        [
+          2665,
+          2028
+        ],
+        [
+          3516,
+          2028
+        ],
+        [
+          4725,
+          2028
+        ]
+      ],
+      "width_m": 26
+    },
+    {
+      "id": "northern-arterial",
+      "points_m": [
+        [
+          2610,
+          2028
+        ],
+        [
+          2599,
+          2299
+        ],
+        [
+          2558,
+          2579
+        ],
+        [
+          2571,
+          2832
+        ],
+        [
+          2629,
+          3099
+        ],
+        [
+          2635,
+          3559
+        ]
+      ],
+      "width_m": 10
+    },
+    {
+      "id": "southern-arterial",
+      "points_m": [
+        [
+          2371,
+          2028
+        ],
+        [
+          2341,
+          1715
+        ],
+        [
+          2354,
+          1292
+        ],
+        [
+          2459,
+          915
+        ],
+        [
+          2462,
+          538
+        ]
+      ],
+      "width_m": 10
+    },
+    {
+      "id": "western-lakes-loop",
+      "points_m": [
+        [
+          967,
+          2028
+        ],
+        [
+          1005,
+          2326
+        ],
+        [
+          1113,
+          2547
+        ],
+        [
+          915,
+          2680
+        ],
+        [
+          876,
+          2970
+        ],
+        [
+          786,
+          3241
+        ],
+        [
+          538,
+          3398
+        ],
+        [
+          420,
+          3563
+        ]
+      ],
+      "width_m": 10
+    },
+    {
+      "id": "winter-road",
+      "points_m": [
+        [
+          1005,
+          2326
+        ],
+        [
+          1264,
+          2510
+        ],
+        [
+          1426,
+          2915
+        ],
+        [
+          1714,
+          3145
+        ],
+        [
+          1890,
+          3425
+        ],
+        [
+          2066,
+          3618
+        ],
+        [
+          2242,
+          3540
+        ],
+        [
+          2635,
+          3559
+        ]
+      ],
+      "width_m": 10
+    },
+    {
+      "id": "great-lake-road",
+      "points_m": [
+        [
+          3514,
+          2028
+        ],
+        [
+          3610,
+          2331
+        ],
+        [
+          3690,
+          2593
+        ],
+        [
+          3915,
+          2639
+        ],
+        [
+          4099,
+          2520
+        ],
+        [
+          4396,
+          2657
+        ],
+        [
+          4456,
+          3030
+        ],
+        [
+          4365,
+          3149
+        ]
+      ],
+      "width_m": 10
+    },
+    {
+      "id": "airport-road",
+      "points_m": [
+        [
+          3907,
+          2028
+        ],
+        [
+          3907,
+          1697
+        ],
+        [
+          3824,
+          1582
+        ],
+        [
+          3764,
+          1209
+        ],
+        [
+          3687,
+          901
+        ],
+        [
+          3541,
+          515
+        ]
+      ],
+      "width_m": 10
+    },
+    {
+      "id": "southern-industrial-road",
+      "points_m": [
+        [
+          764,
+          2028
+        ],
+        [
+          857,
+          1839
+        ],
+        [
+          1234,
+          1798
+        ],
+        [
+          1690,
+          1522
+        ],
+        [
+          2354,
+          1292
+        ],
+        [
+          2681,
+          1315
+        ],
+        [
+          2819,
+          1168
+        ],
+        [
+          3415,
+          1002
+        ],
+        [
+          3687,
+          901
+        ]
+      ],
+      "width_m": 10
+    },
+    {
+      "id": "downtown-loop",
+      "points_m": [
+        [
+          1962,
+          2051
+        ],
+        [
+          1984,
+          2313
+        ],
+        [
+          2135,
+          2506
+        ],
+        [
+          2360,
+          2474
+        ],
+        [
+          2602,
+          2308
+        ],
+        [
+          2681,
+          2069
+        ],
+        [
+          2574,
+          1802
+        ],
+        [
+          2357,
+          1715
+        ],
+        [
+          2107,
+          1775
+        ],
+        [
+          1962,
+          2051
+        ]
+      ],
+      "width_m": 10
+    },
+    {
+      "id": "east-rural-road",
+      "points_m": [
+        [
+          3907,
+          1697
+        ],
+        [
+          4201,
+          1503
+        ],
+        [
+          4637,
+          1517
+        ],
+        [
+          4725,
+          1200
+        ],
+        [
+          4736,
+          809
+        ]
+      ],
+      "width_m": 10
+    },
+    {
+      "id": "crossroads-access",
+      "points_m": [
+        [
+          2460,
+          915
+        ],
+        [
+          2540,
+          870
+        ],
+        [
+          2590,
+          864
+        ]
+      ],
+      "width_m": 8
+    }
+  ],
+  "fissure_m": [
+    [
+      69,
+      736
+    ],
+    [
+      451,
+      299
+    ],
+    [
+      1179,
+      198
+    ],
+    [
+      2143,
+      101
+    ],
+    [
+      2885,
+      106
+    ],
+    [
+      3434,
+      161
+    ],
+    [
+      4217,
+      202
+    ],
+    [
+      4863,
+      446
+    ]
+  ],
+  "radiation_corridors": [
+    {
+      "id": "west-highway",
+      "bounds_m": [
+        0,
+        1950,
+        180,
+        2120
+      ]
+    },
+    {
+      "id": "east-highway",
+      "bounds_m": [
+        4720,
+        1950,
+        5000,
+        2120
+      ]
+    }
+  ]
+}

@@ -256,7 +256,7 @@ void ASurvivalHUD::DrawHUD()
     if (const ASurvivalGameMode* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>())
     {
         const int32 Minutes = Mode->GetWorldMinutes();
-        const int32 Temperature = FMath::RoundToInt32(Mode->GetAmbientTemperature());
+        const int32 Temperature = FMath::RoundToInt32(Mode->GetAmbientTemperature(Character->GetActorLocation()));
         DrawRect(Panel, Right - 145.0f, 20.0f, 145.0f, 40.0f);
         DrawText(FString::Printf(TEXT("Day %d    %02d:%02d    %d C"), Minutes / 1440 + 1,
             (Minutes / 60) % 24, Minutes % 60, Temperature), FLinearColor::White, Right - 134.0f, 31.0f);

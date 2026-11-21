@@ -548,7 +548,7 @@ void ASurvivalCharacter::UpdateSidearmView()
         else
         {
             Sidearm->AttachToComponent(FirstPersonCamera, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-            Sidearm->SetActorRelativeLocation(FVector(48, 19, -34));
+            Sidearm->SetActorRelativeLocation(FVector(48, 19, -44));
         }
     }
 }
@@ -597,7 +597,7 @@ void ASurvivalCharacter::LoadSidearmViewmodel()
     SidearmViewmodel->SetRelativeRotation(CameraAlignment);
     const FVector CameraOffset = CameraAlignment.RotateVector(Eye.GetLocation() * Scale);
     const FVector GripFromEye = CameraAlignment.RotateVector(Reach * Scale);
-    ViewmodelHip = FVector(10, 0, -34) - CameraOffset;
+    ViewmodelHip = FVector(10, 0, -44) - CameraOffset;
     SidearmAimRotation = SidearmHipRotation;
     ViewmodelAim = FVector(10, -GripFromEye.Y, -GripFromEye.Z - 11) - CameraOffset;
     UpdateSidearmSightAlignment();
@@ -722,7 +722,7 @@ void ASurvivalCharacter::UpdateWeaponAim(float DeltaSeconds)
     }
     else if (!bViewmodelReady && Sidearm && !bThirdPerson && (AimBlend > 0.0f || PreviousAim > 0.0f))
     {
-        Sidearm->SetActorRelativeLocation(FMath::Lerp(FVector(48, 19, -34), FVector(48, 0, -7.5), PistolAlpha));
+        Sidearm->SetActorRelativeLocation(FMath::Lerp(FVector(48, 19, -44), FVector(48, 0, -7.5), PistolAlpha));
     }
 
     if (RifleHold)
@@ -800,7 +800,7 @@ void ASurvivalCharacter::PrimaryAction()
     const FVector Muzzle = bThirdPerson && Sidearm && !Sidearm->IsHidden()
         ? Sidearm->GetActorTransform().TransformPosition(FVector(18, 0, 5))
         : FirstPersonCamera->GetComponentTransform().TransformPosition(
-            FMath::Lerp(FVector(52, 9, -21), FVector(52, 0, -4), AimBlend));
+            FMath::Lerp(FVector(52, 9, -31), FVector(52, 0, -4), AimBlend));
     if (!FireRound(Muzzle, 5500.0, false))
     {
         return;
@@ -888,10 +888,10 @@ void ASurvivalCharacter::LoadRifleViewmodel()
     RifleViewmodel->SetRelativeRotation(Alignment);
     RifleViewmodel->SetRelativeScale3D(FVector(Scale));
     // Keep the breech behind the camera and frame the grip and forward section.
-    RifleHip = FVector(-12, 3, -24) - Alignment.RotateVector(Rear * Scale);
+    RifleHip = FVector(-11, 3, -24) - Alignment.RotateVector(Rear * Scale);
     // The magnified view is screen-centered independently of the rifle mesh.
     // Draw the rifle into the shoulder with a small lift so the stock stays below the lens.
-    RifleAim = RifleHip + FVector(-14, -3, 4);
+    RifleAim = RifleHip + FVector(-15, -3, 4);
     RifleViewmodel->SetRelativeLocation(RifleHip);
 
     const auto LoadClip = [](const TCHAR* Name)
@@ -1104,7 +1104,7 @@ void ASurvivalCharacter::UpdateVitals(float DeltaSeconds)
         && !IsAimingSidearm() && !IsAimingRifle() && !bInventoryOpen;
     const bool bSprinting = bSprintAllowed && GetVelocity().SizeSquared2D() > FMath::Square(20.0);
     const ASurvivalGameMode* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
-    const float Ambient = Mode ? static_cast<float>(Mode->GetAmbientTemperature()) : 14.0f;
+    const float Ambient = Mode ? static_cast<float>(Mode->GetAmbientTemperature(GetActorLocation())) : 14.0f;
     const float Effort = static_cast<float>(FMath::Clamp(GetVelocity().Size2D() / WalkSpeed, 0.0, 1.5));
     const int32 Damage = Vitals.Advance(DeltaSeconds, bSprinting, Effort, Ambient,
         Progression.Effect(ETraining::Athletics), Progression.Effect(ETraining::Recovery),
