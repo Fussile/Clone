@@ -48,8 +48,14 @@ ASurvivalBuildChunk::ASurvivalBuildChunk()
 void ASurvivalBuildChunk::BeginPlay()
 {
     Super::BeginPlay();
-    Timber->SetMaterial(0, LoadObject<UMaterialInterface>(nullptr,
-        TEXT("/Game/Art/Crossroads/Building/M_Timber.M_Timber")));
+    UMaterialInterface* TimberMaterial = LoadObject<UMaterialInterface>(nullptr,
+        TEXT("/Game/Art/Crossroads/Building/M_CrossroadsTimber.M_CrossroadsTimber"), nullptr, LOAD_NoWarn);
+    if (!TimberMaterial)
+    {
+        TimberMaterial = LoadObject<UMaterialInterface>(nullptr,
+            TEXT("/Game/Art/Crossroads/Building/M_Timber.M_Timber"), nullptr, LOAD_NoWarn);
+    }
+    Timber->SetMaterial(0, TimberMaterial);
     Stone->SetMaterial(0, LoadObject<UMaterialInterface>(nullptr,
         TEXT("/Game/Art/Crossroads/Surfaces/M_Concrete034.M_Concrete034")));
     Ghosts->SetMaterial(0, LoadObject<UMaterialInterface>(nullptr,

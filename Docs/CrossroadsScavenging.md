@@ -2,7 +2,7 @@
 
 For editor play, run `Tools/prepare_crossroads.py` and open Southern Crossroads. The Windows playtest runs preparation as part of packaging.
 
-1. Before looting, press **B** and aim at a clear spot on the forecourt within 5 m. Scroll through the eight shapes and their costs. Select **Timber wall**, press **R** to rotate, and left-click to place a cyan blueprint. Walk through it and check that inventory stays at zero and **Still needed** rises to three timber.
+1. Before looting, press **B** and aim at a clear spot on the forecourt within 5 m. Scroll through the building shapes and their costs. Select **Timber block**, and left-click to place a cyan blueprint. Walk through it and check that inventory stays at zero and **Still needed** rises to three timber.
 2. Aim at the blueprint within 2.6 m. Press **E** with zero timber and check that it remains a ghost. Place another blueprint a few meters away, then aim at it and press **X**. Check that the ghost disappears and the totals drop by its recipe cost.
 3. Enter the shop and press **E** on the default crate. It gives 24 timber and 12 stone once. The total planned cost stays visible and the shortage drops to zero for the remaining wall.
 4. Aim at the first wall and press **E**. Verify that the ghost becomes a textured, collidable wall and three timber is deducted. Repeat with a stone piece. Verify that a completed door frame has a walkable opening, that stairs are climbable, and that **X** applies only to blueprints.
@@ -11,7 +11,7 @@ For editor play, run `Tools/prepare_crossroads.py` and open Southern Crossroads.
 
 ## Defend the station
 
-1. Take the sidearm and 12 rounds from the darker case inside the shop. Press **E** again to verify the case is empty. Check that left-click places plans with the build menu open and fires only after the menu closes.
+1. Take the sidearm with 12 loaded and 12 reserve rounds from the darker case inside the shop. Press **E** again to verify the case is empty. Check that left-click places plans with the build menu open and fires only after the menu closes.
 2. Start the encounter with **G** while the shop entrance is open and head inside. Check that the zombie comes through the entrance. A hit shows a crosshair marker. Three hits defeat the zombie. The sidearm displays in first person and attaches to the survivor's hand in third person.
 3. Restart with **F5**. Build a timber wall centered in front of the shop doorway, slightly clear of the permanent front wall. Stand inside and press **G**. Watch the finished piece lose health. Press **E** to repair a damaged piece for one unit of its material. Allow a wall to reach zero and verify the zombie can move through the opening. Repeat with stone to compare its longer survival.
 4. Take timber from the cache near the west pump and stone from the cache outside the east wall. Verify adjacent finished pieces keep their health and can still be repaired after one in the same chunk breaks.
@@ -34,7 +34,14 @@ The material counts, plans, completed pieces, health and loot reset when the sol
 
 ## Wall corners, roof edges and projectiles
 
-1. Place a timber wall blueprint. Aim near one end of its broad face, rotate the next wall 90 degrees, and place it. Complete a four-wall loop, then check that the two touching faces at each joint meet without gaps.
-2. Aim at a wall's inside face with **Floor** selected. Place a panel and aim at its exposed edge to continue the roof with a blueprint. Fill narrow gaps with the quarter floor strip and corner infill. Finish supporting pieces before their dependents.
-3. Equip the sidearm in first person and verify the pistol follows the hands during idle, walking, firing and both reloads. Switch views and confirm the pistol appears on the third-person hand.
-4. Close the build menu. Shoot a finished timber piece and check that its health drops after impact. A completed wall should stop a shot aimed at a zombie behind it. Fire through a blueprint and verify it stays intact while the round reaches any finished piece behind it.
+1. Place a timber block blueprint. Aim at its side to place a neighboring block. Rotate the second shape and verify that the common cell still lines up. Build a corner and check that its faces touch.
+2. Aim at the inside face of a block with **Floor** selected. The panel sits in the adjacent cell with both top surfaces at the same height. Chain another roof blueprint from its exposed edge and finish the supporting pieces first.
+3. Equip the sidearm and fire a round. Press **R** to check the partial reload. Empty the magazine and press **R** again to check the empty reload. Hold **right mouse** to check sight alignment and release to return to hip fire.
+4. Close the build menu. Shoot a finished timber piece and check that its health drops on impact. Verify a completed wall stops a round and a blueprint lets it through.
+
+## M2 survival loop
+
+1. A new run starts on Day 1 at 08:00. Watch the clock and sun advance. One full day takes 20 real minutes.
+2. Scavenge the provisions crate in the station and press **I**. Verify food, water and cloth are added only once. Sprint until exhausted, recover stamina, and use **1** and **2** as hunger and thirst drop.
+3. With the inventory open, press **4** to turn two cloth into a bandage. Take damage and press **3** to heal. Verify an empty meter eventually costs health.
+4. Approach the lone zombie east of the station. Retreat behind a finished block and verify the zombie attacks it. The **G** defense encounter remains available separately.

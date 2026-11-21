@@ -113,11 +113,13 @@ void ASurvivalCharacter::BeginPlay()
 void ASurvivalCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
+    UpdateVitals(DeltaSeconds);
     UpdateSurvivorAnimation();
     if (bHasSidearm && HealthPoints > 0)
     {
         UpdateSidearmAnimation();
     }
+    UpdateSidearmAim(DeltaSeconds);
 }
 
 void ASurvivalCharacter::UpdateSurvivorAnimation()
@@ -162,10 +164,17 @@ void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
     PlayerInputComponent->BindAction(TEXT("Crouch"), IE_Pressed, this, &ASurvivalCharacter::ToggleCrouch);
     PlayerInputComponent->BindAction(TEXT("Prone"), IE_Pressed, this, &ASurvivalCharacter::ToggleProne);
     PlayerInputComponent->BindAction(TEXT("Interact"), IE_Pressed, this, &ASurvivalCharacter::Interact);
+    PlayerInputComponent->BindAction(TEXT("Inventory"), IE_Pressed, this, &ASurvivalCharacter::ToggleInventory);
+    PlayerInputComponent->BindAction(TEXT("EatFood"), IE_Pressed, this, &ASurvivalCharacter::EatFood);
+    PlayerInputComponent->BindAction(TEXT("DrinkWater"), IE_Pressed, this, &ASurvivalCharacter::DrinkWater);
+    PlayerInputComponent->BindAction(TEXT("UseBandage"), IE_Pressed, this, &ASurvivalCharacter::UseBandage);
+    PlayerInputComponent->BindAction(TEXT("CraftBandage"), IE_Pressed, this, &ASurvivalCharacter::CraftBandage);
     PlayerInputComponent->BindAction(TEXT("ToggleBuildMode"), IE_Pressed, this, &ASurvivalCharacter::ToggleBuildMode);
     PlayerInputComponent->BindAction(TEXT("RotatePiece"), IE_Pressed, this, &ASurvivalCharacter::RotatePiece);
     PlayerInputComponent->BindAction(TEXT("NextPiece"), IE_Pressed, this, &ASurvivalCharacter::NextPiece);
     PlayerInputComponent->BindAction(TEXT("PreviousPiece"), IE_Pressed, this, &ASurvivalCharacter::PreviousPiece);
+    PlayerInputComponent->BindAction(TEXT("AimSidearm"), IE_Pressed, this, &ASurvivalCharacter::PressAim);
+    PlayerInputComponent->BindAction(TEXT("AimSidearm"), IE_Released, this, &ASurvivalCharacter::ReleaseAim);
     PlayerInputComponent->BindAction(TEXT("PrimaryAction"), IE_Pressed, this, &ASurvivalCharacter::PrimaryAction);
     PlayerInputComponent->BindAction(TEXT("RemovePlan"), IE_Pressed, this, &ASurvivalCharacter::RemovePlan);
     PlayerInputComponent->BindAction(TEXT("Dismantle"), IE_Pressed, this, &ASurvivalCharacter::Dismantle);
@@ -195,13 +204,11 @@ void ASurvivalCharacter::StartJump()
 void ASurvivalCharacter::StartSprint()
 {
     bSprintHeld = true;
-    UpdateMovementPresentation();
 }
 
 void ASurvivalCharacter::StopSprint()
 {
     bSprintHeld = false;
-    UpdateMovementPresentation();
 }
 
 void ASurvivalCharacter::ToggleCrouch()
@@ -249,7 +256,6 @@ void ASurvivalCharacter::SetStance(EStance NewStance)
 void ASurvivalCharacter::UpdateMovementPresentation()
 {
     UCharacterMovementComponent* Movement = GetCharacterMovement();
-    Movement->MaxWalkSpeed = bSprintHeld ? SprintSpeed : WalkSpeed;
     Movement->MaxWalkSpeedCrouched = Stance == EStance::Prone ? ProneSpeed : CrouchSpeed;
 
     double EyeHeight = BaseEyeHeight;
@@ -363,13 +369,12 @@ void ASurvivalCharacter::Interact()
     }
     else if (ASurvivalSupplyCrate* Crate = FindSupplyCrate())
     {
-        if (!bHasSidearm && Crate->TakeSidearm())
+        const FSurvivalLoot Loot = Crate->TakeLoot();
+        Inventory.Add(Loot.Materials);
+        Items.Add(Loot.Items);
+        if (Loot.bSidearm && !bHasSidearm)
         {
             EquipSidearm();
-        }
-        else
-        {
-            Inventory.Add(Crate->TakeMaterials());
         }
     }
     else
@@ -402,6 +407,7 @@ void ASurvivalCharacter::EquipSidearm()
 {
     bHasSidearm = true;
     Ammo = SidearmCapacity;
+    Items.Rounds += SidearmCapacity;
     Sidearm = GetWorld()->SpawnActor<ASurvivalSidearm>();
     LoadSidearmViewmodel();
     UpdateSidearmView();
@@ -409,7 +415,7 @@ void ASurvivalCharacter::EquipSidearm()
 
 void ASurvivalCharacter::UpdateSidearmView()
 {
-    const bool bVisible = !bBuildMode && HealthPoints > 0;
+    const bool bVisible = !bBuildMode && !bInventoryOpen && HealthPoints > 0;
     SidearmViewmodel->SetHiddenInGame(!bVisible || bThirdPerson || !bViewmodelReady);
     if (!Sidearm)
     {
@@ -438,14 +444,14 @@ void ASurvivalCharacter::UpdateSidearmView()
         else
         {
             Sidearm->AttachToComponent(FirstPersonCamera, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-            Sidearm->SetActorRelativeLocation(FVector(48, 19, -28));
+            Sidearm->SetActorRelativeLocation(FVector(48, 19, -34));
         }
     }
 }
 
 void ASurvivalCharacter::LoadSidearmViewmodel()
 {
-    constexpr TCHAR MeshPath[] = TEXT("/Game/Art/Crossroads/ArmedViewmodel/SK_SidearmViewmodel.SK_SidearmViewmodel");
+    constexpr TCHAR MeshPath[] = TEXT("/Game/Art/Crossroads/SightedViewmodel/SK_SidearmViewmodel.SK_SidearmViewmodel");
     USkeletalMesh* Arms = LoadObject<USkeletalMesh>(nullptr, MeshPath, nullptr, LOAD_NoWarn);
     if (!Arms)
     {
@@ -484,11 +490,25 @@ void ASurvivalCharacter::LoadSidearmViewmodel()
     const double Scale = 43.0 / Reach.Size();
     SidearmViewmodel->SetRelativeScale3D(FVector(Scale));
     SidearmViewmodel->SetRelativeRotation(CameraAlignment);
-    SidearmViewmodel->SetRelativeLocation(FVector(10, 0, -26) - CameraAlignment.RotateVector(Eye.GetLocation() * Scale));
+    const FVector CameraOffset = CameraAlignment.RotateVector(Eye.GetLocation() * Scale);
+    const FVector GripFromEye = CameraAlignment.RotateVector(Reach * Scale);
+    ViewmodelHip = FVector(10, 0, -34) - CameraOffset;
+    const FName SightBone(TEXT("FrontSight"));
+    if (SidearmViewmodel->DoesSocketExist(SightBone))
+    {
+        const FVector Sight = SidearmViewmodel->GetSocketTransform(SightBone, RTS_Component).GetLocation();
+        const FVector SightFromEye = CameraAlignment.RotateVector((Sight - Eye.GetLocation()) * Scale);
+        ViewmodelAim = FVector(10, -SightFromEye.Y, -SightFromEye.Z) - CameraOffset;
+    }
+    else
+    {
+        ViewmodelAim = FVector(10, -GripFromEye.Y, -GripFromEye.Z - 11) - CameraOffset;
+    }
+    SidearmViewmodel->SetRelativeLocation(ViewmodelHip);
 
     const auto LoadClip = [](const TCHAR* Name)
     {
-        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/ArmedViewmodel/%s.%s"), Name, Name);
+        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/SightedViewmodel/%s.%s"), Name, Name);
         return LoadObject<UAnimSequence>(nullptr, *Path);
     };
     ViewmodelIdle = LoadClip(TEXT("ViewmodelIdle"));
@@ -514,27 +534,66 @@ void ASurvivalCharacter::UpdateSidearmAnimation()
     const double Now = GetWorld()->GetTimeSeconds();
     if (IsReloading() && Now >= ReloadCompleteAt)
     {
-        const int32 Transfer = FMath::Min(ReserveAmmo, SidearmCapacity - Ammo);
+        const int32 Transfer = FMath::Min(Items.Rounds, SidearmCapacity - Ammo);
         Ammo += Transfer;
-        ReserveAmmo -= Transfer;
+        Items.Rounds -= Transfer;
         ReloadCompleteAt = -1.0;
     }
     if (!IsReloading() && Now >= NextShotAt)
     {
         const bool bMoving = GetVelocity().SizeSquared2D() > FMath::Square(20.0);
-        PlaySidearmAnimation(bMoving && ViewmodelWalk ? ViewmodelWalk.Get() : ViewmodelIdle.Get(), true);
+        PlaySidearmAnimation(bMoving && !IsAimingSidearm() && ViewmodelWalk
+            ? ViewmodelWalk.Get() : ViewmodelIdle.Get(), true);
+    }
+}
+
+bool ASurvivalCharacter::IsAimingSidearm() const
+{
+    return bAimHeld && bHasSidearm && !bThirdPerson && !bBuildMode && !bInventoryOpen && !IsReloading() && HealthPoints > 0;
+}
+
+void ASurvivalCharacter::PressAim()
+{
+    bAimHeld = true;
+}
+
+void ASurvivalCharacter::ReleaseAim()
+{
+    bAimHeld = false;
+}
+
+void ASurvivalCharacter::UpdateSidearmAim(float DeltaSeconds)
+{
+    const float Target = IsAimingSidearm() ? 1.0f : 0.0f;
+    if (AimBlend == Target)
+    {
+        return;
+    }
+    AimBlend = FMath::FInterpConstantTo(AimBlend, Target, DeltaSeconds, 6.0f);
+    FirstPersonCamera->SetFieldOfView(FMath::Lerp(90.0f, 65.0f, AimBlend));
+    if (bViewmodelReady)
+    {
+        SidearmViewmodel->SetRelativeLocation(FMath::Lerp(ViewmodelHip, ViewmodelAim, AimBlend));
+    }
+    else if (Sidearm && !bThirdPerson)
+    {
+        Sidearm->SetActorRelativeLocation(FMath::Lerp(FVector(48, 19, -34), FVector(48, 0, -7.5), AimBlend));
     }
 }
 
 void ASurvivalCharacter::StartReload()
 {
     const double Now = GetWorld()->GetTimeSeconds();
-    if (HealthPoints <= 0 || !bHasSidearm || IsReloading() || Now < NextShotAt
-        || Ammo >= SidearmCapacity || ReserveAmmo <= 0)
+    if (HealthPoints <= 0 || bInventoryOpen || !bHasSidearm || IsReloading() || Now < NextShotAt
+        || Ammo >= SidearmCapacity || Items.Rounds <= 0)
     {
         return;
     }
     UAnimSequence* Clip = Ammo == 0 && ViewmodelReloadEmpty ? ViewmodelReloadEmpty.Get() : ViewmodelReload.Get();
+    if (!Clip)
+    {
+        Clip = ViewmodelReloadEmpty.Get();
+    }
     ReloadCompleteAt = Now + (Clip ? Clip->GetPlayLength() : 1.4);
     PlaySidearmAnimation(Clip, false);
 }
@@ -546,7 +605,7 @@ bool ASurvivalCharacter::ShowHitMarker() const
 
 void ASurvivalCharacter::PrimaryAction()
 {
-    if (HealthPoints <= 0)
+    if (HealthPoints <= 0 || bInventoryOpen)
     {
         return;
     }
@@ -569,7 +628,8 @@ void ASurvivalCharacter::PrimaryAction()
     const FVector Eyes = FirstPersonCamera->GetComponentLocation();
     FVector Muzzle = bThirdPerson && Sidearm && !Sidearm->IsHidden()
         ? Sidearm->GetActorTransform().TransformPosition(FVector(18, 0, 5))
-        : FirstPersonCamera->GetComponentTransform().TransformPosition(FVector(52, 9, -14));
+        : FirstPersonCamera->GetComponentTransform().TransformPosition(
+            FMath::Lerp(FVector(52, 9, -21), FVector(52, 0, -4), AimBlend));
     FHitResult Obstruction;
     if (GetWorld()->SweepSingleByChannel(Obstruction, Eyes, Muzzle, FQuat::Identity, ECC_Visibility,
         FCollisionShape::MakeSphere(1.0), FCollisionQueryParams(SCENE_QUERY_STAT(SidearmClearance), false, this))
@@ -658,15 +718,16 @@ void ASurvivalCharacter::StartDefense()
     DefenseWave = NextWave;
     if (DefenseWave > 1 && bHasSidearm)
     {
-        ReserveAmmo += 6;
+        Items.Rounds += 6;
     }
 }
 
-void ASurvivalCharacter::ReceiveZombieHit(int32 Amount)
+void ASurvivalCharacter::TakeSurvivalDamage(int32 Amount)
 {
     HealthPoints = FMath::Max(0, HealthPoints - Amount);
     if (HealthPoints == 0)
     {
+        bInventoryOpen = false;
         bBuildMode = false;
         ReloadCompleteAt = -1.0;
         UpdateSidearmView();
@@ -679,8 +740,71 @@ void ASurvivalCharacter::RestartDefense()
     UGameplayStatics::OpenLevel(this, FName(*UGameplayStatics::GetCurrentLevelName(this)));
 }
 
+void ASurvivalCharacter::UpdateVitals(float DeltaSeconds)
+{
+    if (HealthPoints <= 0)
+    {
+        return;
+    }
+    const bool bSprintAllowed = bSprintHeld && Stance == EStance::Standing && Vitals.CanSprint()
+        && !IsAimingSidearm() && !bInventoryOpen;
+    const bool bSprinting = bSprintAllowed && GetVelocity().SizeSquared2D() > FMath::Square(20.0);
+    const int32 Damage = Vitals.Advance(DeltaSeconds, bSprinting);
+    GetCharacterMovement()->MaxWalkSpeed = bSprintAllowed && Vitals.CanSprint() ? SprintSpeed : WalkSpeed;
+    if (Damage > 0)
+    {
+        TakeSurvivalDamage(Damage);
+    }
+}
+
+void ASurvivalCharacter::ToggleInventory()
+{
+    if (HealthPoints > 0)
+    {
+        bInventoryOpen = !bInventoryOpen;
+        bBuildMode = false;
+        UpdateSidearmView();
+    }
+}
+
+void ASurvivalCharacter::EatFood()
+{
+    if (HealthPoints > 0 && Items.Food > 0 && Vitals.Hunger < FSurvivalVitals::Max)
+    {
+        --Items.Food;
+        Vitals.Hunger = FMath::Min(FSurvivalVitals::Max, Vitals.Hunger + 34.0f);
+    }
+}
+
+void ASurvivalCharacter::DrinkWater()
+{
+    if (HealthPoints > 0 && Items.Water > 0 && Vitals.Thirst < FSurvivalVitals::Max)
+    {
+        --Items.Water;
+        Vitals.Thirst = FMath::Min(FSurvivalVitals::Max, Vitals.Thirst + 42.0f);
+    }
+}
+
+void ASurvivalCharacter::UseBandage()
+{
+    if (HealthPoints > 0 && HealthPoints < 100 && Items.Bandages > 0)
+    {
+        --Items.Bandages;
+        HealthPoints = FMath::Min(100, HealthPoints + 30);
+    }
+}
+
+void ASurvivalCharacter::CraftBandage()
+{
+    if (bInventoryOpen && HealthPoints > 0)
+    {
+        Items.CraftBandage();
+    }
+}
+
 void ASurvivalCharacter::ToggleBuildMode()
 {
+    bInventoryOpen = false;
     bBuildMode = HealthPoints > 0 && !bBuildMode;
     UpdateSidearmView();
 }
@@ -766,8 +890,8 @@ TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
     }
 
     FSurvivalBuildPlacement Placement;
-    Placement.Base = FVector(FMath::GridSnap(Hit.ImpactPoint.X, FSurvivalBuildPlacement::PlacementGrid),
-        FMath::GridSnap(Hit.ImpactPoint.Y, FSurvivalBuildPlacement::PlacementGrid), Hit.ImpactPoint.Z);
+    Placement.Base = FVector(FMath::GridSnap(Hit.ImpactPoint.X, FSurvivalBuildPlacement::GridSize),
+        FMath::GridSnap(Hit.ImpactPoint.Y, FSurvivalBuildPlacement::GridSize), Hit.ImpactPoint.Z);
     Placement.Rotation = FRotator(0, QuarterTurns * 90.0, 0).Quaternion();
     Placement.PieceIndex = SelectedPiece;
     FVector ReachPoint = Hit.ImpactPoint;

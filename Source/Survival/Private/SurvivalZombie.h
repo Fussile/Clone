@@ -26,6 +26,10 @@ private:
     void UpdateLocomotion(bool bMoving);
     void ApplyAttack(ASurvivalCharacter& Target);
 
+    UPROPERTY(EditAnywhere, Category = "Survival", meta = (ClampMin = "0"))
+    float AggroRange = 0.0f;
+
+    bool bAlerted = false;
     int32 Health = 90;
     double NextAttackTime = 0.0;
     double AttackImpactTime = -1.0;

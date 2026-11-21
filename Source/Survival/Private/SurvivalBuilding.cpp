@@ -37,49 +37,28 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces()
         return FBox(FVector(X0, Y0, Z0), FVector(X1, Y1, Z1));
     };
 
+    constexpr double Half = FSurvivalBuildPlacement::GridSize / 2;
+    constexpr double Height = FSurvivalBuildPlacement::GridSize;
     constexpr double Rise = FSurvivalBuildPlacement::HalfWallHeight;
-    constexpr double T = FSurvivalBuildPlacement::PlacementGrid / 2;
     static const FSurvivalBuildPiece Pieces[] = {
-        {TEXT("Timber wall"), {3, 0}, false, {Box(-50, -T, 0, 50, T, 220)}, false, false, true},
-        {TEXT("Half wall"), {2, 0}, false, {Box(-50, -T, 0, 50, T, Rise)}, false, false, true},
-        {TEXT("Floor"), {2, 0}, false, {Box(-50, -50, 0, 50, 50, 18)}, true},
+        {TEXT("Timber block"), {3, 0}, false, {Box(-Half, -Half, 0, Half, Half, Height)}, false, false, true},
+        {TEXT("Half block"), {2, 0}, false, {Box(-Half, -Half, 0, Half, Half, Rise)}, false, false, true},
+        {TEXT("Floor"), {2, 0}, false, {Box(-Half, -Half, 0, Half, Half, 18)}, true},
         {TEXT("Door frame"), {4, 0}, false, {
-            Box(-50, -T, 0, -45, T, 220), Box(45, -T, 0, 50, T, 220), Box(-45, -T, 200, 45, T, 220)},
-            false, false, true},
-        {TEXT("Window wall"), {4, 0}, false, {
-            Box(-50, -T, 0, 50, T, 90), Box(-50, -T, 170, 50, T, 220),
-            Box(-50, -T, 90, -32, T, 170), Box(32, -T, 90, 50, T, 170)}, false, false, true},
+            Box(-Half, -Half, 0, -60, Half, Height), Box(60, -Half, 0, Half, Half, Height),
+            Box(-60, -Half, 200, 60, Half, Height)}, false, false, true},
+        {TEXT("Window block"), {4, 0}, false, {
+            Box(-Half, -Half, 0, Half, Half, 90), Box(-Half, -Half, 170, Half, Half, Height),
+            Box(-Half, -Half, 90, -70, Half, 170), Box(70, -Half, 90, Half, Half, 170)}, false, false, true},
         {TEXT("Stairs"), {5, 0}, false, {
-            Box(-50, -50, 0, 50, -25, Rise / 4), Box(-50, -25, 0, 50, 0, Rise / 2),
-            Box(-50, 0, 0, 50, 25, Rise * 3 / 4), Box(-50, 25, 0, 50, 50, Rise)}, false, true},
-        {TEXT("Stone wall"), {0, 5}, true, {Box(-50, -T, 0, 50, T, 220)}, false, false, true},
-        {TEXT("Stone foundation"), {0, 4}, true, {Box(-50, -50, 0, 50, 50, 25)}},
-        {TEXT("Stone pillar"), {0, 3}, true, {Box(-13, -13, 0, 13, 13, 220)}},
-        {TEXT("Quarter wall"), {1, 0}, false, {Box(-T, -T, 0, T, T, 220)}, false, false, true},
-        {TEXT("Quarter floor strip"), {1, 0}, false, {Box(-T, -50, 0, T, 50, 18)}, true},
-        {TEXT("Floor corner infill"), {1, 0}, false, {Box(-T, -T, 0, T, T, 18)}, true},
+            Box(-Half, -Half, 0, Half, -Half / 2, Rise / 4), Box(-Half, -Half / 2, 0, Half, 0, Rise / 2),
+            Box(-Half, 0, 0, Half, Half / 2, Rise * 3 / 4), Box(-Half, Half / 2, 0, Half, Half, Rise)},
+            false, true},
+        {TEXT("Stone block"), {0, 5}, true, {Box(-Half, -Half, 0, Half, Half, Height)}, false, false, true},
+        {TEXT("Stone foundation"), {0, 4}, true, {Box(-Half, -Half, 0, Half, Half, 25)}},
+        {TEXT("Stone pillar"), {0, 3}, true, {Box(-25, -25, 0, 25, 25, Height)}},
     };
     return MakeArrayView(Pieces);
-}
-
-namespace
-{
-int32 HorizontalAxis(const FVector& Direction)
-{
-    return FMath::Abs(Direction.X) >= FMath::Abs(Direction.Y) ? 0 : 1;
-}
-
-double SnapAlongEdge(const FBox& Source, const FVector& Extent, int32 Axis, double Aim)
-{
-    const double First = Source.Min[Axis] + Extent[Axis];
-    const double Last = Source.Max[Axis] - Extent[Axis];
-    if (First > Last)
-    {
-        // Larger panels can align their near or far end with a smaller support.
-        return Aim < Source.GetCenter()[Axis] ? Last : First;
-    }
-    return FMath::Clamp(First + FMath::GridSnap(Aim - First, FSurvivalBuildPlacement::PlacementGrid), First, Last);
-}
 }
 
 FBox FSurvivalBuildPlacement::WorldBounds() const
@@ -106,73 +85,34 @@ bool FSurvivalBuildPlacement::SnapTo(const FSurvivalBuildPlacement& Source, cons
     }
 
     const FBox Bounds = Source.WorldBounds();
-    const FVector Extent = WorldBounds().GetExtent();
-    const FVector Center = Bounds.GetCenter();
     const bool bTop = Normal.Z >= 0.95;
     const bool bSide = FMath::Abs(Normal.Z) <= 0.1;
-    const int32 Run = HorizontalAxis(Source.Rotation.RotateVector(FVector::ForwardVector));
-    const int32 Face = 1 - Run;
-    const int32 NewRun = HorizontalAxis(Rotation.RotateVector(FVector::ForwardVector));
-
-    if (Piece.bCarriesLateralSupport && Support.bWall && (bTop || bSide))
+    Base = Source.Base;
+    const bool bFlushRoof = Piece.bCarriesLateralSupport && Support.bWall;
+    if ((bFlushRoof && bTop) || (bSide && (bFlushRoof || Support.bCarriesLateralSupport || Piece.bWall)))
     {
-        // The panel overlaps the top bearing surface and ends flush with the far wall face.
-        const double Side = (bSide && FMath::Abs(Normal[Face]) > 0.95 ? Normal[Face] : TowardViewer[Face]);
-        Base[Face] = Side >= 0.0 ? Bounds.Min[Face] + Extent[Face] : Bounds.Max[Face] - Extent[Face];
-        Base[Run] = SnapAlongEdge(Bounds, Extent, Run, Point[Run]);
-        Base.Z = Bounds.Max.Z;
-        return true;
-    }
-    if (Piece.bCarriesLateralSupport && Support.bCarriesLateralSupport && bSide)
-    {
-        const int32 Edge = HorizontalAxis(Normal);
-        Base[Edge] = Normal[Edge] >= 0.0 ? Bounds.Max[Edge] + Extent[Edge] : Bounds.Min[Edge] - Extent[Edge];
-        Base[1 - Edge] = SnapAlongEdge(Bounds, Extent, 1 - Edge, Point[1 - Edge]);
-        Base.Z = Source.Base.Z;
-        return true;
-    }
-    if (Piece.bWall && Support.bWall && bSide)
-    {
-        const bool bFarEnd = Point[Run] >= Center[Run];
-        if (NewRun == Run)
+        FVector Side = bTop ? Point - Source.Base : Normal;
+        if (bTop && Side.SizeSquared2D() < 1.0)
         {
-            Base[Run] = bFarEnd ? Bounds.Max[Run] + Extent[Run] : Bounds.Min[Run] - Extent[Run];
-            Base[Face] = Center[Face];
+            Side = TowardViewer;
         }
-        else
+        const int32 Axis = FMath::Abs(Side.X) >= FMath::Abs(Side.Y) ? 0 : 1;
+        Base[Axis] += Side[Axis] >= 0.0 ? GridSize : -GridSize;
+        if (bFlushRoof || Support.bCarriesLateralSupport)
         {
-            const bool bFarFace = (FMath::Abs(Normal[Face]) > 0.95
-                ? Normal[Face] : TowardViewer[Face]) >= 0.0;
-            Base[Run] = bFarEnd ? Bounds.Max[Run] - Extent[Run] : Bounds.Min[Run] + Extent[Run];
-            Base[Face] = bFarFace ? Bounds.Max[Face] + Extent[Face] : Bounds.Min[Face] - Extent[Face];
+            const FBox NewBounds = WorldBounds();
+            Base.Z = Bounds.Max.Z - (NewBounds.Max.Z - Base.Z);
         }
-        Base.Z = Source.Base.Z;
         return true;
     }
     if (bTop)
     {
-        if (Piece.bWall && Support.bCarriesLateralSupport)
-        {
-            const int32 Edge = 1 - NewRun;
-            Base[Edge] = Point[Edge] >= Center[Edge] ? Bounds.Max[Edge] - Extent[Edge] : Bounds.Min[Edge] + Extent[Edge];
-            Base[NewRun] = SnapAlongEdge(Bounds, Extent, NewRun, Point[NewRun]);
-        }
-        else if (Support.bWall || Support.bCarriesLateralSupport || Support.bStairs)
-        {
-            Base.X = SnapAlongEdge(Bounds, Extent, 0, Point.X);
-            Base.Y = SnapAlongEdge(Bounds, Extent, 1, Point.Y);
-        }
-        else
-        {
-            Base.X = Source.Base.X;
-            Base.Y = Source.Base.Y;
-        }
         Base.Z = Point.Z;
         return true;
     }
-    if (Piece.bCarriesLateralSupport && bSide)
+    if (bSide && Piece.bCarriesLateralSupport)
     {
-        Base = FVector(Source.Base.X, Source.Base.Y, Bounds.Max.Z);
+        Base.Z = Bounds.Max.Z;
         return true;
     }
     return false;
@@ -225,13 +165,21 @@ int32 FSurvivalBuildPlacement::SupportCostFrom(const FSurvivalBuildPlacement& Ot
                 return 1;
             }
             const bool bZ = Overlaps(Box.Min.Z, Box.Max.Z, Source.Min.Z, Source.Max.Z);
-            if (bLateral && bZ && FMath::Abs(Base.Z - Other.Base.Z) <= Contact
-                && ((bX && (FMath::Abs(Box.Min.Y - Source.Max.Y) <= Contact
-                        || FMath::Abs(Box.Max.Y - Source.Min.Y) <= Contact))
-                    || (bY && (FMath::Abs(Box.Min.X - Source.Max.X) <= Contact
-                        || FMath::Abs(Box.Max.X - Source.Min.X) <= Contact))))
+            const bool bEdge = (bX && (FMath::Abs(Box.Min.Y - Source.Max.Y) <= Contact
+                    || FMath::Abs(Box.Max.Y - Source.Min.Y) <= Contact))
+                || (bY && (FMath::Abs(Box.Min.X - Source.Max.X) <= Contact
+                    || FMath::Abs(Box.Max.X - Source.Min.X) <= Contact));
+            if (bZ && bEdge)
             {
-                BestCost = 2;
+                if (GetPiece().bCarriesLateralSupport && Other.GetPiece().bWall
+                    && FMath::Abs(Box.Max.Z - Source.Max.Z) <= Contact)
+                {
+                    return 1;
+                }
+                if (bLateral && FMath::Abs(Base.Z - Other.Base.Z) <= Contact)
+                {
+                    BestCost = 2;
+                }
             }
         }
     }

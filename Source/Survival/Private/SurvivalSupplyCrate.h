@@ -2,9 +2,17 @@
 
 #include "GameFramework/Actor.h"
 #include "SurvivalBuilding.h"
+#include "SurvivalVitals.h"
 #include "SurvivalSupplyCrate.generated.h"
 
 class UStaticMeshComponent;
+
+struct FSurvivalLoot
+{
+    FSurvivalMaterials Materials;
+    FSurvivalItems Items;
+    bool bSidearm = false;
+};
 
 UCLASS()
 class ASurvivalSupplyCrate : public AActor
@@ -14,10 +22,13 @@ class ASurvivalSupplyCrate : public AActor
 public:
     ASurvivalSupplyCrate();
 
-    FSurvivalMaterials TakeMaterials();
-    bool TakeSidearm();
+    FSurvivalLoot TakeLoot();
     bool HasSidearm() const { return !bSearched && bContainsSidearm; }
-    bool HasMaterials() const { return !bSearched && (TimberAmount > 0 || StoneAmount > 0); }
+    bool HasSupplies() const
+    {
+        return !bSearched && (TimberAmount > 0 || StoneAmount > 0 || FoodAmount > 0
+            || WaterAmount > 0 || ClothAmount > 0);
+    }
 
 protected:
     virtual void BeginPlay() override;
@@ -34,6 +45,15 @@ private:
 
     UPROPERTY(EditAnywhere, Category = "Scavenging")
     bool bContainsSidearm = false;
+
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0"))
+    int32 FoodAmount = 0;
+
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0"))
+    int32 WaterAmount = 0;
+
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0"))
+    int32 ClothAmount = 0;
 
     bool bSearched = false;
 };

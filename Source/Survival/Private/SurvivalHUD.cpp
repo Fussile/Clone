@@ -4,6 +4,8 @@
 #include "GameFramework/PlayerController.h"
 #include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
+#include "SurvivalGameMode.h"
+#include "Engine/World.h"
 #include "SurvivalSupplyCrate.h"
 
 namespace
@@ -25,7 +27,10 @@ void ASurvivalHUD::DrawHUD()
 
     const float CenterX = Canvas->SizeX * 0.5f;
     const float CenterY = Canvas->SizeY * 0.5f;
-    DrawRect(FLinearColor::White, CenterX - 1.5f, CenterY - 1.5f, 3.0f, 3.0f);
+    if (!Character->IsAimingSidearm() && !Character->IsInventoryOpen())
+    {
+        DrawRect(FLinearColor::White, CenterX - 1.5f, CenterY - 1.5f, 3.0f, 3.0f);
+    }
     if (Character->ShowHitMarker())
     {
         for (const float X : {-1.0f, 1.0f})
@@ -43,9 +48,20 @@ void ASurvivalHUD::DrawHUD()
             Character->IsReloading() ? TEXT("  Reloading") : TEXT(""))
         : TEXT("Sidearm   search the shop");
     const int32 Wave = Character->GetDefenseWave();
-    DrawRect(Panel, 20.0f, 20.0f, 300.0f, Wave > 0 ? 54.0f : 34.0f);
+    DrawRect(Panel, 20.0f, 20.0f, 420.0f, Wave > 0 ? 74.0f : 54.0f);
     DrawText(FString::Printf(TEXT("Health   %d   |   %s"), Character->GetHealthPoints(), *Loadout),
         FLinearColor::White, 32.0f, 28.0f);
+    if (const ASurvivalGameMode* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>())
+    {
+        const int32 Minutes = Mode->GetWorldMinutes();
+        DrawText(FString::Printf(TEXT("Day %d   %02d:%02d"), Minutes / 1440 + 1, (Minutes / 60) % 24, Minutes % 60),
+            FLinearColor::White, 325.0f, 28.0f);
+    }
+    const FSurvivalVitals& Vitals = Character->GetVitals();
+    DrawText(FString::Printf(TEXT("Food %d%%   Water %d%%   Stamina %d%%"), FMath::CeilToInt(Vitals.Hunger), FMath::CeilToInt(Vitals.Thirst),
+        FMath::CeilToInt(Vitals.Stamina)),
+        Vitals.Hunger <= 10.0f || Vitals.Thirst <= 10.0f ? Blocked : Muted, 32.0f, 48.0f);
+
     const int32 Alive = Character->GetLivingAttackers();
     FString DefenseStatus;
     if (Alive > 0)
@@ -63,7 +79,7 @@ void ASurvivalHUD::DrawHUD()
     }
     if (Wave > 0)
     {
-        DrawText(DefenseStatus, Muted, 32.0f, 48.0f);
+        DrawText(DefenseStatus, Muted, 32.0f, 68.0f);
     }
     if (Character->GetHealthPoints() <= 0)
     {
@@ -87,7 +103,22 @@ void ASurvivalHUD::DrawHUD()
             : FString::Printf(TEXT("Still needed   %s"), *Shortage.ToText());
         DrawText(Status, Shortage.IsEmpty() ? Muted : Blocked, 32.0f, PanelY + 50.0f);
     }
-    DrawText(TEXT("[B] Build menu   [V] Switch view"), Muted, 32.0f, PanelY + PanelHeight - 22.0f);
+    DrawText(TEXT("[B] Build   [I] Inventory   [V] View"), Muted, 32.0f, PanelY + PanelHeight - 22.0f);
+
+    if (Character->IsInventoryOpen())
+    {
+        const FSurvivalItems& Items = Character->GetItems();
+        DrawRect(Panel, 20.0f, 106.0f, 310.0f, 147.0f);
+        DrawText(TEXT("INVENTORY"), Cyan, 32.0f, 118.0f, nullptr, 1.25f);
+        DrawText(FString::Printf(TEXT("[1] Food  %d    [2] Water  %d"), Items.Food, Items.Water),
+            FLinearColor::White, 32.0f, 147.0f);
+        DrawText(FString::Printf(TEXT("[3] Bandages  %d    Cloth  %d"), Items.Bandages, Items.Cloth),
+            FLinearColor::White, 32.0f, 170.0f);
+        DrawText(FString::Printf(TEXT("Reserve pistol rounds  %d"), Items.Rounds), Muted, 32.0f, 193.0f);
+        DrawText(FString::Printf(TEXT("[4] Craft bandage  (%d cloth)"), FSurvivalItems::BandageCloth),
+            Items.Cloth >= FSurvivalItems::BandageCloth ? Cyan : Muted, 32.0f, 220.0f);
+        return;
+    }
 
     if (Character->IsBuilding())
     {
@@ -122,7 +153,7 @@ void ASurvivalHUD::DrawHUD()
     else if (const ASurvivalSupplyCrate* Crate = Character->FindSupplyCrate())
     {
         const TCHAR* Prompt = Crate->HasSidearm() ? TEXT("[E] Take sidearm and ammo") :
-            (Crate->HasMaterials() ? TEXT("[E] Search building materials") : TEXT("Crate empty"));
+            (Crate->HasSupplies() ? TEXT("[E] Scavenge supplies") : TEXT("Crate empty"));
         DrawText(Prompt,
             FLinearColor::White, CenterX + 14.0f, CenterY + 12.0f);
     }
@@ -149,7 +180,7 @@ void ASurvivalHUD::DrawBuildMenu(const ASurvivalCharacter& Character)
 {
     const TConstArrayView<FSurvivalBuildPiece> Pieces = GetSurvivalBuildPieces();
     const float X = 20.0f;
-    const float Y = 86.0f;
+    const float Y = 106.0f;
     constexpr float Width = 298.0f;
     constexpr float Row = 24.0f;
     const float Footer = Y + 42.0f + Row * Pieces.Num();

@@ -17,18 +17,24 @@ def prepare_structures():
             actor.set_editor_property("tags", [*tags, ground])
 
     tag = unreal.Name("CrossroadsUtilityCanopy")
-    if any(actor.actor_has_tag(tag) for actor in existing):
-        return
-    prefab_class = unreal.load_class(None, "/Script/Survival.SurvivalStructurePrefab")
-    if not prefab_class:
-        raise RuntimeError("Build SurvivalEditor before placing the utility canopy.")
-    canopy = actors.spawn_actor_from_class(prefab_class, unreal.Vector(6300, 3600, 0))
-    if not canopy:
-        raise RuntimeError("Could not place the utility canopy.")
+    canopy = next((actor for actor in existing if actor.actor_has_tag(tag)), None)
+    if canopy is None:
+        prefab_class = unreal.load_class(None, "/Script/Survival.SurvivalStructurePrefab")
+        if not prefab_class:
+            raise RuntimeError("Build SurvivalEditor before placing the utility canopy.")
+        canopy = actors.spawn_actor_from_class(prefab_class, unreal.Vector(6300, 3600, 0))
+        if not canopy:
+            raise RuntimeError("Could not place the utility canopy.")
+    else:
+        old_layout = [(8, 0), (8, 300), (2, 0), (2, 100), (2, 300), (2, 200)]
+        current = [(part.get_editor_property("piece_index"), part.get_editor_property("offset").x)
+                   for part in canopy.get_editor_property("parts")]
+        if current != old_layout:
+            return
 
     parts = []
-    # The floor tiles bridge the 16 m chunk line at local X = 64 m.
-    for piece, x, z in ((8, 0, 0), (8, 300, 0), (2, 0, 220), (2, 100, 220), (2, 300, 220), (2, 200, 220)):
+    # Keep both end pillars and fit four panels on the common 220 cm cell.
+    for piece, x, z in ((8, 0, 0), (8, 660, 0), (2, 0, 220), (2, 220, 220), (2, 660, 220), (2, 440, 220)):
         part = unreal.SurvivalPrefabPart()
         part.set_editor_property("piece_index", piece)
         part.set_editor_property("offset", unreal.Vector(x, 0, z))

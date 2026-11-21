@@ -19,4 +19,4 @@ Preparation imports `Survivor/SK_Survivor.glb` into `/Game/Art/Crossroads/Player
 
 ## Building
 
-Preparation generates an original timber plank texture and a translucent blueprint material in `/Game/Art/Crossroads/Building`. Stone pieces reuse `M_Concrete034`. Preparation enables instanced static mesh rendering for all three materials and the packaging configuration cooks their folders.
+Preparation generates an original timber plank texture, its instanced construction material, and a translucent blueprint material in `/Game/Art/Crossroads/Building`. Stone pieces reuse `M_Concrete034`. Preparation enables instanced static mesh rendering for all three materials and the packaging configuration cooks their folders.

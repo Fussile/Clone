@@ -88,7 +88,7 @@ void ASurvivalZombie::ApplyAttack(ASurvivalCharacter& Target)
     }
     else if (Hit.GetActor() == &Target)
     {
-        Target.ReceiveZombieHit(15);
+        Target.TakeSurvivalDamage(15);
     }
 }
 
@@ -139,6 +139,14 @@ void ASurvivalZombie::Tick(float DeltaSeconds)
         GetMesh()->SetPlayRate(0.0f);
         return;
     }
+
+    if (!bAlerted && AggroRange > 0.0f
+        && FVector::DistSquared2D(GetActorLocation(), Target->GetActorLocation()) > FMath::Square(AggroRange))
+    {
+        UpdateLocomotion(false);
+        return;
+    }
+    bAlerted = true;
 
     const double Now = GetWorld()->GetTimeSeconds();
     if (AttackImpactTime >= 0.0 && Now >= AttackImpactTime)
@@ -205,6 +213,7 @@ void ASurvivalZombie::Tick(float DeltaSeconds)
 
 void ASurvivalZombie::HitBySidearm()
 {
+    bAlerted = true;
     Health -= 32;
     if (Health <= 0)
     {

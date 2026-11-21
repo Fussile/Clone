@@ -1,8 +1,11 @@
 #include "SurvivalGameMode.h"
 
 #include "CollisionQueryParams.h"
+#include "Components/DirectionalLightComponent.h"
+#include "Engine/DirectionalLight.h"
 #include "Engine/HitResult.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
 #include "SurvivalHUD.h"
@@ -10,6 +13,9 @@
 namespace
 {
 const FName GroundTag(TEXT("StructuralGround"));
+const FName SunTag(TEXT("CrossroadsSun"));
+const FName MoonTag(TEXT("CrossroadsMoon"));
+constexpr double StartHour = 8.0;
 
 FIntVector StructureCell(const FVector& Base)
 {
@@ -21,13 +27,75 @@ FIntVector StructureCell(const FVector& Base)
 
 ASurvivalGameMode::ASurvivalGameMode()
 {
+    PrimaryActorTick.bCanEverTick = true;
+    PrimaryActorTick.TickInterval = 0.25f;
     DefaultPawnClass = ASurvivalCharacter::StaticClass();
     HUDClass = ASurvivalHUD::StaticClass();
 }
 
+void ASurvivalGameMode::BeginPlay()
+{
+    Super::BeginPlay();
+    for (TActorIterator<ADirectionalLight> It(GetWorld()); It; ++It)
+    {
+        if (It->ActorHasTag(SunTag))
+        {
+            Sun = *It;
+            if (const UDirectionalLightComponent* Light = It->FindComponentByClass<UDirectionalLightComponent>())
+            {
+                DaylightIntensity = Light->Intensity;
+            }
+        }
+        else if (It->ActorHasTag(MoonTag))
+        {
+            Moon = *It;
+            if (const UDirectionalLightComponent* Light = It->FindComponentByClass<UDirectionalLightComponent>())
+            {
+                MoonlightIntensity = Light->Intensity;
+            }
+        }
+    }
+    UpdateDaylight();
+}
+
+void ASurvivalGameMode::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+    ElapsedSurvivalSeconds += DeltaSeconds;
+    UpdateDaylight();
+}
+
+int32 ASurvivalGameMode::GetWorldMinutes() const
+{
+    return FMath::FloorToInt(StartHour * 60.0 + ElapsedSurvivalSeconds
+        * 1440.0 / FMath::Max(60.0f, DayLengthSeconds));
+}
+
+void ASurvivalGameMode::UpdateDaylight()
+{
+    const double Hours = StartHour + ElapsedSurvivalSeconds * 24.0 / FMath::Max(60.0f, DayLengthSeconds);
+    const double SolarAngle = (FMath::Fmod(Hours, 24.0) - 6.0) * 15.0;
+    const double Elevation = FMath::Sin(FMath::DegreesToRadians(SolarAngle));
+    const auto UpdateLight = [](ADirectionalLight* Actor, double Pitch, double Intensity)
+    {
+        if (Actor)
+        {
+            Actor->SetActorRotation(FRotator(Pitch, -35.0, 0.0));
+            if (UDirectionalLightComponent* Light = Actor->FindComponentByClass<UDirectionalLightComponent>())
+            {
+                Light->SetIntensity(static_cast<float>(Intensity));
+            }
+        }
+    };
+    const double Daylight = FMath::Clamp(Elevation * 2.0, 0.0, 1.0);
+    const double Moonlight = FMath::Clamp(-Elevation * 4.0, 0.0, 1.0);
+    UpdateLight(Sun.Get(), -SolarAngle, Daylight * DaylightIntensity);
+    UpdateLight(Moon.Get(), -SolarAngle + 180.0, Moonlight * MoonlightIntensity);
+}
+
 ASurvivalBuildChunk* ASurvivalGameMode::FindOrCreateChunk(const FVector& Base)
 {
-    constexpr double ChunkSize = 16.0 * FSurvivalBuildPlacement::GridSize;
+    constexpr double ChunkSize = 1600.0;
     const FIntPoint Key(FMath::FloorToInt(Base.X / ChunkSize), FMath::FloorToInt(Base.Y / ChunkSize));
     ASurvivalBuildChunk* Chunk = BuildChunks.FindRef(Key).Get();
     if (!IsValid(Chunk))

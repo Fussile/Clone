@@ -35,9 +35,8 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces();
 
 struct FSurvivalBuildPlacement
 {
-    static constexpr double GridSize = 100.0;
-    static constexpr double PlacementGrid = 25.0;
-    static constexpr double HalfWallHeight = 110.0;
+    static constexpr double GridSize = 220.0;
+    static constexpr double HalfWallHeight = GridSize / 2;
 
     FVector Base = FVector::ZeroVector;
     FQuat Rotation = FQuat::Identity;

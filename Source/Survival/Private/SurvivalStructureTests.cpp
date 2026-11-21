@@ -69,57 +69,42 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurvivalEdgeSnapTest, "Survival.Building.EdgeS
 bool FSurvivalEdgeSnapTest::RunTest(const FString& Parameters)
 {
     constexpr double Tolerance = 0.001;
+    constexpr double Cell = FSurvivalBuildPlacement::GridSize;
     FSurvivalBuildPlacement Wall;
-    FSurvivalBuildPlacement Corner;
-    Corner.Rotation = FRotator(0, 90, 0).Quaternion();
-    TestTrue(TEXT("A rotated wall snaps to the end of its neighbor"),
-        Corner.SnapTo(Wall, FVector(48, 12.5, 100), FVector::RightVector, FVector::RightVector));
-    TestTrue(TEXT("Corner walls touch without sharing any interior volume"),
-        Corner.Base.Equals(FVector(37.5, 62.5, 0), Tolerance));
-    TestEqual(TEXT("The butt joint is load-bearing"), Corner.SupportCostFrom(Wall), 2);
-
-    FSurvivalBuildPlacement Back;
-    Back.Rotation = FRotator(0, 180, 0).Quaternion();
-    TestTrue(TEXT("A second corner snaps in the other axis"),
-        Back.SnapTo(Corner, FVector(25, 112, 100), -FVector::ForwardVector, -FVector::ForwardVector));
-    FSurvivalBuildPlacement Left;
-    Left.Rotation = FRotator(0, 270, 0).Quaternion();
-    TestTrue(TEXT("A fourth wall closes the room"),
-        Left.SnapTo(Back, FVector(-60, 87.5, 100), -FVector::RightVector, -FVector::RightVector));
-    TestEqual(TEXT("The last corner meets the first wall"), Wall.SupportCostFrom(Left), 2);
+    FSurvivalBuildPlacement Neighbor;
+    Neighbor.Rotation = FRotator(0, 90, 0).Quaternion();
+    TestTrue(TEXT("Rotating a cube leaves the adjacent cell unchanged"),
+        Neighbor.SnapTo(Wall, FVector(0, Cell / 2, 100), FVector::RightVector, FVector::RightVector));
+    TestTrue(TEXT("Adjacent cubes share a face"),
+        Neighbor.Base.Equals(FVector(0, Cell, 0), Tolerance));
+    TestEqual(TEXT("Adjacent walls carry support"), Neighbor.SupportCostFrom(Wall), 2);
 
     FSurvivalBuildPlacement Roof;
     Roof.PieceIndex = 2;
-    TestTrue(TEXT("A roof snaps at the top of a wall face"),
-        Roof.SnapTo(Wall, FVector(0, 12.5, 150), FVector::RightVector, FVector::RightVector));
-    TestTrue(TEXT("Roof has a flush exterior edge and sits on the wall"),
-        Roof.Base.Equals(FVector(0, 37.5, 220), Tolerance));
-    TestEqual(TEXT("The wall carries the roof"), Roof.SupportCostFrom(Wall), 1);
-
-    FSurvivalBuildPlacement Strip;
-    Strip.PieceIndex = 10;
-    Strip.Rotation = FRotator(0, 90, 0).Quaternion();
+    TestTrue(TEXT("A roof snaps alongside the wall"),
+        Roof.SnapTo(Wall, FVector(Cell / 2, 0, 150), FVector::ForwardVector, FVector::ForwardVector));
+    const FBox WallBounds = Wall.WorldBounds();
     const FBox RoofBounds = Roof.WorldBounds();
-    TestTrue(TEXT("A 25 cm strip snaps to a full floor edge"),
-        Strip.SnapTo(Roof, FVector(0, RoofBounds.Max.Y, 229), FVector::RightVector, FVector::RightVector));
-    TestTrue(TEXT("The strip meets the floor edge without overlapping it"),
-        FMath::Abs(Strip.WorldBounds().Min.Y - RoofBounds.Max.Y) < Tolerance);
-    TestEqual(TEXT("The strip receives lateral support"), Strip.SupportCostFrom(Roof), 2);
+    TestTrue(TEXT("The wall and roof top surfaces meet flush"),
+        FMath::Abs(RoofBounds.Max.Z - WallBounds.Max.Z) < Tolerance);
+    TestTrue(TEXT("The roof starts on the wall face without overlapping"),
+        FMath::Abs(RoofBounds.Min.X - WallBounds.Max.X) < Tolerance);
+    TestEqual(TEXT("The wall carries the roof"), Roof.SupportCostFrom(Wall), 1);
+    TestEqual(TEXT("The roof cannot suspend the wall"), Wall.SupportCostFrom(Roof), INDEX_NONE);
 
-    FSurvivalBuildPlacement Infill;
-    Infill.PieceIndex = 11;
-    TestTrue(TEXT("The corner infill snaps to the end of a narrow strip"),
-        Infill.SnapTo(Strip, FVector(-50, 100, 229), -FVector::ForwardVector, -FVector::ForwardVector));
-    TestTrue(TEXT("The infill occupies the missing 25 cm square"),
-        Infill.Base.Equals(FVector(-62.5, 100, 220), Tolerance));
-    TestEqual(TEXT("The infill receives support from the strip"), Infill.SupportCostFrom(Strip), 2);
+    FSurvivalBuildPlacement NextRoof = Roof;
+    TestTrue(TEXT("A roof extends by one cell along the exposed edge"),
+        NextRoof.SnapTo(Roof, FVector(RoofBounds.Max.X, 0, 210),
+            FVector::ForwardVector, FVector::ForwardVector));
+    TestTrue(TEXT("Adjacent roof panels stay level"),
+        NextRoof.Base.Equals(Roof.Base + FVector(Cell, 0, 0), Tolerance));
+    TestEqual(TEXT("A roof panel supports its neighbor"), NextRoof.SupportCostFrom(Roof), 2);
 
-    FSurvivalBuildPlacement Fill;
-    Fill.PieceIndex = 9;
-    TestTrue(TEXT("A quarter wall aligns with the end of a full wall"),
-        Fill.SnapTo(Wall, FVector(50, 0, 100), FVector::ForwardVector, FVector::ForwardVector));
-    TestTrue(TEXT("The quarter wall spans one grid interval"),
-        Fill.Base.Equals(FVector(62.5, 0, 0), Tolerance));
+    FSurvivalBuildPlacement Door;
+    Door.PieceIndex = 3;
+    Door.Rotation = FRotator(0, 90, 0).Quaternion();
+    TestTrue(TEXT("A door frame occupies the common cell footprint"),
+        Door.WorldBounds().GetExtent().Equals(FVector(Cell / 2, Cell / 2, Cell / 2), Tolerance));
     return true;
 }
 #endif

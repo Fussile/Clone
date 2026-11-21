@@ -27,8 +27,11 @@ def prepare_if_needed():
         "/Game/Maps/L_SouthernCrossroads",
         "/Game/Art/Crossroads/Player/SK_Survivor",
         "/Game/Art/Crossroads/StationZombie/SK_StationZombie",
-        "/Game/Art/Crossroads/ArmedViewmodel/SK_SidearmViewmodel",
+        "/Game/Art/Crossroads/SightedViewmodel/SK_SidearmViewmodel",
+        "/Game/Art/Crossroads/SightedViewmodel/ViewmodelReload",
+        "/Game/Art/Crossroads/SightedViewmodel/ViewmodelReloadEmpty",
         "/Game/Art/Crossroads/Building/M_BuildPlan",
+        "/Game/Art/Crossroads/Building/M_CrossroadsTimber",
     )
     if (stamp.is_file() and stamp.read_text(encoding="utf-8") == revision
             and all(assets.does_asset_exist(path) for path in required)):

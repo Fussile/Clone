@@ -36,6 +36,8 @@ Source: developer's November 20, 2026 project brief and chat clarification. Prop
 M0: project builds, minimal C++ character, editable southern crossroads blockout and solo movement playtest.
 M1: grid building, destruction, support rules, and a local stress test.
 M2: survival/time, inventory/crafting, one zombie that attacks building pieces.
+The full map will add a shared seasonal cycle with regional weather variation.
+
 M3: small playable world, first horde, one assembled rifle, practice skills and books.
 Later co-op milestone: add gameplay replication, session handling, two-process host/join and packaged Steam validation.
 

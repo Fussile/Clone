@@ -5,6 +5,7 @@
 #include "SurvivalStructure.h"
 #include "SurvivalGameMode.generated.h"
 
+class ADirectionalLight;
 class ASurvivalBuildChunk;
 
 UCLASS()
@@ -22,6 +23,11 @@ public:
     bool AddAuthoredPiece(const FSurvivalBuildPlacement& Placement);
     void RemoveStructure(int32 Id);
     const FSurvivalMaterials& GetPlannedCost() const { return PlannedCost; }
+    int32 GetWorldMinutes() const;
+
+protected:
+    virtual void BeginPlay() override;
+    virtual void Tick(float DeltaSeconds) override;
 
 private:
     struct FRegisteredPiece
@@ -41,6 +47,16 @@ private:
     UPROPERTY(Transient)
     TMap<FIntPoint, TObjectPtr<ASurvivalBuildChunk>> BuildChunks;
 
+    void UpdateDaylight();
+
+    UPROPERTY(EditDefaultsOnly, Category = "Survival", meta = (ClampMin = "60"))
+    float DayLengthSeconds = 1200.0f;
+
+    TWeakObjectPtr<ADirectionalLight> Sun;
+    TWeakObjectPtr<ADirectionalLight> Moon;
+    float DaylightIntensity = 0.0f;
+    float MoonlightIntensity = 0.0f;
+    double ElapsedSurvivalSeconds = 0.0;
     FSurvivalMaterials PlannedCost;
     FSurvivalStructure Structure;
     TMap<int32, FRegisteredPiece> RegisteredPieces;

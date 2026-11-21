@@ -31,22 +31,13 @@ void ASurvivalSupplyCrate::BeginPlay()
     }
 }
 
-FSurvivalMaterials ASurvivalSupplyCrate::TakeMaterials()
+FSurvivalLoot ASurvivalSupplyCrate::TakeLoot()
 {
-    if (!HasMaterials())
+    if (!HasSupplies() && !HasSidearm())
     {
         return {};
     }
     bSearched = true;
-    return {FMath::Max(0, TimberAmount), FMath::Max(0, StoneAmount)};
-}
-
-bool ASurvivalSupplyCrate::TakeSidearm()
-{
-    if (!HasSidearm())
-    {
-        return false;
-    }
-    bSearched = true;
-    return true;
+    return {{FMath::Max(0, TimberAmount), FMath::Max(0, StoneAmount)},
+        {FMath::Max(0, FoodAmount), FMath::Max(0, WaterAmount), FMath::Max(0, ClothAmount)}, bContainsSidearm};
 }

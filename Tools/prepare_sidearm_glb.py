@@ -25,6 +25,37 @@ def read_glb(path):
     return model, bytearray(payload[28 + json_size:])
 
 
+def add_front_sight(model, binary, parent, bind_point):
+    skin = model["skins"][0]
+    grip_index = skin["joints"].index(parent)
+    accessor = model["accessors"][skin["inverseBindMatrices"]]
+    view = model["bufferViews"][accessor["bufferView"]]
+    start = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+    stride = view.get("byteStride", 64)
+    grip_inverse = list(struct.unpack_from("<16f", binary, start + grip_index * stride))
+    local_point = [sum(grip_inverse[axis + column * 4] * bind_point[column] for column in range(3))
+                   + grip_inverse[axis + 12] for axis in range(3)]
+
+    nodes = model["nodes"]
+    nodes[parent]["children"].append(len(nodes))
+    skin["joints"].append(len(nodes))
+    nodes.append({"name": "FrontSight", "translation": local_point})
+    for axis in range(3):
+        grip_inverse[axis + 12] -= local_point[axis]
+    combined = bytearray()
+    for index in range(accessor["count"]):
+        offset = start + index * stride
+        combined.extend(binary[offset:offset + 64])
+    combined.extend(struct.pack("<16f", *grip_inverse))
+    model["bufferViews"].append({"buffer": 0, "byteOffset": len(binary), "byteLength": len(combined)})
+    binary.extend(combined)
+    skin["inverseBindMatrices"] = len(model["accessors"])
+    model["accessors"].append({
+        "bufferView": len(model["bufferViews"]) - 1, "componentType": 5126,
+        "count": len(skin["joints"]), "type": "MAT4",
+    })
+
+
 def mount_pistol(model, binary, arms, frame, pistol_source):
     pistol, geometry = read_glb(pistol_source)
     primitives = pistol["meshes"][0]["primitives"]
@@ -58,7 +89,9 @@ def mount_pistol(model, binary, arms, frame, pistol_source):
         model[key].extend(pistol[key])
 
     joint = next(i for i, node in enumerate(model["nodes"]) if node.get("name") == "PBody_058")
-    grip = model["skins"][0]["joints"].index(joint)
+    # The pistol is rigidly bound to a child of the animated grip. Its origin marks the front sight.
+    front_sight_joint = len(model["skins"][0]["joints"])
+    sight = (0.0, float("-inf"), original["max"][2])
 
     def add_vertex_stream(data, count, component_type):
         view = len(model["bufferViews"])
@@ -90,13 +123,16 @@ def mount_pistol(model, binary, arms, frame, pistol_source):
                 if semantic == "POSITION":
                     value = (-z * scale, original["max"][1] + (y - top) * scale,
                              original["max"][2] + (x - front) * scale)
+                    if value[2] >= original["max"][2] - 0.04 and abs(value[0]) < 0.01:
+                        if (value[1], value[2]) > (sight[1], sight[2]):
+                            sight = (0.0, value[1], value[2])
                 vector.pack_into(binary, offset, *value, *handedness)
                 transformed.append((*value, *handedness))
             accessor["min"] = [min(column) for column in zip(*transformed)]
             accessor["max"] = [max(column) for column in zip(*transformed)]
 
         count = pistol["accessors"][attributes["POSITION"]]["count"]
-        skin_joints = add_vertex_stream(struct.pack("<4H", grip, 0, 0, 0) * count, count, 5123)
+        skin_joints = add_vertex_stream(struct.pack("<4H", front_sight_joint, 0, 0, 0) * count, count, 5123)
         skin_weights = add_vertex_stream(struct.pack("<4f", 1, 0, 0, 0) * count, count, 5126)
         arms["primitives"].append({
             "attributes": {**{key: value + offsets["accessors"] for key, value in attributes.items()},
@@ -105,6 +141,10 @@ def mount_pistol(model, binary, arms, frame, pistol_source):
             "material": part["material"] + offsets["materials"],
             "mode": part["mode"],
         })
+
+    if sight[1] == float("-inf"):
+        raise ValueError("Could not locate vertices near the pistol front sight.")
+    add_front_sight(model, binary, joint, sight)
 
 
 def prepare_sidearm_glb(source, destination, pistol_source):

@@ -3,6 +3,7 @@
 #include "GameFramework/Character.h"
 #include "Misc/Optional.h"
 #include "SurvivalBuilding.h"
+#include "SurvivalVitals.h"
 #include "SurvivalCharacter.generated.h"
 
 class ASurvivalSupplyCrate;
@@ -26,16 +27,20 @@ public:
     FSurvivalPlanTarget FindPlan() const;
     FSurvivalMaterials GetPlannedCost() const;
     const FSurvivalMaterials& GetInventory() const { return Inventory; }
+    const FSurvivalItems& GetItems() const { return Items; }
+    const FSurvivalVitals& GetVitals() const { return Vitals; }
+    bool IsInventoryOpen() const { return bInventoryOpen; }
     bool IsBuilding() const { return bBuildMode; }
     int32 GetSelectedPiece() const { return SelectedPiece; }
     TOptional<FSurvivalBuildPlacement> FindPlacement() const;
     bool CanFinish(const FSurvivalBuildPlacement& Placement) const;
     const FSurvivalFinishedPiece* FindFinishedPiece() const;
-    void ReceiveZombieHit(int32 Amount);
+    void TakeSurvivalDamage(int32 Amount);
     int32 GetHealthPoints() const { return HealthPoints; }
     int32 GetAmmo() const { return Ammo; }
-    int32 GetReserveAmmo() const { return ReserveAmmo; }
+    int32 GetReserveAmmo() const { return Items.Rounds; }
     bool IsReloading() const { return ReloadCompleteAt >= 0.0; }
+    bool IsAimingSidearm() const;
     bool HasSidearm() const { return bHasSidearm; }
     int32 GetLivingAttackers() const;
     int32 GetDefenseWave() const { return DefenseWave; }
@@ -67,6 +72,12 @@ private:
     void SetStance(EStance NewStance);
     void UpdateMovementPresentation();
     void Interact();
+    void ToggleInventory();
+    void EatFood();
+    void DrinkWater();
+    void UseBandage();
+    void CraftBandage();
+    void UpdateVitals(float DeltaSeconds);
     void ToggleBuildMode();
     void RotatePiece();
     void NextPiece();
@@ -81,6 +92,9 @@ private:
     void UpdateSidearmView();
     void LoadSidearmViewmodel();
     void UpdateSidearmAnimation();
+    void UpdateSidearmAim(float DeltaSeconds);
+    void PressAim();
+    void ReleaseAim();
     void PlaySidearmAnimation(UAnimSequence* Sequence, bool bLoop);
     void StartReload();
     void StartDefense();
@@ -96,10 +110,16 @@ private:
     bool bThirdPerson = false;
     bool bHasSidearm = false;
     int32 Ammo = 0;
-    int32 ReserveAmmo = 0;
+    FSurvivalItems Items;
+    FSurvivalVitals Vitals;
+    bool bInventoryOpen = false;
     double ReloadCompleteAt = -1.0;
     double NextShotAt = 0.0;
     bool bViewmodelReady = false;
+    bool bAimHeld = false;
+    float AimBlend = 0.0f;
+    FVector ViewmodelHip = FVector::ZeroVector;
+    FVector ViewmodelAim = FVector::ZeroVector;
     int32 HealthPoints = 100;
     double HitMarkerUntil = -1.0;
     int32 DefenseWave = 0;

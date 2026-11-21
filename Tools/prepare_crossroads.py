@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+import re
 import runpy
 
 import unreal
@@ -15,7 +16,7 @@ PLAYER = ART + "/Player"
 BUILDING = ART + "/Building"
 ZOMBIE = ART + "/StationZombie"
 WEAPON_AUDIO = "/Game/Audio/Weapons"
-VIEWMODEL = ART + "/ArmedViewmodel"
+VIEWMODEL = ART + "/SightedViewmodel"
 LEVEL = "/Game/Maps/L_SouthernCrossroads"
 
 
@@ -118,7 +119,7 @@ def import_building():
         generate = runpy.run_path(str(TOOLS / "build_timber_texture.py"))
         generate["write_timber_texture"](timber_path)
     texture = import_asset(timber_path, BUILDING, unreal.Texture2D)
-    timber = make_material(BUILDING, "M_Timber", (
+    timber = make_material(BUILDING, "M_CrossroadsTimber", (
         (texture, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, "RGB", prop.MP_BASE_COLOR),
     ))
     stone = assets.load_asset(f"{SURFACES}/M_Concrete034")
@@ -144,7 +145,9 @@ def import_building():
     for material in (timber, stone, ghost):
         if not isinstance(material, unreal.Material):
             raise RuntimeError("A required construction material could not be loaded.")
-        editing.set_material_usage(material, unreal.MaterialUsage.MATUSAGE_INSTANCED_STATIC_MESHES)
+        if not material.get_editor_property("used_with_instanced_static_meshes"):
+            material.set_editor_property("used_with_instanced_static_meshes", True)
+            editing.recompile_material(material)
         if not assets.save_loaded_asset(material):
             raise RuntimeError(f"Could not save {material.get_path_name()}.")
 
@@ -187,7 +190,7 @@ def import_skeletal_pack(directory, names, source, prepared=None, generator=None
             matching = [item for item in imported if isinstance(item, unreal.SkeletalMesh)]
         else:
             matching = [item for item in imported
-                        if isinstance(item, unreal.AnimSequence) and name.lower() in item.get_name().lower()]
+                        if isinstance(item, unreal.AnimSequence) and re.search(rf"{re.escape(name)}(?:$|_)", item.get_name(), re.IGNORECASE)]
         if len(matching) != 1 or not assets.rename_loaded_asset(matching[0], path):
             raise RuntimeError(f"Could not resolve {name} from {source.name}.")
 
@@ -232,6 +235,7 @@ def prepare():
     apply_blockout_surfaces()
     if not levels.save_current_level():
         raise RuntimeError(f"Could not save the surfaces in {LEVEL}.")
+    import_building()
     generated = TOOLS.parent / "Saved" / "GeneratedArt"
     sidearm = SOURCE / "Weapons" / "SM_CrossroadsSidearm.glb"
     import_skeletal_pack(ZOMBIE,
@@ -239,8 +243,7 @@ def prepare():
         SOURCE / "Enemy" / "zombie_rigged__animated.glb", generated / "StationZombie.glb", "prepare_zombie_glb")
     import_skeletal_pack(VIEWMODEL,
         ("SK_SidearmViewmodel", "ViewmodelIdle", "ViewmodelWalk", "ViewmodelFire", "ViewmodelReload", "ViewmodelReloadEmpty"),
-        SOURCE / "Weapons" / "fps_pistol_animations.glb", generated / "ArmedViewmodel.glb", "prepare_sidearm_glb", sidearm)
-    import_building()
+        SOURCE / "Weapons" / "fps_pistol_animations.glb", generated / "SightedViewmodel.glb", "prepare_sidearm_glb", sidearm)
     if sidearm.is_file():
         import_asset(sidearm, BUILDING, unreal.StaticMesh)
     shot = SOURCE / "Audio" / "SW_SidearmShot.wav"

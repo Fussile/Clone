@@ -33,6 +33,46 @@ def place():
         crate.set_editor_property("stone_amount", stone)
         crate.set_editor_property("contains_sidearm", sidearm)
 
+    survival_crates = (
+        ("CrossroadsStationProvisions", "Gas station provisions", (3400, 5230, 52), 2, 3, 4),
+        ("CrossroadsHouseProvisions", "House provisions", (-4600, 25450, 52), 2, 2, 3),
+    )
+    for tag, label, position, food, water, cloth in survival_crates:
+        name = unreal.Name(tag)
+        if any(actor.actor_has_tag(name) for actor in existing):
+            continue
+        crate = actors.spawn_actor_from_class(crate_class, unreal.Vector(*position))
+        if not crate:
+            raise RuntimeError(f"Could not place {label}.")
+        crate.set_actor_label(label)
+        crate.set_actor_scale3d(unreal.Vector(0.65, 0.6, 0.8))
+        for prop, value in (("tags", [name]), ("timber_amount", 0), ("stone_amount", 0),
+                            ("food_amount", food), ("water_amount", water), ("cloth_amount", cloth)):
+            crate.set_editor_property(prop, value)
+
+    zombie_tag = unreal.Name("CrossroadsRoamingZombie")
+    if not any(actor.actor_has_tag(zombie_tag) for actor in existing):
+        zombie_type = unreal.load_class(None, "/Script/Survival.SurvivalZombie")
+        zombie = actors.spawn_actor_from_class(zombie_type, unreal.Vector(6900, 4500, 112)) if zombie_type else None
+        if not zombie:
+            raise RuntimeError("Could not place the Crossroads zombie.")
+        zombie.set_actor_label("Crossroads zombie")
+        zombie.set_editor_property("tags", [zombie_tag])
+        zombie.set_editor_property("aggro_range", 1800.0)
+
+    moon_tag = unreal.Name("CrossroadsMoon")
+    if not any(actor.actor_has_tag(moon_tag) for actor in existing):
+        moon = actors.spawn_actor_from_class(unreal.DirectionalLight, unreal.Vector(0, 0, 2000))
+        if not moon:
+            raise RuntimeError("Could not place the Crossroads moonlight.")
+        moon.set_actor_label("Moonlight")
+        moon.set_editor_property("tags", [moon_tag])
+        light = moon.get_component_by_class(unreal.DirectionalLightComponent)
+        light.set_mobility(unreal.ComponentMobility.MOVABLE)
+        light.set_editor_property("intensity", 0.25)
+        light.set_editor_property("atmosphere_sun_light", True)
+        light.set_editor_property("atmosphere_sun_light_index", 1)
+
     for actor in existing:
         for label, component_type in (
             ("Sun", unreal.DirectionalLightComponent), ("Sky light", unreal.SkyLightComponent)
@@ -41,6 +81,9 @@ def place():
                 light = actor.get_component_by_class(component_type)
                 if light:
                     light.set_mobility(unreal.ComponentMobility.MOVABLE)
+                    tag = unreal.Name("CrossroadsSun")
+                    if isinstance(light, unreal.DirectionalLightComponent) and not actor.actor_has_tag(tag):
+                        actor.set_editor_property("tags", [*actor.get_editor_property("tags"), tag])
 
 
 place()
