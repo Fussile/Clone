@@ -1,0 +1,6 @@
+9mm Pistol by TORI106
+Source: https://sketchfab.com/3d-models/9mm-pistol-43bc09f5aace4346a8a2b6e1580fc03f
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+Adapted for this game by combining two mesh parts into one, adjusting scale and orientation,
+retaining the primary UV set, and resizing and re-encoding the six textures.

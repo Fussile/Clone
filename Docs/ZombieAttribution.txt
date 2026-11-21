@@ -1,0 +1,5 @@
+Zombie (Rigged & Animated) by Aiden Studios
+Source: https://sketchfab.com/3d-models/zombie-rigged-animated-131688807ad444609ed9b2ed572dc4aa
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+Game adaptation combines the skinned parts, omits facial morphs, and adjusts size and attack playback.
