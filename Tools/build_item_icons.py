@@ -180,6 +180,10 @@ SPRITES = {
         ............
     """,
 }
+# The paper editions share the guide silhouette, with distinct cover colors.
+SPRITES["ScavengerNotes"] = SPRITES["BuilderGuide"].replace("g", "o")
+SPRITES["DressingSchematic"] = SPRITES["BuilderGuide"].replace("g", "b")
+SPRITES["FieldDressing"] = SPRITES["Bandage"].replace("w", "g")
 
 
 def write_item_icons(directory):

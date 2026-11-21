@@ -16,6 +16,9 @@ const TCHAR* SurvivalItemName(ESurvivalItem Item)
     case ESurvivalItem::Rifle: return TEXT("Bolt-action rifle");
     case ESurvivalItem::RifleRounds: return TEXT("Rifle rounds");
     case ESurvivalItem::BuilderGuide: return TEXT("Builder's guide");
+    case ESurvivalItem::ScavengerNotes: return TEXT("Scavenger's field notes");
+    case ESurvivalItem::DressingSchematic: return TEXT("Field dressing schematic");
+    case ESurvivalItem::FieldDressing: return TEXT("Field dressing");
     default: return TEXT("Empty");
     }
 }
@@ -26,6 +29,8 @@ TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes()
         {ESurvivalItem::Bandage, TEXT("Medical"), TEXT("Treats injuries. Medicine skill improves healing."), {{ESurvivalItem::Cloth, 2}}},
         {ESurvivalItem::TimberDoor, TEXT("Building"), TEXT("Install into a completed door frame."),
             {{ESurvivalItem::Timber, 4}}},
+        {ESurvivalItem::FieldDressing, TEXT("Medical"), TEXT("A heavy dressing for treating deeper injuries."),
+            {{ESurvivalItem::Bandage, 1}, {ESurvivalItem::Cloth, 2}}, ETraining::FieldDressings},
     };
     return MakeArrayView(Recipes);
 }
@@ -40,6 +45,9 @@ void FSurvivalItems::Add(const FSurvivalItems& Other)
     TimberDoors += Other.TimberDoors;
     RifleRounds += Other.RifleRounds;
     BuilderGuides += Other.BuilderGuides;
+    ScavengerNotes += Other.ScavengerNotes;
+    DressingSchematics += Other.DressingSchematics;
+    FieldDressings += Other.FieldDressings;
 }
 
 int32 FSurvivalVitals::Advance(float DeltaSeconds, bool bSprinting, float MovementEffort, float AmbientCelsius,

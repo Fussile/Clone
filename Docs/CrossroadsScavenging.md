@@ -56,6 +56,6 @@ The material counts, plans, completed pieces, health and loot reset when the sol
 
 ## M3 rifle, skills and night
 
-1. Open the dark rifle locker at the back of the station and select slot **5**. Hold the camera still and check that the rifle rests steadily near center and the rear of the arms stays out of view. Check that the bolt and magazine move when firing and reloading. Press **V** to check third-person carry.
-2. Open **I**, then **View skills**. Use the builder's guide to raise Construction Tools by one rank. Sprint, land pistol and rifle hits, treat an injury, craft a basic item, and search new caches to check practice XP in the corresponding entries. Compare rank previews for Loot Appraisal and verify that planned systems cannot spend points.
+1. Open the dark rifle locker at the back of the station and select slot **5**. Hold the camera still and check the rifle finish and hip framing. Hold right mouse to check scope magnification, peripheral view, and reticle alignment. Release to exit ADS. Fire and reload to check bolt and magazine movement. Switch to the pistol and confirm both iron sights meet the center of the view.
+2. Open **I**, then **Skills**. Compare Practice with the Scavenging and Survival trees. Read the construction guide or station field notes from the Backpack or skill details. At the house provisions cache, take the dressing schematic. Read it, then craft a field dressing using a bandage and two cloth. The same recipe can be unlocked by spending points in Survival once its prerequisites are met.
 3. Use `SetTimeOfDay 21.9` to approach dusk and the first horde. Check that daylight begins at 04:00. A complete day takes 60 real minutes, including 15 minutes of darkness.

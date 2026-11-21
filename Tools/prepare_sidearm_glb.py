@@ -26,7 +26,7 @@ def read_glb(path):
     return model, bytearray(payload[28 + json_size:])
 
 
-def add_front_sight(model, binary, parent, bind_point):
+def add_sight(model, binary, parent, name, bind_point):
     skin = model["skins"][0]
     grip_index = skin["joints"].index(parent)
     accessor = model["accessors"][skin["inverseBindMatrices"]]
@@ -40,7 +40,7 @@ def add_front_sight(model, binary, parent, bind_point):
     nodes = model["nodes"]
     nodes[parent]["children"].append(len(nodes))
     skin["joints"].append(len(nodes))
-    nodes.append({"name": "FrontSight", "translation": local_point})
+    nodes.append({"name": name, "translation": local_point})
     for axis in range(3):
         grip_inverse[axis + 12] -= local_point[axis]
     combined = bytearray()
@@ -137,25 +137,31 @@ def mount_pistol(model, binary, arms, frame, pistol_source):
     scale = (original["max"][2] - original["min"][2]) / (front - rear)
 
     joint = next(i for i, node in enumerate(model["nodes"]) if node.get("name") == "PBody_058")
-    front_sight_joint = len(model["skins"][0]["joints"])
-    sight = (0.0, float("-inf"), original["max"][2])
+    grip = model["skins"][0]["joints"].index(joint)
+    slide_length = front - rear
+    sight_vertices = {"FrontSight": [], "RearSight": []}
 
     def transform(semantic, position):
-        nonlocal sight
         x, y, z = position
         if semantic != "POSITION":
             return (-z, y, x)
         value = (-z * scale, original["max"][1] + (y - top) * scale,
                  original["max"][2] + (x - front) * scale)
-        if value[2] >= original["max"][2] - 0.04 and abs(value[0]) < 0.01:
-            if (value[1], value[2]) > (sight[1], sight[2]):
-                sight = (0.0, value[1], value[2])
+        if x >= front - slide_length * .12 and abs(z) < .012:
+            sight_vertices["FrontSight"].append(value)
+        if x <= rear + slide_length * .18 and abs(z) < .012:
+            sight_vertices["RearSight"].append(value)
         return value
 
-    append_rigid_prop(model, binary, arms, pistol, geometry, front_sight_joint, transform)
-    if sight[1] == float("-inf"):
-        raise ValueError("Could not locate vertices near the pistol front sight.")
-    add_front_sight(model, binary, joint, sight)
+    append_rigid_prop(model, binary, arms, pistol, geometry, grip, transform)
+    for name, vertices in sight_vertices.items():
+        if not vertices:
+            raise ValueError(f"Could not locate vertices near the pistol {name}.")
+        ceiling = max(point[1] for point in vertices)
+        crown = [point for point in vertices if point[1] >= ceiling - scale * .0003]
+        center = (min(point[0] for point in crown) + max(point[0] for point in crown)) * .5
+        lengthwise = (min(point[2] for point in crown) + max(point[2] for point in crown)) * .5
+        add_sight(model, binary, joint, name, (center, ceiling, lengthwise))
 
 
 def mount_magazine(model, binary, arms, original, source):

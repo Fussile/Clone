@@ -44,6 +44,8 @@ FSurvivalLoot ASurvivalSupplyCrate::TakeLoot()
     Loot.Items.Water = FMath::Max(0, WaterAmount);
     Loot.Items.Cloth = FMath::Max(0, ClothAmount);
     Loot.Items.BuilderGuides = FMath::Max(0, BuilderGuideAmount);
+    Loot.Items.ScavengerNotes = FMath::Max(0, ScavengerNotesAmount);
+    Loot.Items.DressingSchematics = FMath::Max(0, DressingSchematicAmount);
     Loot.Items.RifleRounds = bContainsRifle ? 8 : 0;
     Loot.bSidearm = bContainsSidearm;
     Loot.bRifle = bContainsRifle;

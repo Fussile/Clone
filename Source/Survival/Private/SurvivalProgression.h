@@ -17,7 +17,7 @@ enum class ETraining : uint8
     Generators, BatteryStorage, PartsFabrication, ArmorCraft, BasicCraft,
     DecorativePaint, FauxPaint, MasonryPaint, MetalPaint, WallCovering,
     WoodFinish, Nutrition, Hydration, CraftSpeed, Repair,
-    Barter, TradeAccess, Count
+    Barter, TradeAccess, FieldDressings, Count
 };
 
 struct FTrainingInfo
@@ -66,6 +66,7 @@ struct FSurvivalProgression
     int32 LevelXPRequired() const { return 100 + 25 * (CharacterLevel - 1); }
     void AwardPractice(ETraining Entry, int32 Amount);
     void AwardXP(int32 Amount);
+    bool CanReadGuide(ETraining Entry) const;
     void ReadGuide(ETraining Entry);
     int32 PointCostThrough(ETraining Entry, int32 TargetRank) const;
     bool CanBuyThrough(ETraining Entry, int32 TargetRank) const;

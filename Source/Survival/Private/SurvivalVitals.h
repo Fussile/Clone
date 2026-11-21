@@ -2,10 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "Containers/ArrayView.h"
+#include "SurvivalProgression.h"
 
 enum class ESurvivalItem : uint8
 {
-    Sidearm, Food, Water, Bandage, Timber, Stone, Cloth, Rounds, TimberDoor, Rifle, RifleRounds, BuilderGuide, None
+    Sidearm, Food, Water, Bandage, Timber, Stone, Cloth, Rounds, TimberDoor, Rifle, RifleRounds, BuilderGuide, ScavengerNotes, DressingSchematic, FieldDressing, None
 };
 
 const TCHAR* SurvivalItemName(ESurvivalItem Item);
@@ -22,6 +23,7 @@ struct FSurvivalRecipe
     const TCHAR* Category;
     const TCHAR* Description;
     TArray<FSurvivalIngredient> Ingredients;
+    ETraining RequiredTraining = ETraining::Count;
 };
 
 TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes();
@@ -37,6 +39,9 @@ struct FSurvivalItems
     int32 TimberDoors = 0;
     int32 RifleRounds = 0;
     int32 BuilderGuides = 0;
+    int32 ScavengerNotes = 0;
+    int32 DressingSchematics = 0;
+    int32 FieldDressings = 0;
 
     void Add(const FSurvivalItems& Other);
 };

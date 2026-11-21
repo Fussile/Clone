@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import bpy
+import numpy as np
 from mathutils import Matrix, Vector
 
 weapons, source = map(Path, sys.argv[sys.argv.index('--') + 1:])
@@ -16,6 +17,17 @@ scene.render.fps = 24
 bpy.ops.import_scene.gltf(filepath=str(weapons / 'sniper_animated.glb'))
 rig = next(obj for obj in scene.objects if obj.type == 'ARMATURE')
 arms = next(obj for obj in rig.children if obj.type == 'MESH')
+# Keep the donor arm textures compact. The rifle's data maps remain lossless.
+arm_images = {
+    node.image for material in arms.data.materials if material and material.use_nodes
+    for node in material.node_tree.nodes if node.type == 'TEX_IMAGE' and node.image
+}
+for image in arm_images:
+    width, height = image.size
+    if max(width, height) > 512:
+        ratio = 512 / max(width, height)
+        image.scale(round(width * ratio), round(height * ratio))
+        image.pack()
 parts = ('base', 'scope', 'boltback', 'bolt', 'release', 'trigger', 'mag', 'bullet')
 nodes = {name: bpy.data.objects[name] for name in parts}
 clip_frames = {
@@ -68,7 +80,22 @@ for suffix, socket in (('Color', 'Base Color'), ('Normal', 'Normal'), ('Roughnes
     node.image = bpy.data.images.load(str(source / 'textures' / f'sniper{suffix}.png'))
     if suffix != 'Color':
         node.image.colorspace_settings.name = 'Non-Color'
-    node.image.scale(768, 768)
+    resolution = 768
+    node.image.scale(resolution, resolution)
+    pixels = np.empty(resolution * resolution * 4, dtype=np.float32)
+    node.image.pixels.foreach_get(pixels)
+    rgb = pixels.reshape(-1, 4)[:, :3]
+    if suffix == 'Color':
+        rgb[:] = np.minimum(1.0, np.power(rgb, .80) * 1.12)
+    elif suffix == 'Metallic':
+        rgb *= .32
+    elif suffix == 'Normal':
+        rgb[:, :2] = .5 + (rgb[:, :2] - .5) * .28
+        forward_sq = 1.0 - np.sum(np.square(rgb[:, :2] * 2.0 - 1.0), axis=1)
+        rgb[:, 2] = .5 + .5 * np.sqrt(np.maximum(forward_sq, 0.0))
+    node.image.pixels.foreach_set(pixels)
+    node.image.update()
+    # Save edited pixels rather than allowing the exporter to reuse the original map.
     node.image.pack()
     color = node.outputs['Color']
     if suffix == 'Normal':
@@ -101,7 +128,7 @@ bpy.ops.object.join()
 world = bpy.context.object
 world.name = 'SM_CrossroadsSniper'
 bpy.ops.export_scene.gltf(filepath=str(weapons / 'SM_CrossroadsSniper.glb'), export_format='GLB',
-                         use_selection=True, export_animations=False, export_image_format='JPEG', export_jpeg_quality=83)
+                         use_selection=True, export_animations=False, export_image_format='AUTO')
 bpy.data.objects.remove(world, do_unlink=True)
 
 bpy.context.view_layer.objects.active = rig
@@ -109,10 +136,14 @@ rig.select_set(True)
 bpy.ops.object.mode_set(mode='EDIT')
 bones = rig.data.edit_bones
 arm_inverse = rig.matrix_world.inverted()
-for name in (*parts, 'ViewBreech', 'ViewMuzzle'):
+aim_points = {
+    'ViewBreech': (0, 18, 4), 'ViewMuzzle': (0, donor_low, 4),
+    'ViewScopeEye': (0, 19, 17),
+}
+for name in (*parts, *aim_points):
     bone = bones.new(name if name.startswith('View') else 'Sniper_' + name)
     bone.parent = bones['_rootJoint']
-    start = (0, 18, 4) if name == 'ViewBreech' else (0, donor_low, 4) if name == 'ViewMuzzle' else (0, 0, 0)
+    start = aim_points.get(name, (0, 0, 0))
     bone.head = arm_inverse @ Vector(start)
     bone.tail = arm_inverse @ (Vector(start) + Vector((0, 0, 10)))
 bpy.ops.object.mode_set(mode='OBJECT')
@@ -143,7 +174,7 @@ for clip, sequence in clip_frames.items():
         for name, basis in pose.items():
             rig.pose.bones[name].matrix_basis = basis
         bpy.context.view_layer.update()
-        for name in (*parts, 'ViewBreech', 'ViewMuzzle'):
+        for name in (*parts, *aim_points):
             prop = 'base' if name.startswith('View') else name
             bone = rig.pose.bones[name if name.startswith('View') else 'Sniper_' + name]
             delta = world_matrices[prop] @ node_rest[prop].inverted()
@@ -164,4 +195,4 @@ rig.select_set(True)
 arms.select_set(True)
 bpy.ops.export_scene.gltf(filepath=str(weapons / 'SK_SniperViewmodel.glb'), export_format='GLB',
                          use_selection=True, export_animations=True, export_animation_mode='NLA_TRACKS',
-                         export_image_format='JPEG', export_jpeg_quality=83)
+                         export_image_format='AUTO')

@@ -29,7 +29,8 @@ public:
     bool HasSupplies() const
     {
         return !bSearched && (TimberAmount > 0 || StoneAmount > 0 || FoodAmount > 0
-            || WaterAmount > 0 || ClothAmount > 0 || bContainsRifle || BuilderGuideAmount > 0);
+            || WaterAmount > 0 || ClothAmount > 0 || bContainsRifle || BuilderGuideAmount > 0
+            || ScavengerNotesAmount > 0 || DressingSchematicAmount > 0);
     }
 
 protected:
@@ -62,6 +63,12 @@ private:
 
     UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0"))
     int32 BuilderGuideAmount = 0;
+
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0"))
+    int32 ScavengerNotesAmount = 0;
+
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0"))
+    int32 DressingSchematicAmount = 0;
 
     bool bSearched = false;
 };

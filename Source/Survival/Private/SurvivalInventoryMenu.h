@@ -8,6 +8,8 @@
 
 class ASurvivalCharacter;
 class ASurvivalHUD;
+class SSearchBox;
+class SScrollBox;
 
 class SSurvivalInventoryMenu : public SCompoundWidget
 {
@@ -28,6 +30,11 @@ private:
     void SelectFirstMatchingRecipe();
     TSharedRef<SWidget> MakeRecipeBrowser();
     TSharedRef<SWidget> MakeSkillsPanel();
+    TSharedRef<SWidget> MakeTrainingDetails();
+    bool MatchesTraining(ETraining Entry) const;
+    void SelectFirstTraining();
+    void SelectTraining(int32 Index);
+    FText TrainingRequirements() const;
     TSharedRef<SWidget> MakeRecipeDetails();
     FText GetIngredientText() const;
 
@@ -35,7 +42,11 @@ private:
     FString Category;
     int32 SelectedRecipe = INDEX_NONE;
     int32 Quantity = 1;
-    bool bShowSkills = false;
+    enum class EPage { Pack, Crafting, Skills };
+    EPage Page = EPage::Pack;
+    int32 TrainingTree = 0;
+    TSharedPtr<SSearchBox> TrainingFilterBox;
+    TSharedPtr<SScrollBox> TrainingRows;
     FString TrainingSearch;
     int32 SelectedTraining = 0;
     int32 PreviewRank = 1;

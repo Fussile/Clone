@@ -98,10 +98,15 @@ void FSurvivalProgression::AwardXP(int32 Amount)
     }
 }
 
-void FSurvivalProgression::ReadGuide(ETraining Entry)
+bool FSurvivalProgression::CanReadGuide(ETraining Entry) const
 {
     const FTrainingInfo& Info = GetTrainingInfo(Entry);
-    if (Info.IsPractice() && Info.bAvailable && Rank(Entry) < Info.MaxRank)
+    return Info.bAvailable && Rank(Entry) < Info.MaxRank;
+}
+
+void FSurvivalProgression::ReadGuide(ETraining Entry)
+{
+    if (CanReadGuide(Entry))
     {
         ++EarnedRanks[static_cast<int32>(Entry)];
     }

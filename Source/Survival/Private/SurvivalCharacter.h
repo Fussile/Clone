@@ -13,6 +13,8 @@ class ASurvivalZombie;
 struct FSurvivalFinishedPiece;
 class UAnimSequence;
 class UCameraComponent;
+class USceneCaptureComponent2D;
+class UTextureRenderTarget2D;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
 class USpringArmComponent;
@@ -35,6 +37,7 @@ public:
     int32 GetActiveHotbarSlot() const { return ActiveHotbarSlot; }
     int32 GetItemCount(ESurvivalItem Item) const;
     bool CanUseItem(ESurvivalItem Item) const;
+    static ESurvivalItem TrainingBook(ETraining Entry);
     ESurvivalItem GetSelectedInventoryItem() const { return SelectedInventoryItem; }
     void SetSelectedInventoryItem(ESurvivalItem Item) { SelectedInventoryItem = Item; }
     void ChooseHotbarSlot(int32 Slot);
@@ -54,6 +57,12 @@ public:
     int32 GetReserveAmmo() const { return Items.Rounds; }
     bool IsReloading() const { return ReloadCompleteAt >= 0.0; }
     bool IsAimingSidearm() const;
+    bool IsAimingRifle() const;
+    float GetScopeBlend() const
+    {
+        return !bThirdPerson && !bBuildMode && !bInventoryOpen && HealthPoints > 0 && IsRifleSelected() ? ScopeBlend : 0.0f;
+    }
+    UTextureRenderTarget2D* GetScopeTexture() const;
     bool HasSidearm() const { return bHasSidearm; }
     int32 GetLivingAttackers() const;
     int32 GetLivingNightHorde() const;
@@ -125,7 +134,8 @@ private:
     void UpdateSidearmView();
     void LoadSidearmViewmodel();
     void UpdateSidearmAnimation();
-    void UpdateSidearmAim(float DeltaSeconds);
+    void UpdateWeaponAim(float DeltaSeconds);
+    void UpdateSidearmSightAlignment();
     void PressAim();
     void ReleaseAim();
     void PlaySidearmAnimation(UAnimSequence* Sequence, bool bLoop);
@@ -183,6 +193,17 @@ private:
     bool bViewmodelReady = false;
     bool bAimHeld = false;
     float AimBlend = 0.0f;
+    float ScopeBlend = 0.0f;
+    FVector RifleHip = FVector::ZeroVector;
+    FVector RifleAim = FVector::ZeroVector;
+    FQuat SidearmHipRotation = FQuat::Identity;
+    FQuat SidearmAimRotation = FQuat::Identity;
+
+    UPROPERTY(VisibleAnywhere, Category = "Camera")
+    TObjectPtr<USceneCaptureComponent2D> ScopeCapture;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UTextureRenderTarget2D> ScopeTexture;
     FVector ViewmodelHip = FVector::ZeroVector;
     FVector ViewmodelAim = FVector::ZeroVector;
     int32 HealthPoints = 100;

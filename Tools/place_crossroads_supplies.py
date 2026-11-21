@@ -50,6 +50,12 @@ def place():
                             ("food_amount", food), ("water_amount", water), ("cloth_amount", cloth)):
             crate.set_editor_property(prop, value)
 
+    for actor in actors.get_all_level_actors():
+        if actor.actor_has_tag(unreal.Name("CrossroadsStationProvisions")):
+            actor.set_editor_property("scavenger_notes_amount", 1)
+        elif actor.actor_has_tag(unreal.Name("CrossroadsHouseProvisions")):
+            actor.set_editor_property("dressing_schematic_amount", 1)
+
     rifle_tag = unreal.Name("CrossroadsRifleLocker")
     if not any(actor.actor_has_tag(rifle_tag) for actor in existing):
         locker = actors.spawn_actor_from_class(crate_class, unreal.Vector(3950, 5310, 36))

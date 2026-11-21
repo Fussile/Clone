@@ -5,6 +5,7 @@
 #include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/Texture2D.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "SurvivalBuildChunk.h"
@@ -15,7 +16,9 @@
 
 namespace
 {
-const FLinearColor Panel(0.02f, 0.04f, 0.05f, 0.88f);
+const FLinearColor Panel(0.019f, 0.025f, 0.029f, 0.9f);
+const FLinearColor Alloy(0.88f, 0.47f, 0.25f);
+const FLinearColor Track(0.10f, 0.12f, 0.13f, 1.0f);
 const FLinearColor Cyan(0.42f, 0.88f, 1.0f);
 const FLinearColor Muted(0.72f, 0.76f, 0.78f);
 const FLinearColor Blocked(1.0f, 0.51f, 0.36f);
@@ -31,7 +34,8 @@ void ASurvivalHUD::BeginPlay()
     static const TCHAR* Names[] = {
         TEXT("Sidearm"), TEXT("Food"), TEXT("Water"), TEXT("Bandage"), TEXT("Timber"),
         TEXT("Stone"), TEXT("Cloth"), TEXT("Rounds"), TEXT("TimberDoor"),
-        TEXT("Rifle"), TEXT("RifleRounds"), TEXT("BuilderGuide")
+        TEXT("Rifle"), TEXT("RifleRounds"), TEXT("BuilderGuide"), TEXT("ScavengerNotes"),
+        TEXT("DressingSchematic"), TEXT("FieldDressing")
     };
     static_assert(UE_ARRAY_COUNT(Names) == static_cast<int32>(ESurvivalItem::None));
     for (const TCHAR* Name : Names)
@@ -120,7 +124,7 @@ void ASurvivalHUD::DrawHotbar(const ASurvivalCharacter& Character)
         const bool bSelected = Index == Character.GetActiveHotbarSlot();
         if (bSelected)
         {
-            DrawRect(Cyan, X - 2.0f, Y - 2.0f, SlotSize + 4.0f, SlotSize + 4.0f);
+            DrawRect(Alloy, X - 1.0f, Y - 1.0f, SlotSize + 2.0f, SlotSize + 2.0f);
         }
         DrawRect(Panel, X, Y, SlotSize, SlotSize);
         const ESurvivalItem Item = Character.GetHotbarItem(Index);
@@ -132,7 +136,7 @@ void ASurvivalHUD::DrawHotbar(const ASurvivalCharacter& Character)
             DrawTexture(Icon, X + 7.0f, Y + 7.0f, 40.0f, 40.0f, UV.Min.X, UV.Min.Y, Size.X, Size.Y,
                 FLinearColor(1, 1, 1, Count > 0 ? 1.0f : 0.25f));
         }
-        DrawText(FString::FromInt(Index + 1), bSelected ? Cyan : Muted, X + 5.0f, Y + 3.0f);
+        DrawText(FString::FromInt(Index + 1), bSelected ? Alloy : Muted, X + 5.0f, Y + 3.0f);
         if (Item != ESurvivalItem::None)
         {
             DrawText(FString::FromInt(Count), FLinearColor::White, X + 35.0f, Y + 36.0f);
@@ -143,6 +147,54 @@ void ASurvivalHUD::DrawHotbar(const ASurvivalCharacter& Character)
     float LabelHeight = 0.0f;
     GetTextSize(Active, LabelWidth, LabelHeight);
     DrawText(Active, FLinearColor::White, (Canvas->SizeX - LabelWidth) * 0.5f, Y - LabelHeight - 7.0f);
+}
+
+void ASurvivalHUD::DrawRifleScope(const ASurvivalCharacter& Character, float CenterX, float CenterY)
+{
+    UTextureRenderTarget2D* Lens = Character.GetScopeTexture();
+    const float Opacity = FMath::SmoothStep(0.28f, 0.90f, Character.GetScopeBlend());
+    if (!Lens || Opacity <= 0.0f)
+    {
+        return;
+    }
+
+    const float Radius = FMath::Min(Canvas->SizeX, Canvas->SizeY) * 0.31f * FMath::Lerp(0.78f, 1.0f, Opacity);
+    const float Diameter = Radius * 2.0f;
+    // Draw only the circular portion of the magnified capture. The main camera remains visible outside it.
+    constexpr int32 Strips = 96;
+    for (int32 Index = 0; Index < Strips; ++Index)
+    {
+        const float V = static_cast<float>(Index) / Strips;
+        const float Center = (V + 0.5f / Strips) * 2.0f - 1.0f;
+        const float HalfWidth = Radius * FMath::Sqrt(FMath::Max(0.0f, 1.0f - Center * Center));
+        DrawTexture(Lens, CenterX - HalfWidth, CenterY - Radius + V * Diameter, HalfWidth * 2.0f,
+            Diameter / Strips + 0.25f, 0.5f - HalfWidth / Diameter, V, HalfWidth * 2.0f / Diameter,
+            1.0f / Strips, FLinearColor::White, BLEND_Opaque);
+    }
+    const auto Ring = [this, CenterX, CenterY](float R, const FLinearColor& Color, float Thickness)
+    {
+        FVector2D Previous(CenterX + R, CenterY);
+        for (int32 Step = 1; Step <= 96; ++Step)
+        {
+            const float Angle = 2.0f * PI * Step / 96.0f;
+            const FVector2D Point(CenterX + R * FMath::Cos(Angle), CenterY + R * FMath::Sin(Angle));
+            DrawLine(Previous.X, Previous.Y, Point.X, Point.Y, Color, Thickness);
+            Previous = Point;
+        }
+    };
+    Ring(Radius + 7.0f, FLinearColor(0.012f, 0.015f, 0.018f, Opacity), 18.0f);
+    Ring(Radius + 15.0f, FLinearColor(0.19f, 0.20f, 0.20f, Opacity * .75f), 1.25f);
+    const FLinearColor Reticle(0.018f, 0.022f, 0.021f, Opacity);
+    const float Span = Radius * .80f;
+    DrawLine(CenterX - Span, CenterY, CenterX + Span, CenterY, Reticle, 1.3f);
+    DrawLine(CenterX, CenterY - Span, CenterX, CenterY + Span, Reticle, 1.3f);
+    for (int32 Mark = 1; Mark <= 4; ++Mark)
+    {
+        const float Y = CenterY + Radius * .12f * Mark;
+        const float MarkWidth = Radius * (Mark % 2 == 0 ? .052f : .029f);
+        DrawLine(CenterX - MarkWidth, Y, CenterX + MarkWidth, Y, Reticle, 1.3f);
+    }
+    DrawRect(FLinearColor(0.92f, 0.38f, 0.24f, Opacity), CenterX - 1.2f, CenterY - 1.2f, 2.4f, 2.4f);
 }
 
 void ASurvivalHUD::DrawHUD()
@@ -156,7 +208,12 @@ void ASurvivalHUD::DrawHUD()
 
     const float CenterX = Canvas->SizeX * 0.5f;
     const float CenterY = Canvas->SizeY * 0.5f;
-    if (!Character->IsAimingSidearm() && !Character->IsInventoryOpen())
+    const bool bScoped = Character->GetScopeBlend() > .28f && Character->GetScopeTexture();
+    if (bScoped && !Character->IsInventoryOpen())
+    {
+        DrawRifleScope(*Character, CenterX, CenterY);
+    }
+    if (!bScoped && !Character->IsAimingSidearm() && !Character->IsInventoryOpen())
     {
         DrawRect(FLinearColor::White, CenterX - 1.5f, CenterY - 1.5f, 3.0f, 3.0f);
     }
@@ -172,30 +229,46 @@ void ASurvivalHUD::DrawHUD()
         }
     }
 
-    const FString Loadout = Character->HasRifle() && Character->IsRifleSelected()
-        ? FString::Printf(TEXT("Rifle   %d / %d%s"), Character->GetRifleAmmo(), Character->GetRifleReserve(),
-            Character->IsRifleReloading() ? TEXT("  Reloading") : TEXT(""))
-        : Character->HasSidearm()
-        ? FString::Printf(TEXT("Sidearm   %d / %d%s"), Character->GetAmmo(), Character->GetReserveAmmo(),
-            Character->IsReloading() ? TEXT("  Reloading") : TEXT(""))
-        : TEXT("Sidearm   search the shop");
+    const FSurvivalVitals& Vitals = Character->GetVitals();
     const int32 Wave = Character->GetDefenseWave();
     const bool bHordeStarted = Character->HasFirstHordeStarted();
-    DrawRect(Panel, 20.0f, 20.0f, 420.0f, Wave > 0 || bHordeStarted ? 74.0f : 54.0f);
-    DrawText(FString::Printf(TEXT("Health   %d   |   %s"), Character->GetHealthPoints(), *Loadout),
-        FLinearColor::White, 32.0f, 28.0f);
+    const auto Meter = [this](float X, const TCHAR* Label, float Value, const FLinearColor& Color)
+    {
+        DrawRect(Panel, X, 20.0f, 89.0f, 40.0f);
+        DrawText(FString::Printf(TEXT("%s  %d"), Label, FMath::CeilToInt(Value)), FLinearColor::White, X + 8.0f, 26.0f);
+        DrawRect(Track, X + 8.0f, 49.0f, 73.0f, 3.0f);
+        DrawRect(Color, X + 8.0f, 49.0f, 73.0f * FMath::Clamp(Value * .01f, 0.0f, 1.0f), 3.0f);
+    };
+    Meter(20.0f, TEXT("Health"), Character->GetHealthPoints(), Blocked);
+    Meter(113.0f, TEXT("Stamina"), Vitals.Stamina, FLinearColor(.56f, .74f, .42f));
+    Meter(206.0f, TEXT("Food"), Vitals.Hunger, Alloy);
+    Meter(299.0f, TEXT("Water"), Vitals.Thirst, Cyan);
+
+    const float Right = Canvas->SizeX - 20.0f;
     if (const ASurvivalGameMode* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>())
     {
         const int32 Minutes = Mode->GetWorldMinutes();
-        DrawText(FString::Printf(TEXT("Day %d   %02d:%02d"), Minutes / 1440 + 1, (Minutes / 60) % 24, Minutes % 60),
-            FLinearColor::White, 325.0f, 28.0f);
         const int32 Temperature = FMath::RoundToInt32(Mode->GetAmbientTemperature());
-        DrawText(FString::Printf(TEXT("%d C"), Temperature), Temperature < 12 ? Cyan : Muted, 325.0f, 48.0f);
+        DrawRect(Panel, Right - 145.0f, 20.0f, 145.0f, 40.0f);
+        DrawText(FString::Printf(TEXT("Day %d    %02d:%02d    %d C"), Minutes / 1440 + 1,
+            (Minutes / 60) % 24, Minutes % 60, Temperature), FLinearColor::White, Right - 134.0f, 31.0f);
     }
-    const FSurvivalVitals& Vitals = Character->GetVitals();
-    DrawText(FString::Printf(TEXT("Food %d%%   Water %d%%   Stamina %d%%"), FMath::CeilToInt(Vitals.Hunger), FMath::CeilToInt(Vitals.Thirst),
-        FMath::CeilToInt(Vitals.Stamina)),
-        Vitals.Hunger <= 10.0f || Vitals.Thirst <= 10.0f ? Blocked : Muted, 32.0f, 48.0f);
+
+    if (!Character->IsInventoryOpen())
+    {
+        const bool bRifle = Character->HasRifle() && Character->IsRifleSelected();
+        const bool bPistol = Character->HasSidearm() &&
+            Character->GetHotbarItem(Character->GetActiveHotbarSlot()) == ESurvivalItem::Sidearm;
+        if (bRifle || bPistol)
+        {
+            const bool bReloading = bRifle ? Character->IsRifleReloading() : Character->IsReloading();
+            DrawRect(Panel, Right - 145.0f, Canvas->SizeY - 73.0f, 145.0f, 55.0f);
+            DrawText(bRifle ? TEXT("Bolt-action rifle") : TEXT("Sidearm"), Muted, Right - 132.0f, Canvas->SizeY - 66.0f);
+            DrawText(FString::Printf(TEXT("%d / %d%s"), bRifle ? Character->GetRifleAmmo() : Character->GetAmmo(),
+                bRifle ? Character->GetRifleReserve() : Character->GetReserveAmmo(),
+                bReloading ? TEXT("   Reloading") : TEXT("")), FLinearColor::White, Right - 132.0f, Canvas->SizeY - 45.0f);
+        }
+    }
 
     const int32 Alive = Character->GetLivingAttackers();
     FString DefenseStatus;
@@ -223,7 +296,11 @@ void ASurvivalHUD::DrawHUD()
     }
     if (!DefenseStatus.IsEmpty())
     {
-        DrawText(DefenseStatus, Muted, 32.0f, 68.0f);
+        float Width = 0.0f;
+        float Height = 0.0f;
+        GetTextSize(DefenseStatus, Width, Height);
+        DrawRect(Panel, 20.0f, 65.0f, Width + 20.0f, Height + 10.0f);
+        DrawText(DefenseStatus, Muted, 30.0f, 70.0f);
     }
     if (Character->GetHealthPoints() <= 0)
     {
@@ -343,7 +420,7 @@ void ASurvivalHUD::DrawBuildMenu(const ASurvivalCharacter& Character)
             DrawRect(Cyan, X + 7.0f, Top, 2.0f, Row);
         }
         DrawText(Piece.Name, bSelected ? FLinearColor::White : Muted, X + 15.0f, Top + 4.0f);
-        DrawText(Piece.Cost.ToText(), bSelected ? Cyan : Muted, X + 193.0f, Top + 4.0f);
+        DrawText(Piece.Cost.ToText(), bSelected ? Alloy : Muted, X + 193.0f, Top + 4.0f);
     }
 
     DrawText(TEXT("[Scroll] Select   [R] Rotate   [B] Close"), Muted, X + 12.0f, Footer + 4.0f);

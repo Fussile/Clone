@@ -26,6 +26,7 @@ protected:
 
 private:
     void DrawHUD() override;
+    void DrawRifleScope(const ASurvivalCharacter& Character, float CenterX, float CenterY);
     void DrawHotbar(const ASurvivalCharacter& Character);
     void RemoveInventoryWidget();
     void DrawBuildMenu(const ASurvivalCharacter& Character);

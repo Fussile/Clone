@@ -125,6 +125,8 @@ constexpr FTrainingInfo Training[] = {
         1, 100, 18, 0, 0.0f, false },
     { TEXT("Trade Access"), TEXT("Scavenging"), TEXT("Scavenging"), TEXT("Learn to access more of a trader’s stock."),
         0, 3, 0, 4, 2.0f, false },
+    { TEXT("Field Dressings"), TEXT("Survival"), TEXT("Workshop"), TEXT("Unlock a heavy dressing that restores more health than a bandage."),
+        0, 1, 0, 4, 0.0f, true },
 };
 
 constexpr FTrainingGate Gates[] = {
@@ -188,6 +190,8 @@ constexpr FTrainingGate Gates[] = {
     { ETraining::TradeAccess, 1, ETraining::Barter, 20 },
     { ETraining::TradeAccess, 2, ETraining::Barter, 40 },
     { ETraining::TradeAccess, 3, ETraining::Barter, 80 },
+    { ETraining::FieldDressings, 1, ETraining::Count, 2 },
+    { ETraining::FieldDressings, 1, ETraining::Medicine, 5 },
 };
 
 constexpr FTrainingEffect Effects[] = {
