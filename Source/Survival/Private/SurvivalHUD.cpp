@@ -153,15 +153,23 @@ void ASurvivalHUD::DrawHotbar(const ASurvivalCharacter& Character)
 void ASurvivalHUD::DrawRifleScope(const ASurvivalCharacter& Character, float CenterX, float CenterY)
 {
     UTextureRenderTarget2D* Lens = Character.GetScopeTexture();
-    const float Opacity = FMath::SmoothStep(0.28f, 0.90f, Character.GetScopeBlend());
-    if (!Lens || Opacity <= 0.0f)
+    const float Blend = Character.GetScopeBlend();
+    if (!Lens || Blend <= 0.0f)
     {
         return;
     }
 
-    const float Radius = FMath::Min(Canvas->SizeX, Canvas->SizeY) * 0.31f * FMath::Lerp(0.78f, 1.0f, Opacity);
+    // Cross through black so the off-axis animated eyepiece never competes with the lens.
+    DrawRect(FLinearColor(0.008f, 0.009f, 0.01f, FMath::SmoothStep(0.0f, 0.5f, Blend)),
+        0.0f, 0.0f, Canvas->SizeX, Canvas->SizeY);
+    const float Opacity = FMath::SmoothStep(0.5f, 1.0f, Blend);
+    if (Opacity <= 0.0f)
+    {
+        return;
+    }
+    const float Radius = FMath::Min(Canvas->SizeX, Canvas->SizeY) * 0.45f * FMath::Lerp(0.78f, 1.0f, Opacity);
     const float Diameter = Radius * 2.0f;
-    // Draw only the circular portion of the magnified capture. The main camera remains visible outside it.
+    // Draw only the circular portion of the magnified capture.
     constexpr int32 Strips = 96;
     for (int32 Index = 0; Index < Strips; ++Index)
     {
@@ -170,7 +178,7 @@ void ASurvivalHUD::DrawRifleScope(const ASurvivalCharacter& Character, float Cen
         const float HalfWidth = Radius * FMath::Sqrt(FMath::Max(0.0f, 1.0f - Center * Center));
         DrawTexture(Lens, CenterX - HalfWidth, CenterY - Radius + V * Diameter, HalfWidth * 2.0f,
             Diameter / Strips + 0.25f, 0.5f - HalfWidth / Diameter, V, HalfWidth * 2.0f / Diameter,
-            1.0f / Strips, FLinearColor::White, BLEND_Opaque);
+            1.0f / Strips, FLinearColor(Opacity, Opacity, Opacity, 1.0f), BLEND_Opaque);
     }
     const auto Ring = [this, CenterX, CenterY](float R, const FLinearColor& Color, float Thickness)
     {
@@ -209,7 +217,7 @@ void ASurvivalHUD::DrawHUD()
 
     const float CenterX = Canvas->SizeX * 0.5f;
     const float CenterY = Canvas->SizeY * 0.5f;
-    const bool bScoped = Character->GetScopeBlend() > .28f && Character->GetScopeTexture();
+    const bool bScoped = Character->GetScopeBlend() > 0.0f && Character->GetScopeTexture();
     if (bScoped && !Character->IsInventoryOpen())
     {
         DrawRifleScope(*Character, CenterX, CenterY);

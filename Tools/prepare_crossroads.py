@@ -248,6 +248,7 @@ def prepare():
     # Save the playable map before importing art. A failed import must leave a world to play.
     runpy.run_path(str(TOOLS / "build_crossroads.py"), run_name="__main__")
     runpy.run_path(str(TOOLS / "place_crossroads_supplies.py"), run_name="__main__")
+    runpy.run_path(str(TOOLS / "place_crossroads_pois.py"), run_name="__main__")
     runpy.run_path(str(TOOLS / "place_crossroads_structures.py"), run_name="__main__")
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     if not levels.save_current_level():

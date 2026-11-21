@@ -691,7 +691,7 @@ void ASurvivalCharacter::UpdateWeaponAim(float DeltaSeconds)
 {
     const bool bHipShotPlaying = ViewmodelFire && CurrentViewmodelAnimation == ViewmodelFire;
     const bool bPistolAiming = IsAimingSidearm() && !bHipShotPlaying;
-    const bool bScopeAiming = IsAimingRifle() && IsLocallyControlled();
+    const bool bScopeAiming = IsAimingRifle() && IsLocallyControlled() && GetWorld()->GetTimeSeconds() >= RifleReadyAt;
     const float PreviousAim = AimBlend;
     AimBlend = FMath::FInterpConstantTo(AimBlend, bPistolAiming ? 1.0f : 0.0f, DeltaSeconds, 7.0f);
     ScopeBlend = FMath::FInterpConstantTo(ScopeBlend, bScopeAiming ? 1.0f : 0.0f, DeltaSeconds, 6.0f);
