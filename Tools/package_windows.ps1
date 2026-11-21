@@ -67,6 +67,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $projectRoot 'Docs\SidearmAttribution.txt') -Destination $package[0]
     }
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Docs\ZombieAttribution.txt') -Destination $package[0]
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'Docs\SidearmViewmodelAttribution.txt') -Destination $package[0]
 
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $temporaryZip = Join-Path $work $zipName

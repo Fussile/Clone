@@ -11,6 +11,7 @@ class ASurvivalZombie;
 struct FSurvivalFinishedPiece;
 class UAnimSequence;
 class UCameraComponent;
+class USkeletalMeshComponent;
 class USpringArmComponent;
 
 UCLASS()
@@ -33,6 +34,8 @@ public:
     void ReceiveZombieHit(int32 Amount);
     int32 GetHealthPoints() const { return HealthPoints; }
     int32 GetAmmo() const { return Ammo; }
+    int32 GetReserveAmmo() const { return ReserveAmmo; }
+    bool IsReloading() const { return ReloadCompleteAt >= 0.0; }
     bool HasSidearm() const { return bHasSidearm; }
     int32 GetLivingAttackers() const;
     int32 GetDefenseWave() const { return DefenseWave; }
@@ -65,6 +68,10 @@ private:
     void PrimaryAction();
     void EquipSidearm();
     void UpdateSidearmView();
+    void LoadSidearmViewmodel();
+    void UpdateSidearmAnimation();
+    void PlaySidearmAnimation(UAnimSequence* Sequence, bool bLoop);
+    void StartReload();
     void StartDefense();
     void RestartDefense();
 
@@ -75,6 +82,11 @@ private:
     bool bThirdPerson = false;
     bool bHasSidearm = false;
     int32 Ammo = 0;
+    int32 ReserveAmmo = 0;
+    double ReloadCompleteAt = -1.0;
+    double NextShotAt = 0.0;
+    bool bViewmodelReady = false;
+    FTransform ViewmodelGrip;
     int32 HealthPoints = 100;
     double HitMarkerUntil = -1.0;
     int32 DefenseWave = 0;
@@ -82,6 +94,27 @@ private:
 
     UPROPERTY(Transient)
     TObjectPtr<ASurvivalSidearm> Sidearm;
+
+    UPROPERTY(VisibleAnywhere, Category = "Camera")
+    TObjectPtr<USkeletalMeshComponent> SidearmViewmodel;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> ViewmodelIdle;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> ViewmodelWalk;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> ViewmodelFire;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> ViewmodelReload;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> ViewmodelReloadEmpty;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> CurrentViewmodelAnimation;
 
     UPROPERTY(VisibleAnywhere, Category = "Camera")
     TObjectPtr<UCameraComponent> FirstPersonCamera;

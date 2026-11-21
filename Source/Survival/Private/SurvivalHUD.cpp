@@ -39,7 +39,8 @@ void ASurvivalHUD::DrawHUD()
     }
 
     const FString Loadout = Character->HasSidearm()
-        ? FString::Printf(TEXT("Sidearm   %d rounds"), Character->GetAmmo())
+        ? FString::Printf(TEXT("Sidearm   %d / %d%s"), Character->GetAmmo(), Character->GetReserveAmmo(),
+            Character->IsReloading() ? TEXT("  Reloading") : TEXT(""))
         : TEXT("Sidearm   search the shop");
     DrawRect(Panel, 20.0f, 20.0f, 300.0f, 54.0f);
     DrawText(FString::Printf(TEXT("Health   %d   |   %s"), Character->GetHealthPoints(), *Loadout),

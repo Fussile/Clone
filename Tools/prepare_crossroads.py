@@ -15,6 +15,7 @@ SURVIVOR = ART + "/Survivor"
 BUILDING = ART + "/Building"
 ZOMBIE = ART + "/StationZombie"
 WEAPON_AUDIO = "/Game/Audio/Weapons"
+VIEWMODEL = ART + "/SidearmViewmodel"
 LEVEL = "/Game/Maps/L_SouthernCrossroads"
 
 
@@ -208,25 +209,22 @@ def import_building():
             raise RuntimeError(f"Could not save {path}.")
 
 
-def import_zombie():
+def import_skeletal_pack(directory, names, source, prepared, generator):
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
-    names = ("SK_StationZombie", "StationZombieIdle", "StationZombieWalk", "StationZombieAttack")
-    if all(assets.does_asset_exist(f"{ZOMBIE}/{name}") for name in names):
+    if all(assets.does_asset_exist(f"{directory}/{name}") for name in names):
         return
 
-    source = SOURCE / "Enemy" / "zombie_rigged__animated.glb"
-    prepared = TOOLS.parent / "Saved" / "GeneratedArt" / "StationZombie.glb"
-    runpy.run_path(str(TOOLS / "prepare_zombie_glb.py"))["prepare_zombie_glb"](source, prepared)
+    runpy.run_path(str(TOOLS / f"{generator}.py"))[generator](source, prepared)
     task = unreal.AssetImportTask()
     task.set_editor_property("filename", str(prepared))
-    task.set_editor_property("destination_path", ZOMBIE)
+    task.set_editor_property("destination_path", directory)
     task.set_editor_property("automated", True)
     task.set_editor_property("replace_existing", False)
     unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
     imported = task.get_objects()
 
     for name in names:
-        path = f"{ZOMBIE}/{name}"
+        path = f"{directory}/{name}"
         if assets.does_asset_exist(path):
             continue
         if name == names[0]:
@@ -235,16 +233,16 @@ def import_zombie():
             matching = [item for item in imported
                         if isinstance(item, unreal.AnimSequence) and name.lower() in item.get_name().lower()]
         if len(matching) != 1 or not assets.rename_loaded_asset(matching[0], path):
-            raise RuntimeError(f"Could not resolve {name} from the zombie import.")
+            raise RuntimeError(f"Could not resolve {name} from {prepared.name}.")
 
-    mesh = assets.load_asset(f"{ZOMBIE}/{names[0]}")
+    mesh = assets.load_asset(f"{directory}/{names[0]}")
     skeleton = mesh.get_editor_property("skeleton")
     for name in names[1:]:
-        clip = assets.load_asset(f"{ZOMBIE}/{name}")
+        clip = assets.load_asset(f"{directory}/{name}")
         if clip.get_editor_property("skeleton") != skeleton:
-            raise RuntimeError(f"{name} does not use the imported zombie skeleton.")
-    if not assets.save_directory(ZOMBIE, only_if_is_dirty=True):
-        raise RuntimeError("Could not save the zombie assets.")
+            raise RuntimeError(f"{name} does not use the imported skeleton.")
+    if not assets.save_directory(directory, only_if_is_dirty=True):
+        raise RuntimeError(f"Could not save {directory}.")
 
 
 def prepare():
@@ -254,7 +252,16 @@ def prepare():
     )
     import_surfaces()
     import_survivor()
-    import_zombie()
+    generated = TOOLS.parent / "Saved" / "GeneratedArt"
+    for directory, file, generator, source, names in (
+        (ZOMBIE, "StationZombie.glb", "prepare_zombie_glb",
+         SOURCE / "Enemy" / "zombie_rigged__animated.glb",
+         ("SK_StationZombie", "StationZombieIdle", "StationZombieWalk", "StationZombieAttack")),
+        (VIEWMODEL, "SidearmViewmodel.glb", "prepare_sidearm_glb",
+         SOURCE / "Weapons" / "fps_pistol_animations.glb",
+         ("SK_SidearmViewmodel", "ViewmodelIdle", "ViewmodelWalk", "ViewmodelFire", "ViewmodelReload", "ViewmodelReloadEmpty")),
+    ):
+        import_skeletal_pack(directory, names, source, generated / file, generator)
     import_building()
     sidearm = SOURCE / "Weapons" / "SM_CrossroadsSidearm.glb"
     if sidearm.is_file():
