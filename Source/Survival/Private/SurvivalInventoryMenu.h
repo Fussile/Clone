@@ -1,6 +1,8 @@
 #pragma once
 
+#include "Engine/Texture2D.h"
 #include "Styling/SlateBrush.h"
+#include "UObject/StrongObjectPtr.h"
 #include "SurvivalVitals.h"
 #include "Widgets/SCompoundWidget.h"
 
@@ -20,6 +22,7 @@ public:
     virtual FReply OnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
 
 private:
+    const FSlateBrush* FindThemeIcon(const TCHAR* Name) const;
     const FSlateBrush* FindIcon(ESurvivalItem Item) const;
     bool MatchesFilters(const FSurvivalRecipe& Recipe) const;
     void SelectFirstMatchingRecipe();
@@ -33,6 +36,10 @@ private:
     int32 SelectedRecipe = INDEX_NONE;
     int32 Quantity = 1;
     bool bShowSkills = false;
+    int32 SelectedTraining = 0;
+    int32 PreviewRank = 1;
+    TMap<FName, FSlateBrush> ThemeBrushes;
+    TArray<TStrongObjectPtr<UTexture2D>> ThemeTextures;
 
     TWeakObjectPtr<ASurvivalCharacter> Player;
     FSlateBrush Icons[static_cast<int32>(ESurvivalItem::None)];

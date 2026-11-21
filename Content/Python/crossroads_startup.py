@@ -29,14 +29,11 @@ def prepare_if_needed():
     required = (
         "/Game/Maps/L_SouthernCrossroads",
         "/Game/Art/Crossroads/Player/SK_Survivor",
-        "/Game/Art/Crossroads/UnifiedArms/SK_ArmedSurvivor",
-        "/Game/Art/Crossroads/UnifiedArms/SurvivorRifleHold",
-        "/Game/Art/Crossroads/UnifiedArms/SurvivorRifleFire",
-        "/Game/Art/Crossroads/UnifiedArms/SurvivorRifleReload",
-        "/Game/Art/Crossroads/UnifiedArms/SurvivorPistolHold",
-        "/Game/Art/Crossroads/UnifiedArms/SurvivorPistolFire",
-        "/Game/Art/Crossroads/UnifiedArms/SurvivorPistolReload",
-        "/Game/Art/Crossroads/UnifiedArms/SurvivorPistolReloadEmpty",
+        "/Game/Art/Crossroads/Sniper/SK_SniperViewmodel",
+        "/Game/Art/Crossroads/Sniper/SM_CrossroadsSniper",
+        "/Game/Art/Crossroads/Sniper/SniperHold",
+        "/Game/Art/Crossroads/Sniper/SniperFire",
+        "/Game/Art/Crossroads/Sniper/SniperReload",
         "/Game/Art/Crossroads/StationZombie/SK_StationZombie",
         "/Game/Art/Crossroads/MagazineViewmodel/SK_SidearmViewmodel",
         "/Game/Art/Crossroads/MagazineViewmodel/ViewmodelReload",
@@ -47,6 +44,10 @@ def prepare_if_needed():
     required += tuple(
         f"/Game/Art/Crossroads/Inventory/T_Item_{name}"
         for name in ("Sidearm", "Food", "Water", "Bandage", "Timber", "Stone", "Cloth", "Rounds", "TimberDoor", "Rifle", "RifleRounds", "BuilderGuide")
+    )
+    required += tuple(
+        f"/Game/Art/Crossroads/Interface/{icon.stem}"
+        for icon in (project / "SourceArt" / "Crossroads" / "Interface").glob("T_UI_*.png")
     )
     if medicine_sheet.is_file():
         required += ("/Game/Art/Crossroads/Local/MedicineSheet",)

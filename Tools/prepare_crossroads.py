@@ -277,12 +277,13 @@ def prepare():
         "SK_Survivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",
         "SurvivorCrouchIdle", "SurvivorCrouchMove", "SurvivorProneIdle", "SurvivorProneMove",
     ), SOURCE / "Survivor" / "SK_Survivor.glb")
-    import_skeletal_pack(ART + "/UnifiedArms", (
-        "SK_ArmedSurvivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",
-        "SurvivorCrouchIdle", "SurvivorCrouchMove", "SurvivorProneIdle", "SurvivorProneMove",
-        "SurvivorRifleHold", "SurvivorRifleFire", "SurvivorRifleReload",
-        "SurvivorPistolHold", "SurvivorPistolFire", "SurvivorPistolReload", "SurvivorPistolReloadEmpty",
-    ), SOURCE / "Survivor" / "SK_ArmedSurvivor.glb")
+    sniper = ART + "/Sniper"
+    import_skeletal_pack(sniper, ("SK_SniperViewmodel", "SniperHold", "SniperFire", "SniperReload"),
+                         SOURCE / "Weapons" / "SK_SniperViewmodel.glb")
+    world_rifle = SOURCE / "Weapons" / "SM_CrossroadsSniper.glb"
+    import_asset(world_rifle, sniper, unreal.StaticMesh)
+    for icon in sorted((SOURCE / "Interface").glob("T_UI_*.png")):
+        import_asset(icon, ART + "/Interface", unreal.Texture2D)
     if not os.environ.get("SURVIVAL_PREPARED_MARKER"):
         import_local_medicine_sheet()
     if marker := os.environ.get("SURVIVAL_PREPARED_MARKER"):

@@ -56,6 +56,6 @@ The material counts, plans, completed pieces, health and loot reset when the sol
 
 ## M3 rifle, skills and night
 
-1. Open the dark rifle locker at the back of the station, select slot **5**, and fire. The survivor's right hand should cycle the bolt before another shot is available. Reload with **R**, then check the left-hand motion and the separately tracked rifle reserve. Switch between first and third person to check that the same survivor rig carries the rifle.
-2. Use the builder's guide from the pack. **I** then **Skills** should show one additional Building rank. Finish construction, land hits on zombies and sprint to check that each activity trains its corresponding skill. Buy a perk after reaching rank 3 and earning a point.
+1. Open the dark rifle locker at the back of the station and select slot **5**. Fire to check the hands and bolt. Reload with **R** and check magazine motion. Press **V** to check the scoped rifle's third-person carry. Equip the pistol to check its original hands, sight alignment, and both reloads.
+2. Use the builder's guide from the pack. **I** then **View skills** should show one additional Construction rank. Finish construction, land hits, sprint, and search new caches to check action XP. On leveling, confirm six points are awarded. Preview perk ranks and confirm that cost, character level, and relevant action skill gate each purchase.
 3. Use `SetTimeOfDay 21.9` to approach dusk and the first horde. Check that daylight begins at 04:00. A complete day takes 60 real minutes, including 15 minutes of darkness.

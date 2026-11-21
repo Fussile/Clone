@@ -14,9 +14,9 @@ Loot the darker case inside the shop for the sidearm. With the build menu closed
 
 Scavenge food, water, and cloth from the provisions crates. Press **I** to open the pack and crafting menu. Select an item to use it or assign it to a hotbar slot by clicking the slot or pressing **1–6**. Select a slot with a number key or the mouse wheel in play, then left-click to use the selected item. Use recipe search, categories, and quantity to craft bandages or doors. Movement and cold increase food expenditure, and spending stamina increases water loss. A full day takes 60 real minutes. Daylight runs from 04:00 to 22:00, leaving 15 real minutes of darkness. A zombie waits east of the station, investigates sight and sound, and attacks player-built obstacles during pursuit. The first horde arrives at 22:00 on Day 1. **F5** restarts Crossroads. In a development build, open the console with **~** and enter `SetTimeOfDay 21.5` to jump to 21:30 on the current day.
 
-The dark locker at the back of the shop holds a bolt-action rifle, rifle ammunition and a builder's guide. Slot **5** selects the rifle. **Left-click** fires and cycles the bolt, and **R** reloads from the rifle's separate reserve. The rifle and pistol use the survivor's skeleton for firing and reloading in both camera views.
+The dark locker at the back of the shop holds a bolt-action rifle, rifle ammunition and a builder's guide. Slot **5** selects the rifle. **Left-click** fires and cycles the bolt, and **R** reloads from the rifle's separate reserve. The pistol and scoped rifle use their original first-person arm animations. The survivor carries the weapon in third person.
 
-Open **I**, then **Skills** to see progression. Hitting enemies, finishing construction and sprinting train their respective skills. Character levels grant points for perks once the relevant skill reaches rank 3. Use the builder's guide from the pack to improve Building by one rank.
+Open **I**, then **View skills**. Hitting infected, building, sprinting, and searching new caches train action skills. Each character level awards six points. Select a perk to preview its ranks, costs, and requirements, then learn any rank you qualify for. Use the builder's guide from the pack to raise Construction by one rank.
 
 ## Build a playtest ZIP
 

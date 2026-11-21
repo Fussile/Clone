@@ -1,11 +1,7 @@
-Rifle mesh from Rifle by Yudin Vadim:
-https://sketchfab.com/3d-models/rifle-c2c569b6250743c7bf66297413045313
+Scoped rifle mesh and textures from Weapons/sniper in the project's content branch
+(commit 7e1114de905481e627a77cff58431810c037556d). This source is an FBX with
+separate texture maps and matches the rifle parts in the animated donor below.
 
-Rifle hand motion adapted from sniper animated by DJMaesen:
+First-person arms and motion for the hands, bolt, and magazine from sniper
+animated by DJMaesen:
 https://sketchfab.com/3d-models/sniper-animated-eae1ba5b43ae4bc89b0647fb5d8a2d27
-
-Both source assets are licensed under Creative Commons Attribution 4.0:
-https://creativecommons.org/licenses/by/4.0/
-
-The game bundles the rifle on the survivor rig with resized textures.
-The hand motion was segmented and retargeted to the survivor skeleton.

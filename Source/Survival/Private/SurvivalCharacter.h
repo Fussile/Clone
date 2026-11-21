@@ -14,6 +14,7 @@ struct FSurvivalFinishedPiece;
 class UAnimSequence;
 class UCameraComponent;
 class USkeletalMeshComponent;
+class UStaticMeshComponent;
 class USpringArmComponent;
 
 UCLASS()
@@ -68,7 +69,7 @@ public:
     bool ShowHitMarker() const;
     void NotifySidearmHit(bool bHitZombie);
     const FSurvivalProgression& GetProgression() const { return Progression; }
-    void BuySkillPerk(ESurvivalSkill Skill);
+    void BuySkillPerk(ESurvivalPerk Perk, int32 TargetRank);
 
 protected:
     virtual void BeginPlay() override;
@@ -119,7 +120,8 @@ private:
     void FireRifle();
     void ReloadRifle();
     void UpdateRifle();
-    void UpdateWeaponRigVisibility();
+    void LoadRifleViewmodel();
+    void UpdateRifleView();
     void UpdateSidearmView();
     void LoadSidearmViewmodel();
     void UpdateSidearmAnimation();
@@ -156,6 +158,15 @@ private:
     UPROPERTY(Transient)
     TObjectPtr<UAnimSequence> RifleReload;
 
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> CurrentRifleAnimation;
+
+    UPROPERTY(VisibleAnywhere, Category = "Camera")
+    TObjectPtr<USkeletalMeshComponent> RifleViewmodel;
+
+    UPROPERTY(VisibleAnywhere, Category = "Weapons")
+    TObjectPtr<UStaticMeshComponent> RifleWorldMesh;
+
     bool bHasSidearm = false;
     int32 Ammo = 0;
     FSurvivalItems Items;
@@ -170,7 +181,6 @@ private:
     double ReloadCompleteAt = -1.0;
     double NextShotAt = 0.0;
     bool bViewmodelReady = false;
-    bool bBodyPistolReady = false;
     bool bAimHeld = false;
     float AimBlend = 0.0f;
     FVector ViewmodelHip = FVector::ZeroVector;
