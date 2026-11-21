@@ -10,7 +10,7 @@ The solo playtest starts outside the Southern Crossroads gas station. Use **WASD
 
 Press **B** to open the build menu, **scroll** to select a piece, and **R** to rotate it. **Left-click** to place a free blueprint. Aim at the blueprint and press **E** to finish it with timber or stone, or **X** to remove it. The HUD shows the total materials required and how many you still need to collect.
 
-Loot the darker case inside the shop for the sidearm. **G** starts each of the three defense waves. With the build menu closed, **left-click** fires and **R** reloads from reserve. **E** repairs an aimed-at damaged piece. The timber and stone caches sit outside near the west pump and east shop wall. **F5** restarts Crossroads.
+Loot the darker case inside the shop for the sidearm. With the build menu closed, **left-click** fires and **R** reloads from reserve. **E** repairs a damaged piece. In build mode, aim at a finished piece and press **K** to dismantle it. Structures collapse when they lose their last viable path to ground. There's a destructible canopy east of the station. **F5** restarts Crossroads.
 
 ## Build a playtest ZIP
 

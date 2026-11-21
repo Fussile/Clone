@@ -42,12 +42,12 @@ void ASurvivalHUD::DrawHUD()
         ? FString::Printf(TEXT("Sidearm   %d / %d%s"), Character->GetAmmo(), Character->GetReserveAmmo(),
             Character->IsReloading() ? TEXT("  Reloading") : TEXT(""))
         : TEXT("Sidearm   search the shop");
-    DrawRect(Panel, 20.0f, 20.0f, 300.0f, 54.0f);
+    const int32 Wave = Character->GetDefenseWave();
+    DrawRect(Panel, 20.0f, 20.0f, 300.0f, Wave > 0 ? 54.0f : 34.0f);
     DrawText(FString::Printf(TEXT("Health   %d   |   %s"), Character->GetHealthPoints(), *Loadout),
         FLinearColor::White, 32.0f, 28.0f);
-    const int32 Wave = Character->GetDefenseWave();
     const int32 Alive = Character->GetLivingAttackers();
-    FString DefenseStatus = TEXT("[G] Start defense   [F5] Restart");
+    FString DefenseStatus;
     if (Alive > 0)
     {
         DefenseStatus = FString::Printf(TEXT("Wave %d / %d   |   %d remaining"),
@@ -61,7 +61,10 @@ void ASurvivalHUD::DrawHUD()
     {
         DefenseStatus = TEXT("Wave clear   [G] Next wave (+6 rounds)");
     }
-    DrawText(DefenseStatus, Muted, 32.0f, 48.0f);
+    if (Wave > 0)
+    {
+        DrawText(DefenseStatus, Muted, 32.0f, 48.0f);
+    }
     if (Character->GetHealthPoints() <= 0)
     {
         DrawText(TEXT("Downed   [F5] Restart"), Blocked, CenterX + 14.0f, CenterY + 12.0f);
@@ -108,7 +111,7 @@ void ASurvivalHUD::DrawHUD()
         }
         else if (!Character->CanFinish(*Plan))
         {
-            Prompt = TEXT("Clear the footprint   [X] Remove");
+            Prompt = TEXT("Needs support or clearance   [X] Remove");
             Color = Blocked;
         }
 
@@ -127,6 +130,10 @@ void ASurvivalHUD::DrawHUD()
     {
         DrawText(FString::Printf(TEXT("%s   %d / %d HP"), Piece->Placement.GetPiece().Name,
             Piece->Health, Piece->MaxHealth), FLinearColor::White, CenterX + 14.0f, CenterY + 12.0f);
+        if (Character->IsBuilding())
+        {
+            DrawText(TEXT("[K] Dismantle"), Muted, CenterX + 14.0f, CenterY + 52.0f);
+        }
         if (Piece->Health < Piece->MaxHealth)
         {
             const FSurvivalMaterials Cost = Piece->RepairCost();
@@ -163,7 +170,7 @@ void ASurvivalHUD::DrawBuildMenu(const ASurvivalCharacter& Character)
     }
 
     DrawText(TEXT("[Scroll] Select   [R] Rotate   [B] Close"), Muted, X + 12.0f, Footer + 4.0f);
-    DrawText(TEXT("[LMB] Place on level ground"), FLinearColor::White, X + 12.0f, Footer + 24.0f);
+    DrawText(TEXT("[LMB] Place on ground or support"), FLinearColor::White, X + 12.0f, Footer + 24.0f);
 }
 
 void ASurvivalHUD::DrawPlacement(const FSurvivalBuildPlacement& Placement, const FLinearColor& Color)

@@ -3,7 +3,10 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/HitResult.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
 #include "Materials/MaterialInterface.h"
+#include "SurvivalGameMode.h"
 #include "UObject/ConstructorHelpers.h"
 
 const FSurvivalBuildPlacement* FSurvivalPlanTarget::GetPlan() const
@@ -102,22 +105,26 @@ void ASurvivalBuildChunk::RemovePlan(int32 Index)
     }
 }
 
-bool ASurvivalBuildChunk::FinishPlan(int32 Index)
+bool ASurvivalBuildChunk::FinishPlan(int32 Index, int32 StructureId)
 {
     const FSurvivalBuildPlacement* Plan = GetPlan(Index);
-    if (!Plan)
+    if (!Plan || !AddFinishedPiece(*Plan, StructureId))
     {
         return false;
     }
+    RemovePlan(Index);
+    return true;
+}
 
-    const int32 MaxHealth = Plan->GetPiece().bStone ? 140 : 70;
-    const int32 FinishedIndex = Finished.Add(FSurvivalFinishedPiece{*Plan, MaxHealth, MaxHealth});
+bool ASurvivalBuildChunk::AddFinishedPiece(const FSurvivalBuildPlacement& Placement, int32 StructureId)
+{
+    const int32 MaxHealth = Placement.GetPiece().bStone ? 140 : 70;
+    const int32 FinishedIndex = Finished.Add(FSurvivalFinishedPiece{Placement, MaxHealth, MaxHealth, StructureId});
     if (!AddFinishedInstances(FinishedIndex))
     {
         Finished.Pop();
         return false;
     }
-    RemovePlan(Index);
     return true;
 }
 
@@ -167,21 +174,72 @@ bool ASurvivalBuildChunk::DamageFinished(const FHitResult& Hit, int32 Amount)
         return false;
     }
     FSurvivalFinishedPiece& Piece = Finished[Index];
-    Piece.Health -= Amount;
-    if (Piece.Health <= 0)
+    if (Amount < Piece.Health)
     {
-        Finished.RemoveAtSwap(Index);
-        Timber->ClearInstances();
-        Stone->ClearInstances();
-        TimberOwners.Reset();
-        StoneOwners.Reset();
-        for (int32 Remaining = 0; Remaining < Finished.Num(); ++Remaining)
-        {
-            const bool bAdded = AddFinishedInstances(Remaining);
-            ensure(bAdded);
-        }
+        Piece.Health -= Amount;
+        return true;
     }
-    return true;
+    if (ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>())
+    {
+        GameMode->RemoveStructure(Piece.StructureId);
+        return true;
+    }
+    return false;
+}
+
+void ASurvivalBuildChunk::RemoveFinishedPieces(const TSet<int32>& StructureIds, int32& DebrisSlots)
+{
+    TArray<FSurvivalBuildPlacement> Debris;
+    Finished.RemoveAllSwap([&](const FSurvivalFinishedPiece& Piece)
+    {
+        if (!StructureIds.Contains(Piece.StructureId))
+        {
+            return false;
+        }
+        if (DebrisSlots > 0)
+        {
+            --DebrisSlots;
+            Debris.Add(Piece.Placement);
+        }
+        return true;
+    });
+    Timber->ClearInstances();
+    Stone->ClearInstances();
+    TimberOwners.Reset();
+    StoneOwners.Reset();
+    for (int32 Remaining = 0; Remaining < Finished.Num(); ++Remaining)
+    {
+        const bool bAdded = AddFinishedInstances(Remaining);
+        ensure(bAdded);
+    }
+    for (const FSurvivalBuildPlacement& Placement : Debris)
+    {
+        SpawnDebris(Placement);
+    }
+}
+
+void ASurvivalBuildChunk::SpawnDebris(const FSurvivalBuildPlacement& Placement)
+{
+    const UInstancedStaticMeshComponent& Source = Placement.GetPiece().bStone ? *Stone : *Timber;
+    const FBox& Box = Placement.GetPiece().Boxes[0];
+    AStaticMeshActor* DebrisActor = GetWorld()->SpawnActor<AStaticMeshActor>(
+        Placement.WorldCenter(Box), Placement.Rotation.Rotator());
+    if (!DebrisActor)
+    {
+        return;
+    }
+    UStaticMeshComponent* Fragment = DebrisActor->GetStaticMeshComponent();
+    Fragment->SetMobility(EComponentMobility::Movable);
+    Fragment->SetStaticMesh(Source.GetStaticMesh());
+    Fragment->SetMaterial(0, Source.GetMaterial(0));
+    DebrisActor->SetActorScale3D(Box.GetExtent() * (0.72 / 50.0));
+    Fragment->SetCollisionProfileName(TEXT("PhysicsActor"));
+    Fragment->SetCollisionResponseToAllChannels(ECR_Ignore);
+    Fragment->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+    Fragment->SetCanEverAffectNavigation(false);
+    Fragment->SetSimulatePhysics(true);
+    Fragment->AddAngularImpulseInDegrees(FVector(27, 20, 13), NAME_None, true);
+    DebrisActor->SetLifeSpan(2.5f);
 }
 
 bool ASurvivalBuildChunk::RepairFinished(const FHitResult& Hit, FSurvivalMaterials& Inventory)

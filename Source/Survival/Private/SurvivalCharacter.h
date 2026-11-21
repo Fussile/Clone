@@ -63,6 +63,7 @@ private:
     void PreviousPiece();
     void PlacePlan();
     void RemovePlan();
+    void Dismantle();
     void ToggleView();
     void UpdateSurvivorAnimation();
     void PrimaryAction();

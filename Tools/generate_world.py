@@ -52,7 +52,11 @@ def generate(seed):
             sites.append({"id": f"{side}-{index}", "kind": kind,
                           "xy_m": [100*x + 50, 100*y + 50]})
 
-    return {"version": 1, "seed": seed, "size_m": [5000, 4000], "cell_m": 100,
+    for site in sites:
+        site["construction"] = ("custom_shell_shared_structure" if site["kind"] in
+                                {"slaughterhouse", "abandoned_factory"} else "shared_kit")
+
+    return {"version": 2, "seed": seed, "size_m": [5000, 4000], "cell_m": 100,
             "cells": [{"x": x, "y": y, "zone": zones[x, y]} for x, y in sorted(zones)],
             "roads": roads, "sites": sites}
 

@@ -40,7 +40,7 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces()
     static const FSurvivalBuildPiece Pieces[] = {
         {TEXT("Timber wall"), {3, 0}, false, {Box(-50, -12, 0, 50, 12, 220)}},
         {TEXT("Half wall"), {2, 0}, false, {Box(-50, -12, 0, 50, 12, 110)}},
-        {TEXT("Floor"), {2, 0}, false, {Box(-50, -50, 0, 50, 50, 18)}},
+        {TEXT("Floor"), {2, 0}, false, {Box(-50, -50, 0, 50, 50, 18)}, true},
         {TEXT("Door frame"), {4, 0}, false, {
             Box(-50, -12, 0, -45, 12, 220), Box(45, -12, 0, 50, 12, 220), Box(-45, -12, 200, 45, 12, 220)}},
         {TEXT("Window wall"), {4, 0}, false, {
@@ -51,6 +51,43 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces()
             Box(-50, 0, 0, 50, 25, 75), Box(-50, 25, 0, 50, 50, 100)}},
         {TEXT("Stone wall"), {0, 5}, true, {Box(-50, -14, 0, 50, 14, 220)}},
         {TEXT("Stone foundation"), {0, 4}, true, {Box(-50, -50, 0, 50, 50, 25)}},
+        {TEXT("Stone pillar"), {0, 3}, true, {Box(-13, -13, 0, 13, 13, 220)}},
     };
     return MakeArrayView(Pieces);
+}
+
+int32 FSurvivalBuildPlacement::SupportCostFrom(const FSurvivalBuildPlacement& Other) const
+{
+    constexpr double Contact = 1.0;
+    const auto Overlaps = [](double MinA, double MaxA, double MinB, double MaxB)
+    {
+        return FMath::Min(MaxA, MaxB) - FMath::Max(MinA, MinB) > 1.0;
+    };
+    const FTransform ThisTransform(Rotation, Base);
+    const FTransform SourceTransform(Other.Rotation, Other.Base);
+    const bool bLateral = GetPiece().bCarriesLateralSupport && Other.GetPiece().bCarriesLateralSupport;
+    int32 BestCost = INDEX_NONE;
+    for (const FBox& LocalBox : GetPiece().Boxes)
+    {
+        const FBox Box = LocalBox.TransformBy(ThisTransform);
+        for (const FBox& SourceLocal : Other.GetPiece().Boxes)
+        {
+            const FBox Source = SourceLocal.TransformBy(SourceTransform);
+            const bool bX = Overlaps(Box.Min.X, Box.Max.X, Source.Min.X, Source.Max.X);
+            const bool bY = Overlaps(Box.Min.Y, Box.Max.Y, Source.Min.Y, Source.Max.Y);
+            if (bX && bY && FMath::Abs(Box.Min.Z - Source.Max.Z) <= Contact)
+            {
+                return 1;
+            }
+            if (bLateral && FMath::Abs(Box.Min.Z - Source.Min.Z) <= Contact
+                && ((bX && (FMath::Abs(Box.Min.Y - Source.Max.Y) <= Contact
+                        || FMath::Abs(Box.Max.Y - Source.Min.Y) <= Contact))
+                    || (bY && (FMath::Abs(Box.Min.X - Source.Max.X) <= Contact
+                        || FMath::Abs(Box.Max.X - Source.Min.X) <= Contact))))
+            {
+                BestCost = 2;
+            }
+        }
+    }
+    return BestCost;
 }

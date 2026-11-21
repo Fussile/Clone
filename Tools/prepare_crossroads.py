@@ -278,6 +278,7 @@ def prepare():
     else:
         runpy.run_path(str(TOOLS / "build_crossroads.py"), run_name="__main__")
     runpy.run_path(str(TOOLS / "place_crossroads_supplies.py"), run_name="__main__")
+    runpy.run_path(str(TOOLS / "place_crossroads_structures.py"), run_name="__main__")
     if not levels.save_current_level():
         raise RuntimeError(f"Could not save {LEVEL}.")
     if marker := os.environ.get("SURVIVAL_PREPARED_MARKER"):

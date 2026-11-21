@@ -19,6 +19,8 @@ Source: developer's November 20, 2026 project brief and chat clarification. Prop
 | D013 | Confirmed / developer | Windows initially. Target 4–8 players including the host |
 | D014 | Confirmed / developer | Generate one standard world and edit it by hand before shipping. Player-selectable procedural worlds are deferred |
 | D015 | Confirmed / developer | Build and iterate on the first playable slice in single-player. Integrate multiplayer later |
+| D016 | Proposed / prototype | Use the shared construction kit for ordinary buildings. Author unique landmarks as custom visual sections with destructible connections in the same structural system |
+| D017 | Confirmed / developer | Treat Crossroads as a survival sandbox. Keep the existing defense waves as a manually triggered playtest |
 
 ## Open decisions
 

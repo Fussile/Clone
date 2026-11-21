@@ -11,6 +11,7 @@ struct FSurvivalFinishedPiece
     FSurvivalBuildPlacement Placement;
     int32 Health;
     int32 MaxHealth;
+    int32 StructureId;
 
     FSurvivalMaterials RepairCost() const
     {
@@ -28,7 +29,9 @@ public:
 
     bool AddPlan(const FSurvivalBuildPlacement& Placement);
     void RemovePlan(int32 Index);
-    bool FinishPlan(int32 Index);
+    bool FinishPlan(int32 Index, int32 StructureId);
+    bool AddFinishedPiece(const FSurvivalBuildPlacement& Placement, int32 StructureId);
+    void RemoveFinishedPieces(const TSet<int32>& StructureIds, int32& DebrisSlots);
     const FSurvivalBuildPlacement* GetPlan(int32 Index) const;
     FSurvivalPlanTarget GetPlanTarget(const FHitResult& Hit);
     const FSurvivalFinishedPiece* FindFinished(const FHitResult& Hit) const;
@@ -44,6 +47,7 @@ private:
     void RebuildGhosts();
     int32 FindFinishedIndex(const FHitResult& Hit) const;
     bool AddFinishedInstances(int32 Index);
+    void SpawnDebris(const FSurvivalBuildPlacement& Placement);
 
     UPROPERTY()
     TObjectPtr<UInstancedStaticMeshComponent> Timber;

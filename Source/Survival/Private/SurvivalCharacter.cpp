@@ -142,6 +142,7 @@ void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
     PlayerInputComponent->BindAction(TEXT("PreviousPiece"), IE_Pressed, this, &ASurvivalCharacter::PreviousPiece);
     PlayerInputComponent->BindAction(TEXT("PrimaryAction"), IE_Pressed, this, &ASurvivalCharacter::PrimaryAction);
     PlayerInputComponent->BindAction(TEXT("RemovePlan"), IE_Pressed, this, &ASurvivalCharacter::RemovePlan);
+    PlayerInputComponent->BindAction(TEXT("Dismantle"), IE_Pressed, this, &ASurvivalCharacter::Dismantle);
     PlayerInputComponent->BindAction(TEXT("ToggleView"), IE_Pressed, this, &ASurvivalCharacter::ToggleView);
     PlayerInputComponent->BindAction(TEXT("StartDefense"), IE_Pressed, this, &ASurvivalCharacter::StartDefense);
     PlayerInputComponent->BindAction(TEXT("RestartDefense"), IE_Pressed, this, &ASurvivalCharacter::RestartDefense);
@@ -589,47 +590,8 @@ void ASurvivalCharacter::PreviousPiece()
 
 bool ASurvivalCharacter::HasSupport(const FSurvivalBuildPlacement& Placement) const
 {
-    const FVector Probe(0, 0, SupportTolerance);
-    const FCollisionQueryParams Query(SCENE_QUERY_STAT(BuildSupport), false, this);
-    const auto TraceSupport = [&](double LocalX, double LocalY, FHitResult& Hit)
-    {
-        const FVector Foot = Placement.Base + Placement.Rotation.RotateVector(FVector(LocalX, LocalY, 0));
-        return GetWorld()->LineTraceSingleByChannel(Hit, Foot + Probe, Foot - Probe, ECC_Visibility, Query)
-            && Hit.ImpactNormal.Z >= 0.95 && Hit.GetComponent()
-            && (Hit.GetComponent()->Mobility == EComponentMobility::Static
-                || Cast<ASurvivalBuildChunk>(Hit.GetActor()));
-    };
-
-    // Only the boxes that reach the ground need support. Door lintels and window caps are carried by the frame.
-    for (const FBox& Box : Placement.GetPiece().Boxes)
-    {
-        if (Box.Min.Z != 0.0)
-        {
-            continue;
-        }
-        FHitResult Hit;
-        const FVector Center = Box.GetCenter();
-        if (!TraceSupport(Center.X, Center.Y, Hit))
-        {
-            return false;
-        }
-        // A completed piece can support a centered floor or other part wider than its own top.
-        if (Cast<ASurvivalBuildChunk>(Hit.GetActor()))
-        {
-            continue;
-        }
-        for (const double X : {Box.Min.X + 2.0, Box.Max.X - 2.0})
-        {
-            for (const double Y : {Box.Min.Y + 2.0, Box.Max.Y - 2.0})
-            {
-                if (!TraceSupport(X, Y, Hit))
-                {
-                    return false;
-                }
-            }
-        }
-    }
-    return true;
+    const ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
+    return GameMode && GameMode->CanSupport(Placement);
 }
 
 bool ASurvivalCharacter::IsFootprintClear(const FSurvivalBuildPlacement& Placement, bool bPlanning) const
@@ -658,7 +620,7 @@ bool ASurvivalCharacter::IsFootprintClear(const FSurvivalBuildPlacement& Placeme
 TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
 {
     FHitResult Hit;
-    if (!FindWorldAimHit(BuildReach, Hit) || Hit.ImpactNormal.Z < 0.95)
+    if (!FindWorldAimHit(BuildReach, Hit))
     {
         return {};
     }
@@ -668,7 +630,37 @@ TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
         FMath::GridSnap(Hit.ImpactPoint.Y, FSurvivalBuildPlacement::GridSize), Hit.ImpactPoint.Z);
     Placement.Rotation = FRotator(0, QuarterTurns * 90.0, 0).Quaternion();
     Placement.PieceIndex = SelectedPiece;
-    Placement.bClear = HasReachTo(Placement.Base + FVector(0, 0, SupportTolerance + 2.0), BuildReach)
+    FVector ReachPoint = Placement.Base + FVector(0, 0, SupportTolerance + 2.0);
+    if (Hit.ImpactNormal.Z < 0.95)
+    {
+        const ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor());
+        const FSurvivalFinishedPiece* Support = Chunk ? Chunk->FindFinished(Hit) : nullptr;
+        if (!Support || !Placement.GetPiece().bCarriesLateralSupport || FMath::Abs(Hit.ImpactNormal.Z) > 0.1)
+        {
+            return {};
+        }
+
+        const FSurvivalBuildPlacement& Source = Support->Placement;
+        Placement.Base = Source.Base;
+        if (Source.GetPiece().bCarriesLateralSupport)
+        {
+            const FVector Normal = Hit.ImpactNormal;
+            const FVector Axis = FMath::Abs(Normal.X) > FMath::Abs(Normal.Y)
+                ? FVector(FMath::Sign(Normal.X), 0, 0) : FVector(0, FMath::Sign(Normal.Y), 0);
+            Placement.Base += Axis * FSurvivalBuildPlacement::GridSize;
+        }
+        else
+        {
+            double Top = 0.0;
+            for (const FBox& Box : Source.GetPiece().Boxes)
+            {
+                Top = FMath::Max(Top, Box.Max.Z);
+            }
+            Placement.Base.Z += Top;
+        }
+        ReachPoint = Hit.ImpactPoint;
+    }
+    Placement.bClear = HasReachTo(ReachPoint, BuildReach)
         && HasSupport(Placement) && IsFootprintClear(Placement, true);
     return TOptional<FSurvivalBuildPlacement>(Placement);
 }
@@ -700,5 +692,22 @@ void ASurvivalCharacter::RemovePlan()
     if (ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>())
     {
         GameMode->RemovePlan(FindPlan());
+    }
+}
+
+void ASurvivalCharacter::Dismantle()
+{
+    FHitResult Hit;
+    if (!bBuildMode || HealthPoints <= 0 || !FindWorldAimHit(InteractReach, Hit)
+        || !HasReachTo(Hit.ImpactPoint, InteractReach))
+    {
+        return;
+    }
+    if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
+    {
+        if (const FSurvivalFinishedPiece* Piece = Chunk->FindFinished(Hit))
+        {
+            Chunk->DamageFinished(Hit, Piece->Health);
+        }
     }
 }

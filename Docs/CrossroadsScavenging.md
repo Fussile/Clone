@@ -23,3 +23,10 @@ For editor play, run `Tools/prepare_crossroads.py` and open Southern Crossroads.
 10. In first person, verify that the arms and pistol align at idle, while moving and while firing. Spend a few rounds, start wave two, and press **R** to reload. Verify the transfer happens when the reload animation finishes. Repeat from empty to check the longer reload. Toggle **V** mid-reload and verify the ammo transfers once. Open build mode and verify **R** rotates the selected piece.
 
 The material counts, plans, completed pieces, health and loot reset when the solo session restarts.
+
+## Structural playtest
+
+1. Build a stone pillar on the forecourt. Select **Floor**, aim at the pillar side to snap to its top, and finish the floor. Aim at the edge of that floor to extend the roof until the preview rejects another tile.
+2. Aim at the pillar while in build mode and press **K**. Confirm the roof pieces fall and their original collision disappears. Dismantling spends no materials and gives no refund.
+3. Walk east from the station to the authored canopy. Remove one pillar and verify that roof tiles close to the other pillar remain. Remove the remaining pillar and verify that the rest falls, including pieces across the chunk border.
+4. Place a plan on supported terrain or on a supporting piece, then dismantle its support before completing the plan. Press **E** and confirm the plan stays unbuilt without spending materials.

@@ -24,6 +24,9 @@ struct FSurvivalBuildPiece
     FSurvivalMaterials Cost;
     bool bStone;
     TArray<FBox> Boxes;
+    bool bCarriesLateralSupport = false;
+
+    int32 SupportCapacity() const { return bStone ? 9 : 5; }
 };
 
 TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces();
@@ -39,6 +42,7 @@ struct FSurvivalBuildPlacement
 
     const FSurvivalBuildPiece& GetPiece() const { return GetSurvivalBuildPieces()[PieceIndex]; }
     FVector WorldCenter(const FBox& Box) const { return Base + Rotation.RotateVector(Box.GetCenter()); }
+    int32 SupportCostFrom(const FSurvivalBuildPlacement& Other) const;
 };
 
 struct FSurvivalPlanTarget
