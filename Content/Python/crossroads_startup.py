@@ -13,6 +13,9 @@ def prepare_if_needed():
     stamp = project / "Saved" / "CrossroadsPreparation.sha256"
     sources = list((project / "Tools").glob("*.py"))
     sources.extend(path for path in (project / "SourceArt" / "Crossroads").rglob("*") if path.is_file())
+    medicine_sheet = project / "SourceArt" / "Local" / "MedicineSheet.png"
+    if medicine_sheet.is_file():
+        sources.append(medicine_sheet)
     digest = hashlib.sha256()
     digest.update(Path(__file__).read_bytes())
     for path in sorted(sources):
@@ -27,16 +30,18 @@ def prepare_if_needed():
         "/Game/Maps/L_SouthernCrossroads",
         "/Game/Art/Crossroads/Player/SK_Survivor",
         "/Game/Art/Crossroads/StationZombie/SK_StationZombie",
-        "/Game/Art/Crossroads/SightedViewmodel/SK_SidearmViewmodel",
-        "/Game/Art/Crossroads/SightedViewmodel/ViewmodelReload",
-        "/Game/Art/Crossroads/SightedViewmodel/ViewmodelReloadEmpty",
+        "/Game/Art/Crossroads/MagazineViewmodel/SK_SidearmViewmodel",
+        "/Game/Art/Crossroads/MagazineViewmodel/ViewmodelReload",
+        "/Game/Art/Crossroads/MagazineViewmodel/ViewmodelReloadEmpty",
         "/Game/Art/Crossroads/Building/M_BuildPlan",
         "/Game/Art/Crossroads/Building/M_CrossroadsTimber",
     )
     required += tuple(
         f"/Game/Art/Crossroads/Inventory/T_Item_{name}"
-        for name in ("Sidearm", "Food", "Water", "Bandage", "Timber", "Stone", "Cloth", "Rounds")
+        for name in ("Sidearm", "Food", "Water", "Bandage", "Timber", "Stone", "Cloth", "Rounds", "TimberDoor")
     )
+    if medicine_sheet.is_file():
+        required += ("/Game/Art/Crossroads/Local/MedicineSheet",)
     if (stamp.is_file() and stamp.read_text(encoding="utf-8") == revision
             and all(assets.does_asset_exist(path) for path in required)):
         return

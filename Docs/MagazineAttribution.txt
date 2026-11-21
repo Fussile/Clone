@@ -1,0 +1,7 @@
+Kama Model 81 magazine by KING MUFFIN
+https://sketchfab.com/3d-models/kama-model-81-magazine-9d704c90dfa246afb3d3ea91552d6c45
+Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/
+
+The raw asset is unchanged. The game fits its magazine shell to the dimensions of
+the animated pistol rig and binds it to the existing animated magazine joint.

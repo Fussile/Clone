@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GameFramework/HUD.h"
+#include "Math/Box2D.h"
 #include "SurvivalVitals.h"
 #include "SurvivalHUD.generated.h"
 
@@ -17,6 +18,7 @@ class ASurvivalHUD : public AHUD
 public:
     void SetInventoryVisible(ASurvivalCharacter& Character, bool bVisible);
     UTexture2D* GetItemIcon(ESurvivalItem Item) const;
+    FBox2f GetItemIconUV(ESurvivalItem Item) const;
 
 protected:
     void BeginPlay() override;
@@ -31,6 +33,9 @@ private:
 
     UPROPERTY(Transient)
     TArray<TObjectPtr<UTexture2D>> ItemIcons;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UTexture2D> MedicineSheet;
 
     TSharedPtr<SWidget> InventoryWidget;
 };

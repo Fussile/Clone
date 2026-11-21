@@ -1,6 +1,7 @@
 """Bind the bundled pistol mesh to Cransh's animated grip joint."""
 
 import json
+import math
 import struct
 
 
@@ -56,42 +57,29 @@ def add_front_sight(model, binary, parent, bind_point):
     })
 
 
-def mount_pistol(model, binary, arms, frame, pistol_source):
-    pistol, geometry = read_glb(pistol_source)
-    primitives = pistol["meshes"][0]["primitives"]
-    positions = [pistol["accessors"][part["attributes"]["POSITION"]] for part in primitives]
-    original = model["accessors"][frame["attributes"]["POSITION"]]
-    front = max(item["max"][0] for item in positions)
-    rear = min(item["min"][0] for item in positions)
-    top = max(item["max"][1] for item in positions)
-    scale = (original["max"][2] - original["min"][2]) / (front - rear)
-
+def append_rigid_prop(model, binary, arms, prop, geometry, joint_index, transform):
+    primitives = prop["meshes"][0]["primitives"]
     offsets = {key: len(model[key]) for key in
                ("bufferViews", "accessors", "images", "samplers", "textures", "materials")}
     geometry_offset = len(binary)
     binary.extend(geometry)
-    for view in pistol["bufferViews"]:
+    for view in prop["bufferViews"]:
         view["byteOffset"] = view.get("byteOffset", 0) + geometry_offset
-    for accessor in pistol["accessors"]:
+    for accessor in prop["accessors"]:
         accessor["bufferView"] += offsets["bufferViews"]
-    for image in pistol["images"]:
+    for image in prop["images"]:
         image["bufferView"] += offsets["bufferViews"]
-    for texture in pistol["textures"]:
+    for texture in prop["textures"]:
         texture["source"] += offsets["images"]
         texture["sampler"] += offsets["samplers"]
-    for material in pistol["materials"]:
+    for material in prop["materials"]:
         locations = (material, material["pbrMetallicRoughness"])
         for location in locations:
             for key, info in location.items():
                 if key.endswith("Texture"):
                     info["index"] += offsets["textures"]
     for key in offsets:
-        model[key].extend(pistol[key])
-
-    joint = next(i for i, node in enumerate(model["nodes"]) if node.get("name") == "PBody_058")
-    # The pistol is rigidly bound to a child of the animated grip. Its origin marks the front sight.
-    front_sight_joint = len(model["skins"][0]["joints"])
-    sight = (0.0, float("-inf"), original["max"][2])
+        model[key].extend(prop[key])
 
     def add_vertex_stream(data, count, component_type):
         view = len(model["bufferViews"])
@@ -110,7 +98,7 @@ def mount_pistol(model, binary, arms, frame, pistol_source):
         for semantic, accessor_index in attributes.items():
             if semantic not in ("POSITION", "NORMAL", "TANGENT"):
                 continue
-            accessor = pistol["accessors"][accessor_index]
+            accessor = prop["accessors"][accessor_index]
             view = model["bufferViews"][accessor["bufferView"]]
             vector = struct.Struct("<ffff" if semantic == "TANGENT" else "<fff")
             start = view["byteOffset"] + accessor.get("byteOffset", 0)
@@ -119,20 +107,14 @@ def mount_pistol(model, binary, arms, frame, pistol_source):
             for i in range(accessor["count"]):
                 offset = start + i * stride
                 x, y, z, *handedness = vector.unpack_from(binary, offset)
-                value = (-z, y, x)
-                if semantic == "POSITION":
-                    value = (-z * scale, original["max"][1] + (y - top) * scale,
-                             original["max"][2] + (x - front) * scale)
-                    if value[2] >= original["max"][2] - 0.04 and abs(value[0]) < 0.01:
-                        if (value[1], value[2]) > (sight[1], sight[2]):
-                            sight = (0.0, value[1], value[2])
+                value = transform(semantic, (x, y, z))
                 vector.pack_into(binary, offset, *value, *handedness)
                 transformed.append((*value, *handedness))
             accessor["min"] = [min(column) for column in zip(*transformed)]
             accessor["max"] = [max(column) for column in zip(*transformed)]
 
-        count = pistol["accessors"][attributes["POSITION"]]["count"]
-        skin_joints = add_vertex_stream(struct.pack("<4H", front_sight_joint, 0, 0, 0) * count, count, 5123)
+        count = prop["accessors"][attributes["POSITION"]]["count"]
+        skin_joints = add_vertex_stream(struct.pack("<4H", joint_index, 0, 0, 0) * count, count, 5123)
         skin_weights = add_vertex_stream(struct.pack("<4f", 1, 0, 0, 0) * count, count, 5126)
         arms["primitives"].append({
             "attributes": {**{key: value + offsets["accessors"] for key, value in attributes.items()},
@@ -142,12 +124,60 @@ def mount_pistol(model, binary, arms, frame, pistol_source):
             "mode": part["mode"],
         })
 
+
+
+def mount_pistol(model, binary, arms, frame, pistol_source):
+    pistol, geometry = read_glb(pistol_source)
+    primitives = pistol["meshes"][0]["primitives"]
+    positions = [pistol["accessors"][part["attributes"]["POSITION"]] for part in primitives]
+    original = model["accessors"][frame["attributes"]["POSITION"]]
+    front = max(item["max"][0] for item in positions)
+    rear = min(item["min"][0] for item in positions)
+    top = max(item["max"][1] for item in positions)
+    scale = (original["max"][2] - original["min"][2]) / (front - rear)
+
+    joint = next(i for i, node in enumerate(model["nodes"]) if node.get("name") == "PBody_058")
+    front_sight_joint = len(model["skins"][0]["joints"])
+    sight = (0.0, float("-inf"), original["max"][2])
+
+    def transform(semantic, position):
+        nonlocal sight
+        x, y, z = position
+        if semantic != "POSITION":
+            return (-z, y, x)
+        value = (-z * scale, original["max"][1] + (y - top) * scale,
+                 original["max"][2] + (x - front) * scale)
+        if value[2] >= original["max"][2] - 0.04 and abs(value[0]) < 0.01:
+            if (value[1], value[2]) > (sight[1], sight[2]):
+                sight = (0.0, value[1], value[2])
+        return value
+
+    append_rigid_prop(model, binary, arms, pistol, geometry, front_sight_joint, transform)
     if sight[1] == float("-inf"):
         raise ValueError("Could not locate vertices near the pistol front sight.")
     add_front_sight(model, binary, joint, sight)
 
 
-def prepare_sidearm_glb(source, destination, pistol_source):
+def mount_magazine(model, binary, arms, original, source):
+    prop, geometry = read_glb(source)
+    shell = prop["meshes"][0]["primitives"][0]
+    positions = prop["accessors"][shell["attributes"]["POSITION"]]
+    scales = [(original["max"][i] - original["min"][i]) / (positions["max"][i] - positions["min"][i])
+              for i in range(3)]
+    node = next(i for i, node in enumerate(model["nodes"]) if node.get("name") == "Pmag_061")
+    joint = model["skins"][0]["joints"].index(node)
+
+    def transform(semantic, position):
+        if semantic == "POSITION":
+            return tuple(original["min"][i] + (v - positions["min"][i]) * scales[i] for i, v in enumerate(position))
+        vector = tuple(v / scales[i] if semantic == "NORMAL" else v * scales[i] for i, v in enumerate(position))
+        length = math.sqrt(sum(v * v for v in vector))
+        return tuple(v / length for v in vector) if length else position
+
+    append_rigid_prop(model, binary, arms, prop, geometry, joint, transform)
+
+
+def prepare_sidearm_glb(source, destination, pistol_source, magazine_source):
     model, binary = read_glb(source)
     nodes = model["nodes"]
     armature_index = next(i for i, node in enumerate(nodes) if node.get("name") == "Armature")
@@ -163,6 +193,8 @@ def prepare_sidearm_glb(source, destination, pistol_source):
     arms = model["meshes"][arms_index]
     arms["name"] = "SK_SidearmViewmodel"
     frame = model["meshes"][grip_index]["primitives"][0]
+    magazine_mesh = next(mesh for mesh in model["meshes"] if mesh["name"].startswith("xd_frame.002"))
+    magazine_bounds = model["accessors"][magazine_mesh["primitives"][0]["attributes"]["POSITION"]]
     for node in nodes:
         if node.get("mesh") == arms_index:
             node.update(mesh=0, name="SK_SidearmViewmodel")
@@ -180,6 +212,7 @@ def prepare_sidearm_glb(source, destination, pistol_source):
     }
     model["materials"] = [material]
     mount_pistol(model, binary, arms, frame, pistol_source)
+    mount_magazine(model, binary, arms, magazine_bounds, magazine_source)
     model.pop("extensionsUsed", None)
     model.pop("extensionsRequired", None)
     model["buffers"][0]["byteLength"] = len(binary)

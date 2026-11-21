@@ -26,8 +26,8 @@ The material counts, plans, completed pieces, health and loot reset when the sol
 
 ## Structural playtest
 
-1. Build a stone pillar on the forecourt. Select **Floor**, aim at the pillar side to snap to its top, and finish the floor. Aim at the edge of that floor to extend the roof until the preview rejects another tile.
-2. Aim at the pillar while in build mode and press **K**. Confirm the roof pieces fall and their original collision disappears. Dismantling spends no materials and gives no refund.
+1. Stack stone blocks on the forecourt. Place a block on top of a column and extend the roof by snapping blocks to its side until the next block needs additional support.
+2. Aim at the supporting column while in build mode and press **K**. Confirm the roof pieces fall and their original collision disappears. Dismantling spends no materials and gives no refund.
 3. Walk east from the station to the authored canopy. Remove one pillar and verify that roof tiles close to the other pillar remain. Remove the remaining pillar and verify that the rest falls, including pieces across the chunk border.
 4. Place a plan on supported terrain or on a supporting piece, then dismantle its support before completing the plan. Press **E** and confirm the plan stays unbuilt without spending materials.
 
@@ -35,19 +35,20 @@ The material counts, plans, completed pieces, health and loot reset when the sol
 ## Wall corners, roof edges and projectiles
 
 1. Place a timber block blueprint. Aim at its side to place a neighboring block. Rotate the second shape and verify that the common cell still lines up. Build a corner and check that its faces touch.
-2. Aim at the inside face of a block with **Floor** selected. The panel sits in the adjacent cell with both top surfaces at the same height. Chain another roof blueprint from its exposed edge and finish the supporting pieces first.
+2. Aim at the side of an upper block to extend a roof at the same height. Chain another blueprint from its edge and finish the supporting pieces first.
 3. Equip the sidearm and fire a round. Press **R** to check the partial reload. Empty the magazine and press **R** again to check the empty reload. Hold **right mouse** to check sight alignment and release to return to hip fire.
 4. Close the build menu. Shoot a finished timber piece and check that its health drops on impact. Verify a completed wall stops a round and a blueprint lets it through.
 
-## Doors and the one-meter grid
+## Doors and the shared grid
 
-1. Stack two wood blocks. The resulting wall should measure 2 m high, with roof panels snapping flush to its top.
-2. Build a door frame beside the wall, including its upper block. The frame should be thin, leave an opening for the standing character, and reserve two stacked cells.
-3. Build a timber door. Press **E** to open and close it. Block its swing with a crate, another build piece, or the player and check that it stays in place. Test damage and dismantling against the leaf and frame.
+1. Verify that the build menu lists timber blocks, stone blocks, stairs, and door frames. Stack two blocks and verify the walls and frame reach the same 2.1 m height.
+2. Aim near an edge of a cell and place a thin frame. Rotate it twice while aiming at the same spot. Verify the frame mounts on the same edge and the resulting door swings the other way.
+3. Open the pack, filter recipes for **Building**, craft a timber door, then use **E** to install it in the finished frame. Confirm the item is spent only when the leaf can be installed.
+4. Press **E** to open or close it. Block its swing and check that it stays in place. Damage or dismantle the leaf and verify that the empty frame can receive a replacement.
 
 ## M2 survival loop
 
 1. A new run starts on Day 1 at 08:00. In the development console try `SetTimeOfDay 0`, `SetTimeOfDay 14`, and `SetTimeOfDay 21.5`. Check that the clock, sunlight, and temperature update while the day number stays the same.
 2. Scavenge the station provisions and press **I**. Use a mouse or **Tab** and **Enter** to select an item and use it. Assign food to a slot by clicking that slot or pressing **1–6**. Close the menu, select the slot, and left-click to consume it.
 3. Compare standing still at midday, standing still at midnight, and repeated sprinting. Food expenditure should rise with movement and cold. Thirst should drain slowly at rest, then accelerate while spending stamina.
-4. Craft a bandage from two cloth using the crafting pane. Take damage and use the bandage from the pack or hotbar. Approach the zombie east of the station, retreat behind a block, and check that it attacks the block.
+4. Search for a bandage, choose a quantity, and craft from the listed cloth requirements. Take damage and use the bandage from the pack or hotbar. Approach the zombie east of the station, break line of sight, and verify it investigates the last known location. Sprint behind a block within hearing range and check that the zombie attacks blocking construction.

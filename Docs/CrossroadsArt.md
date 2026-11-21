@@ -20,3 +20,10 @@ Preparation imports `Survivor/SK_Survivor.glb` into `/Game/Art/Crossroads/Player
 ## Building
 
 Preparation generates an original timber plank texture, its instanced construction material, and a translucent blueprint material in `/Game/Art/Crossroads/Building`. Stone pieces reuse `M_Concrete034`. Preparation enables instanced static mesh rendering for all three materials and the packaging configuration cooks their folders.
+
+## Optional medicine sheet for editor playtests
+
+Put the supplied 1215 × 765 sprite sheet at `SourceArt/Local/MedicineSheet.png`
+and reopen the editor. The pack and hotbar use the wrapped bandage tile from
+the first row. The local sheet stays outside Git and packaged builds use the
+project's original bandage sprite.

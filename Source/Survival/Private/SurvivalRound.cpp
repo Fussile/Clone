@@ -66,7 +66,7 @@ void ASurvivalRound::HandleImpact(const FHitResult& Hit)
     }
     else if (ASurvivalZombie* Zombie = Cast<ASurvivalZombie>(Hit.GetActor()))
     {
-        Zombie->HitBySidearm();
+        Zombie->HitBySidearm(Cast<ASurvivalCharacter>(GetInstigator()));
         bDamaged = true;
     }
 

@@ -13,7 +13,7 @@ class ASurvivalZombie : public ACharacter
 
 public:
     ASurvivalZombie();
-    void HitBySidearm();
+    void HitBySidearm(ASurvivalCharacter* Shooter);
 
 protected:
     virtual void BeginPlay() override;
@@ -21,15 +21,21 @@ protected:
 
 private:
     bool ProbePath(const FVector& Destination, FHitResult& Hit) const;
-    FVector FindDestination(const ASurvivalCharacter& Target) const;
+    void UpdatePerception(double Now);
+    FVector ChooseMoveDirection(const FVector& Desired);
+    void RememberTarget(const ASurvivalCharacter& Target, double Now);
 
     void UpdateLocomotion(bool bMoving);
-    void ApplyAttack(ASurvivalCharacter& Target);
+    void ApplyAttack();
 
     UPROPERTY(EditAnywhere, Category = "Survival", meta = (ClampMin = "0"))
     float AggroRange = 0.0f;
 
-    bool bAlerted = false;
+    FVector Home = FVector::ZeroVector;
+    FVector LastKnownLocation = FVector::ZeroVector;
+    double SearchUntil = -1.0;
+    double NextSenseTime = 0.0;
+    double DetourSide = 1.0;
     int32 Health = 90;
     double NextAttackTime = 0.0;
     double AttackImpactTime = -1.0;

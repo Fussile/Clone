@@ -26,21 +26,18 @@ def prepare_structures():
         if not canopy:
             raise RuntimeError("Could not place the utility canopy.")
     else:
-        old_layouts = [
-            [(8, 0), (8, 300), (2, 0), (2, 100), (2, 300), (2, 200)],
-            [(8, 0), (8, 660), (2, 0), (2, 220), (2, 660), (2, 440)],
-        ]
-        current = [(part.get_editor_property("piece_index"), part.get_editor_property("offset").x)
+        current = [(part.get_editor_property("piece_index"), part.get_editor_property("offset"))
                    for part in canopy.get_editor_property("parts")]
-        if current not in old_layouts or any(
-                part.get_editor_property("offset").y != 0 or
-                part.get_editor_property("offset").z != (0 if part.get_editor_property("piece_index") == 8 else 220)
-                for part in canopy.get_editor_property("parts")):
+        if not any(
+                [(index, offset.x, offset.y, offset.z) for index, offset in current] ==
+                [(8, 0, 0, 0), (8, 3 * width, 0, 0), (2, 0, 0, height), (2, width, 0, height),
+                 (2, 3 * width, 0, height), (2, 2 * width, 0, height)]
+                for width, height in ((100, 200), (100, 220), (220, 220))):
             return
 
     parts = []
     # Keep the end pillars and four panels across the 16 m chunk boundary.
-    for piece, x, z in ((8, 0, 0), (8, 300, 0), (2, 0, 200), (2, 100, 200), (2, 300, 200), (2, 200, 200)):
+    for piece, x, z in ((8, 0, 0), (8, 315, 0), (2, 0, 210), (2, 105, 210), (2, 315, 210), (2, 210, 210)):
         part = unreal.SurvivalPrefabPart()
         part.set_editor_property("piece_index", piece)
         part.set_editor_property("offset", unreal.Vector(x, 0, z))

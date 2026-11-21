@@ -16,7 +16,7 @@ PLAYER = ART + "/Player"
 BUILDING = ART + "/Building"
 ZOMBIE = ART + "/StationZombie"
 WEAPON_AUDIO = "/Game/Audio/Weapons"
-VIEWMODEL = ART + "/SightedViewmodel"
+VIEWMODEL = ART + "/MagazineViewmodel"
 LEVEL = "/Game/Maps/L_SouthernCrossroads"
 
 
@@ -178,6 +178,16 @@ def import_inventory_icons():
             raise RuntimeError(f"Could not save {texture.get_path_name()}.")
 
 
+def import_local_medicine_sheet():
+    sheet = TOOLS.parent / "SourceArt" / "Local" / "MedicineSheet.png"
+    if sheet.is_file():
+        texture = import_asset(sheet, ART + "/Local", unreal.Texture2D, replace_existing=True)
+        texture.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_UI)
+        assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+        if not assets.save_loaded_asset(texture):
+            raise RuntimeError("Could not save the local medicine icons.")
+
+
 def import_skeletal_pack(directory, names, source, prepared=None, generator=None, *generator_inputs):
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     if all(assets.does_asset_exist(f"{directory}/{name}") for name in names):
@@ -256,7 +266,8 @@ def prepare():
         SOURCE / "Enemy" / "zombie_rigged__animated.glb", generated / "StationZombie.glb", "prepare_zombie_glb")
     import_skeletal_pack(VIEWMODEL,
         ("SK_SidearmViewmodel", "ViewmodelIdle", "ViewmodelWalk", "ViewmodelFire", "ViewmodelReload", "ViewmodelReloadEmpty"),
-        SOURCE / "Weapons" / "fps_pistol_animations.glb", generated / "SightedViewmodel.glb", "prepare_sidearm_glb", sidearm)
+        SOURCE / "Weapons" / "fps_pistol_animations.glb", generated / "MagazineViewmodel.glb", "prepare_sidearm_glb",
+        sidearm, SOURCE / "Weapons" / "SM_Magazine.glb")
     if sidearm.is_file():
         import_asset(sidearm, BUILDING, unreal.StaticMesh)
     shot = SOURCE / "Audio" / "SW_SidearmShot.wav"
@@ -266,6 +277,8 @@ def prepare():
         "SK_Survivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",
         "SurvivorCrouchIdle", "SurvivorCrouchMove", "SurvivorProneIdle", "SurvivorProneMove",
     ), SOURCE / "Survivor" / "SK_Survivor.glb")
+    if not os.environ.get("SURVIVAL_PREPARED_MARKER"):
+        import_local_medicine_sheet()
     if marker := os.environ.get("SURVIVAL_PREPARED_MARKER"):
         Path(marker).write_text(LEVEL, encoding="utf-8")
 

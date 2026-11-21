@@ -41,13 +41,13 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces()
     constexpr double Height = FSurvivalBuildPlacement::GridSize;
     constexpr double Rise = FSurvivalBuildPlacement::HalfWallHeight;
     constexpr double DoorHeight = Height * 2;
-    static const TArray<FBox> Frame = {Box(-Half, -6, 0, -42, 6, DoorHeight),
-        Box(42, -6, 0, Half, 6, DoorHeight), Box(-42, -6, 192, 42, 6, DoorHeight)};
+    static const TArray<FBox> Frame = {Box(-Half, -6, 0, -Half + 8, 6, DoorHeight),
+        Box(Half - 8, -6, 0, Half, 6, DoorHeight), Box(-Half + 8, -6, DoorHeight - 8, Half - 8, 6, DoorHeight)};
     static const FSurvivalBuildPiece Pieces[] = {
         {TEXT("Timber block"), {3, 0}, false, {Box(-Half, -Half, 0, Half, Half, Height)}, false, false, true},
         {TEXT("Half block"), {2, 0}, false, {Box(-Half, -Half, 0, Half, Half, Rise)}, false, false, true},
         {TEXT("Floor"), {2, 0}, false, {Box(-Half, -Half, 0, Half, Half, 18)}, true},
-        {TEXT("Door frame"), {4, 0}, false, Frame, false, false, true, 2},
+        {TEXT("Door frame"), {4, 0}, false, Frame, false, false, true, 2, true},
         {TEXT("Window block"), {3, 0}, false, {
             Box(-Half, -Half, 0, Half, Half, 25), Box(-Half, -Half, 85, Half, Half, Height),
             Box(-Half, -Half, 25, -35, Half, 85), Box(35, -Half, 25, Half, Half, 85)}, false, false, true},
@@ -58,15 +58,33 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces()
         {TEXT("Stone block"), {0, 5}, true, {Box(-Half, -Half, 0, Half, Half, Height)}, false, false, true},
         {TEXT("Stone foundation"), {0, 4}, true, {Box(-Half, -Half, 0, Half, Half, 25)}},
         {TEXT("Stone pillar"), {0, 3}, true, {Box(-25, -25, 0, 25, 25, DoorHeight)}, false, false, false, 2},
-        {TEXT("Timber door"), {6, 0}, false, Frame, false, false, true, 2, true},
     };
     return MakeArrayView(Pieces);
+}
+
+TConstArrayView<int32> GetPlayerBuildPieces()
+{
+    // The other stable indices are reserved for authored prefabs.
+    static const int32 Pieces[] = {0, 6, 5, 3};
+    return MakeArrayView(Pieces);
+}
+
+void FSurvivalBuildPlacement::AlignFrameEdge(const FVector& Point)
+{
+    if (!GetPiece().bDoorFrame)
+    {
+        return;
+    }
+    const FVector Normal = Rotation.RotateVector(FVector::RightVector);
+    const int32 Axis = FMath::Abs(Normal.X) > FMath::Abs(Normal.Y) ? 0 : 1;
+    FrameOffset = FVector::ZeroVector;
+    FrameOffset[Axis] = (Point[Axis] >= Base[Axis] ? 1.0 : -1.0) * GridSize / 2.0;
 }
 
 FBox FSurvivalBuildPlacement::WorldBounds() const
 {
     FBox Bounds(ForceInit);
-    const FTransform Transform(Rotation, Base);
+    const FTransform Transform(Rotation, MeshOrigin());
     for (const FBox& Box : GetPiece().Boxes)
     {
         Bounds += Box.TransformBy(Transform);
@@ -104,7 +122,7 @@ bool FSurvivalBuildPlacement::OverlapsReservedCells(const FSurvivalBuildPlacemen
 
 FBox FSurvivalBuildPlacement::ClosedDoor()
 {
-    return FBox(FVector(-39, -2.5, 2), FVector(39, 2.5, 190));
+    return FBox(FVector(-41.5, -2.5, 2), FVector(41.5, 2.5, 200));
 }
 
 bool FSurvivalBuildPlacement::SnapTo(const FSurvivalBuildPlacement& Source, const FVector& Point,
@@ -187,8 +205,8 @@ int32 FSurvivalBuildPlacement::SupportCostFrom(const FSurvivalBuildPlacement& Ot
     {
         return FMath::Min(MaxA, MaxB) - FMath::Max(MinA, MinB) > 1.0;
     };
-    const FTransform ThisTransform(Rotation, Base);
-    const FTransform SourceTransform(Other.Rotation, Other.Base);
+    const FTransform ThisTransform(Rotation, MeshOrigin());
+    const FTransform SourceTransform(Other.Rotation, Other.MeshOrigin());
     const bool bLateral = (GetPiece().bCarriesLateralSupport && Other.GetPiece().bCarriesLateralSupport)
         || (GetPiece().bWall && Other.GetPiece().bWall);
     int32 BestCost = INDEX_NONE;

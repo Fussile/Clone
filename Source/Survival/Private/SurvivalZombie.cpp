@@ -8,7 +8,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "Kismet/GameplayStatics.h"
+#include "EngineUtils.h"
 #include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
 
@@ -33,6 +33,7 @@ ASurvivalZombie::ASurvivalZombie()
 void ASurvivalZombie::BeginPlay()
 {
     Super::BeginPlay();
+    Home = GetActorLocation();
     USkeletalMesh* ZombieAsset = LoadObject<USkeletalMesh>(nullptr,
         TEXT("/Game/Art/Crossroads/StationZombie/SK_StationZombie.SK_StationZombie"), nullptr, LOAD_NoWarn);
     if (!ZombieAsset)
@@ -75,7 +76,7 @@ void ASurvivalZombie::UpdateLocomotion(bool bMoving)
     GetMesh()->SetPlayRate(IdleAnimation ? 1.0f : 0.48f);
 }
 
-void ASurvivalZombie::ApplyAttack(ASurvivalCharacter& Target)
+void ASurvivalZombie::ApplyAttack()
 {
     FHitResult Hit;
     if (!ProbePath(GetActorLocation() + AttackDirection * AttackReach, Hit))
@@ -86,9 +87,9 @@ void ASurvivalZombie::ApplyAttack(ASurvivalCharacter& Target)
     {
         Chunk->DamageFinished(Hit, 18);
     }
-    else if (Hit.GetActor() == &Target)
+    else if (ASurvivalCharacter* Target = Cast<ASurvivalCharacter>(Hit.GetActor()))
     {
-        Target.TakeSurvivalDamage(15);
+        Target->TakeSurvivalDamage(15);
     }
 }
 
@@ -101,70 +102,103 @@ bool ASurvivalZombie::ProbePath(const FVector& Destination, FHitResult& Hit) con
         FCollisionQueryParams(SCENE_QUERY_STAT(StationZombie), false, this));
 }
 
-FVector ASurvivalZombie::FindDestination(const ASurvivalCharacter& Target) const
+void ASurvivalZombie::RememberTarget(const ASurvivalCharacter& Target, double Now)
 {
-    const FVector Goal = Target.GetActorLocation();
-    FHitResult Obstruction;
-    if (!ProbePath(Goal, Obstruction) || Obstruction.GetActor() == &Target)
-    {
-        return Goal;
-    }
+    LastKnownLocation = Target.GetActorLocation();
+    SearchUntil = Now + 8.0;
+}
 
-    // The station shop has one entrance. Route around the permanent front wall through that opening.
-    constexpr double DoorX = 3700.0;
-    constexpr double DoorY = 4300.0;
-    const bool bTargetInShop = Goal.X > 2825.0 && Goal.X < 4575.0 && Goal.Y > DoorY && Goal.Y < 5475.0;
-    const FVector Position = GetActorLocation();
-    const bool bZombieInShop = Position.X > 2825.0 && Position.X < 4575.0
-        && Position.Y > DoorY && Position.Y < 5475.0;
-    const double Side = bTargetInShop ? -1.0 : 1.0;
-    if (bZombieInShop == bTargetInShop && FMath::Abs(Position.Y - DoorY) > 90.0)
+void ASurvivalZombie::UpdatePerception(double Now)
+{
+    if (Now < NextSenseTime)
     {
-        return Goal;
+        return;
     }
-    const FVector Approach(DoorX, DoorY + Side * 105.0, Position.Z);
-    if ((Position.Y - DoorY) * Side > 90.0 && FVector::DistSquared2D(Position, Approach) > FMath::Square(70.0))
+    NextSenseTime = Now + 0.2;
+    const ASurvivalCharacter* Nearest = nullptr;
+    const double Range = AggroRange > 0.0f ? AggroRange : 10000.0;
+    double BestDistance = FMath::Square(Range);
+    for (TActorIterator<ASurvivalCharacter> It(GetWorld()); It; ++It)
     {
-        return Approach;
+        if (It->GetHealthPoints() <= 0)
+        {
+            continue;
+        }
+        const double Distance = FVector::DistSquared(GetActorLocation(), It->GetActorLocation());
+        if (Distance > BestDistance)
+        {
+            continue;
+        }
+        FCollisionQueryParams Query(SCENE_QUERY_STAT(ZombiePerception), false, this);
+        Query.AddIgnoredActor(*It);
+        const FVector Eyes = GetActorLocation() + FVector(0, 0, 50);
+        const FVector TargetPoint = It->GetActorLocation() + FVector(0, 0, 20);
+        const double HearingRange = It->GetVelocity().Size2D() > 650.0 ? 1300.0 : 550.0;
+        const bool bHeard = It->GetVelocity().SizeSquared2D() > FMath::Square(150.0)
+            && Distance <= FMath::Square(HearingRange);
+        const bool bSeen = !GetWorld()->LineTraceTestByChannel(Eyes, TargetPoint, ECC_Visibility, Query);
+        if (AggroRange <= 0.0f || bHeard || bSeen)
+        {
+            Nearest = *It;
+            BestDistance = Distance;
+        }
     }
-    return FVector(DoorX, DoorY - Side * 115.0, Position.Z);
+    if (Nearest)
+    {
+        RememberTarget(*Nearest, Now);
+    }
+}
+
+FVector ASurvivalZombie::ChooseMoveDirection(const FVector& Desired)
+{
+    FHitResult Obstruction;
+    for (const double Angle : {40.0, 70.0, 100.0, 135.0})
+    {
+        for (const double Side : {DetourSide, -DetourSide})
+        {
+            const FVector Option = Desired.RotateAngleAxis(Angle * Side, FVector::UpVector);
+            if (!ProbePath(GetActorLocation() + Option * 105.0, Obstruction))
+            {
+                DetourSide = Side;
+                return Option;
+            }
+        }
+    }
+    return FVector::ZeroVector;
 }
 
 void ASurvivalZombie::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-    ASurvivalCharacter* Target = Cast<ASurvivalCharacter>(UGameplayStatics::GetPlayerPawn(this, 0));
-    if (!Target || Target->GetHealthPoints() <= 0 || Health <= 0)
+    if (Health <= 0)
     {
-        GetMesh()->SetPlayRate(0.0f);
         return;
     }
-
-    if (!bAlerted && AggroRange > 0.0f
-        && FVector::DistSquared2D(GetActorLocation(), Target->GetActorLocation()) > FMath::Square(AggroRange))
-    {
-        UpdateLocomotion(false);
-        return;
-    }
-    bAlerted = true;
-
     const double Now = GetWorld()->GetTimeSeconds();
+    UpdatePerception(Now);
     if (AttackImpactTime >= 0.0 && Now >= AttackImpactTime)
     {
         AttackImpactTime = -1.0;
-        ApplyAttack(*Target);
+        ApplyAttack();
     }
     if (AttackAnimation && Now < NextAttackTime)
     {
         return;
     }
 
-    const FVector Destination = FindDestination(*Target);
+    const bool bTracking = Now < SearchUntil;
+    const FVector Destination = bTracking ? LastKnownLocation : Home;
+    if (FVector::DistSquared2D(Destination, GetActorLocation()) < FMath::Square(bTracking ? 25.0 : 75.0))
+    {
+        UpdateLocomotion(false);
+        return;
+    }
     FHitResult Obstruction;
     const FVector Direction = (Destination - GetActorLocation()).GetSafeNormal2D();
     const bool bBlocked = ProbePath(GetActorLocation() + Direction * AttackReach, Obstruction);
     ASurvivalBuildChunk* Chunk = bBlocked ? Cast<ASurvivalBuildChunk>(Obstruction.GetActor()) : nullptr;
-    if ((Chunk && Chunk->FindFinished(Obstruction)) || (bBlocked && Obstruction.GetActor() == Target))
+    if (bTracking && ((Chunk && Chunk->FindFinished(Obstruction))
+        || (bBlocked && Cast<ASurvivalCharacter>(Obstruction.GetActor()))))
     {
         GetCharacterMovement()->StopMovementImmediately();
         if (Now >= NextAttackTime)
@@ -184,36 +218,26 @@ void ASurvivalZombie::Tick(float DeltaSeconds)
             else
             {
                 UpdateLocomotion(false);
-                ApplyAttack(*Target);
+                ApplyAttack();
             }
         }
         return;
     }
 
-    if (!bBlocked)
+    const FVector Move = bBlocked ? ChooseMoveDirection(Direction) : Direction;
+    UpdateLocomotion(!Move.IsNearlyZero());
+    if (!Move.IsNearlyZero())
     {
-        UpdateLocomotion(true);
-        AddMovementInput(Direction, 1.0f, /*bForce=*/true);
-        return;
+        AddMovementInput(Move, 1.0f, /*bForce=*/true);
     }
-
-    // Keep the station route usable with crates and pump columns in it.
-    for (const double Turn : {-55.0, 55.0})
-    {
-        const FVector Detour = Direction.RotateAngleAxis(Turn, FVector::UpVector);
-        if (!ProbePath(GetActorLocation() + Detour * 100.0, Obstruction))
-        {
-            UpdateLocomotion(true);
-            AddMovementInput(Detour, 1.0f, /*bForce=*/true);
-            return;
-        }
-    }
-    UpdateLocomotion(false);
 }
 
-void ASurvivalZombie::HitBySidearm()
+void ASurvivalZombie::HitBySidearm(ASurvivalCharacter* Shooter)
 {
-    bAlerted = true;
+    if (Shooter)
+    {
+        RememberTarget(*Shooter, GetWorld()->GetTimeSeconds());
+    }
     Health -= 32;
     if (Health <= 0)
     {

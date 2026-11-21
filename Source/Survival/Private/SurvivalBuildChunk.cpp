@@ -94,7 +94,7 @@ bool ASurvivalBuildChunk::AddInstances(UInstancedStaticMeshComponent& Component,
             return false;
         }
     }
-    return &Component != Ghosts.Get() || !Placement.GetPiece().bDoor || AddBox(FSurvivalBuildPlacement::ClosedDoor());
+    return true;
 }
 
 bool ASurvivalBuildChunk::AddPlan(const FSurvivalBuildPlacement& Placement)
@@ -141,17 +141,27 @@ FTransform DoorTransform(const FSurvivalBuildPlacement& Placement, double Degree
     const FVector Hinge(Leaf.Min.X, Center.Y, Center.Z);
     const FQuat Swing = FRotator(0, Degrees, 0).Quaternion();
     return FTransform(Placement.Rotation * Swing,
-        Placement.Base + Placement.Rotation.RotateVector(Hinge + Swing.RotateVector(Center - Hinge)),
+        Placement.MeshOrigin() + Placement.Rotation.RotateVector(Hinge + Swing.RotateVector(Center - Hinge)),
         Leaf.GetExtent() / 50.0);
 }
 }
 
-bool ASurvivalBuildChunk::AddDoorLeaf(FSurvivalFinishedPiece& Piece)
+bool ASurvivalBuildChunk::TryInstallDoor(const FHitResult& Hit)
 {
-    if (!Timber->GetStaticMesh())
+    const int32 Index = FindFinishedIndex(Hit);
+    if (!Finished.IsValidIndex(Index) || !Finished[Index].Placement.GetPiece().bDoorFrame
+        || Finished[Index].Door.IsValid() || !Timber->GetStaticMesh())
     {
         return false;
     }
+    FSurvivalFinishedPiece& Piece = Finished[Index];
+    const FTransform Transform = DoorTransform(Piece.Placement, 0.0);
+    const FCollisionShape Shape = FCollisionShape::MakeBox(FSurvivalBuildPlacement::ClosedDoor().GetExtent() - FVector(0.25));
+    if (GetWorld()->OverlapBlockingTestByChannel(Transform.GetLocation(), Transform.GetRotation(), ECC_Pawn, Shape))
+    {
+        return false;
+    }
+
     UStaticMeshComponent* Leaf = NewObject<UStaticMeshComponent>(this);
     AddInstanceComponent(Leaf);
     Leaf->SetupAttachment(GetRootComponent());
@@ -160,10 +170,24 @@ bool ASurvivalBuildChunk::AddDoorLeaf(FSurvivalFinishedPiece& Piece)
     Leaf->SetMaterial(0, Timber->GetMaterial(0));
     Leaf->SetCollisionProfileName(TEXT("BlockAllDynamic"));
     Leaf->SetCanEverAffectNavigation(false);
-    Leaf->SetWorldTransform(DoorTransform(Piece.Placement, 0.0));
+    Leaf->SetWorldTransform(Transform);
     Leaf->RegisterComponent();
     Piece.Door = Leaf;
+    Piece.DoorHealth = 55;
+    Piece.bDoorOpen = false;
     return true;
+}
+
+void ASurvivalBuildChunk::RemoveDoorLeaf(FSurvivalFinishedPiece& Piece)
+{
+    if (UStaticMeshComponent* Leaf = Piece.Door.Get())
+    {
+        RemoveInstanceComponent(Leaf);
+        Leaf->DestroyComponent();
+    }
+    Piece.Door.Reset();
+    Piece.DoorHealth = 0;
+    Piece.bDoorOpen = false;
 }
 
 bool ASurvivalBuildChunk::TryToggleDoor(const FHitResult& Hit)
@@ -218,18 +242,8 @@ bool ASurvivalBuildChunk::AddFinishedPiece(const FSurvivalBuildPlacement& Placem
 {
     const int32 MaxHealth = Placement.GetPiece().bStone ? 140 : 70;
     const int32 FinishedIndex = Finished.Add(FSurvivalFinishedPiece{Placement, MaxHealth, MaxHealth, StructureId});
-    if (Placement.GetPiece().bDoor && !AddDoorLeaf(Finished[FinishedIndex]))
-    {
-        Finished.Pop();
-        return false;
-    }
     if (!AddFinishedInstances(FinishedIndex))
     {
-        if (UStaticMeshComponent* Leaf = Finished[FinishedIndex].Door.Get())
-        {
-            RemoveInstanceComponent(Leaf);
-            Leaf->DestroyComponent();
-        }
         Finished.Pop();
         return false;
     }
@@ -293,6 +307,15 @@ bool ASurvivalBuildChunk::DamageFinished(const FHitResult& Hit, int32 Amount)
         return false;
     }
     FSurvivalFinishedPiece& Piece = Finished[Index];
+    if (Piece.Door.IsValid() && Hit.GetComponent() == Piece.Door.Get())
+    {
+        Piece.DoorHealth -= Amount;
+        if (Piece.DoorHealth <= 0)
+        {
+            RemoveDoorLeaf(Piece);
+        }
+        return true;
+    }
     if (Amount < Piece.Health)
     {
         Piece.Health -= Amount;
@@ -309,17 +332,13 @@ bool ASurvivalBuildChunk::DamageFinished(const FHitResult& Hit, int32 Amount)
 void ASurvivalBuildChunk::RemoveFinishedPieces(const TSet<int32>& StructureIds, int32& DebrisSlots)
 {
     TArray<FSurvivalBuildPlacement> Debris;
-    Finished.RemoveAllSwap([&](const FSurvivalFinishedPiece& Piece)
+    Finished.RemoveAllSwap([&](FSurvivalFinishedPiece& Piece)
     {
         if (!StructureIds.Contains(Piece.StructureId))
         {
             return false;
         }
-        if (UStaticMeshComponent* Leaf = Piece.Door.Get())
-        {
-            RemoveInstanceComponent(Leaf);
-            Leaf->DestroyComponent();
-        }
+        RemoveDoorLeaf(Piece);
         if (DebrisSlots > 0)
         {
             --DebrisSlots;

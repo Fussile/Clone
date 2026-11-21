@@ -103,6 +103,16 @@ bool FSurvivalEdgeSnapTest::RunTest(const FString& Parameters)
     FSurvivalBuildPlacement Door;
     Door.PieceIndex = 3;
     Door.Rotation = FRotator(0, 90, 0).Quaternion();
+    Door.AlignFrameEdge(FVector(25, 0, 0));
+    FSurvivalBuildPlacement Reversed = Door;
+    Reversed.Rotation = FRotator(0, 270, 0).Quaternion();
+    Reversed.AlignFrameEdge(FVector(25, 0, 0));
+    TestTrue(TEXT("The frame rests on the edge of the cell"),
+        Door.MeshOrigin().Equals(FVector(Cell / 2, 0, 0), Tolerance));
+    TestTrue(TEXT("A half-turn reverses the door without moving the frame"),
+        Reversed.MeshOrigin().Equals(Door.MeshOrigin(), Tolerance) &&
+        Door.Rotation.RotateVector(FVector::RightVector).Equals(
+            -Reversed.Rotation.RotateVector(FVector::RightVector), Tolerance));
     TestTrue(TEXT("The thin frame reserves two cells after rotating"),
         Door.ReservedBounds().GetExtent().Equals(FVector(Cell / 2, Cell / 2, Cell), Tolerance));
     TestTrue(TEXT("The frame is physically thin"),
@@ -117,7 +127,7 @@ bool FSurvivalEdgeSnapTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("A cube can use the cell beside the doorway"),
         !Door.OverlapsReservedCells(Upper));
     TestEqual(TEXT("The adjacent upper cube touches the tall door jamb"), Upper.SupportCostFrom(Door), 2);
-    TestTrue(TEXT("A wall reaches two meters with two cubes"),
+    TestTrue(TEXT("Two blocks reach the top of the two-cell doorway"),
         FMath::Abs(Upper.WorldBounds().Max.Z - 2.0 * Cell) < Tolerance);
     return true;
 }

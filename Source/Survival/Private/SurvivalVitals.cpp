@@ -12,8 +12,19 @@ const TCHAR* SurvivalItemName(ESurvivalItem Item)
     case ESurvivalItem::Stone: return TEXT("Stone");
     case ESurvivalItem::Cloth: return TEXT("Cloth");
     case ESurvivalItem::Rounds: return TEXT("Pistol rounds");
+    case ESurvivalItem::TimberDoor: return TEXT("Timber door");
     default: return TEXT("Empty");
     }
+}
+
+TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes()
+{
+    static const FSurvivalRecipe Recipes[] = {
+        {ESurvivalItem::Bandage, TEXT("Medical"), TEXT("Restores 30 health."), {{ESurvivalItem::Cloth, 2}}},
+        {ESurvivalItem::TimberDoor, TEXT("Building"), TEXT("Install into a completed door frame."),
+            {{ESurvivalItem::Timber, 4}}},
+    };
+    return MakeArrayView(Recipes);
 }
 
 void FSurvivalItems::Add(const FSurvivalItems& Other)
@@ -23,17 +34,7 @@ void FSurvivalItems::Add(const FSurvivalItems& Other)
     Cloth += Other.Cloth;
     Bandages += Other.Bandages;
     Rounds += Other.Rounds;
-}
-
-bool FSurvivalItems::CraftBandage()
-{
-    if (Cloth < BandageCloth)
-    {
-        return false;
-    }
-    Cloth -= BandageCloth;
-    ++Bandages;
-    return true;
+    TimberDoors += Other.TimberDoors;
 }
 
 int32 FSurvivalVitals::Advance(float DeltaSeconds, bool bSprinting, float MovementEffort, float AmbientCelsius)

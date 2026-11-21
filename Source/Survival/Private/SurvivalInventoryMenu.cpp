@@ -8,9 +8,12 @@
 #include "SurvivalHUD.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SSearchBox.h"
+#include "Widgets/Input/SSpinBox.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScaleBox.h"
+#include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SUniformGridPanel.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
@@ -33,14 +36,16 @@ const FSlateBrush* SSurvivalInventoryMenu::FindIcon(ESurvivalItem Item) const
 void SSurvivalInventoryMenu::Construct(const FArguments& Args)
 {
     Player = Args._Player;
+    SelectFirstMatchingRecipe();
     TSharedRef<SUniformGridPanel> Items = SNew(SUniformGridPanel).SlotPadding(FMargin(3.0f));
     for (int32 Index = 0; Index < UE_ARRAY_COUNT(Icons); ++Index)
     {
         const ESurvivalItem Item = static_cast<ESurvivalItem>(Index);
         Icons[Index].SetImageSize(FVector2D(36.0, 36.0));
         Icons[Index].SetResourceObject(Args._HUD->GetItemIcon(Item));
+        Icons[Index].SetUVRegion(Args._HUD->GetItemIconUV(Item));
         Icons[Index].DrawAs = Icons[Index].GetResourceObject() ? ESlateBrushDrawType::Image : ESlateBrushDrawType::NoDrawType;
-        Items->AddSlot(Index % 4, Index / 4)
+        Items->AddSlot(Index % 5, Index / 5)
         [
             SNew(SButton)
             .HAlign(HAlign_Center)
@@ -120,23 +125,23 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
     }
 
     ChildSlot
-    .HAlign(HAlign_Center).VAlign(VAlign_Center).Padding(14.0f)
+    .HAlign(HAlign_Center).VAlign(VAlign_Center).Padding(16.0f)
     [
         SNew(SScaleBox).Stretch(EStretch::ScaleToFit).StretchDirection(EStretchDirection::DownOnly)
         [
-            SNew(SBox).WidthOverride(720.0f)
+            SNew(SBox).WidthOverride(860.0f)
             [
-                SNew(SBorder).Padding(FMargin(18.0f))
+                SNew(SBorder).Padding(FMargin(19.0f))
                 .BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).BorderBackgroundColor(Backdrop)
                 [
                     SNew(SVerticalBox)
-                    + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 12)
+                    + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 14)
                     [
                         SNew(SHorizontalBox)
-                        + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center)
+                        + SHorizontalBox::Slot().FillWidth(1)
                         [
-                            SNew(STextBlock).Text(FText::FromString(TEXT("Pack & Craft")))
-                            .Font(FCoreStyle::GetDefaultFontStyle("Bold", 22)).ColorAndOpacity(FSlateColor(Accent))
+                            SNew(STextBlock).Text(FText::FromString(TEXT("Crafting")))
+                            .Font(FCoreStyle::GetDefaultFontStyle("Bold", 24)).ColorAndOpacity(FSlateColor(Accent))
                         ]
                         + SHorizontalBox::Slot().AutoWidth()
                         [
@@ -154,86 +159,225 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                     + SVerticalBox::Slot().AutoHeight()
                     [
                         SNew(SHorizontalBox)
-                        + SHorizontalBox::Slot().FillWidth(1).Padding(0, 0, 12, 0)
-                        [
-                            SNew(SVerticalBox)
-                            + SVerticalBox::Slot().AutoHeight()[Items]
-                            + SVerticalBox::Slot().AutoHeight().Padding(3, 9, 3, 0)
-                            [
-                                SNew(SButton).HAlign(HAlign_Center)
-                                .Text_Lambda([this]()
-                                {
-                                    const ESurvivalItem Item = Player.IsValid()
-                                        ? Player->GetSelectedInventoryItem() : ESurvivalItem::None;
-                                    return FText::FromString(FString::Printf(TEXT("Use %s"), SurvivalItemName(Item)));
-                                })
-                                .IsEnabled_Lambda([this]()
-                                {
-                                    return Player.IsValid() && Player->CanUseItem(Player->GetSelectedInventoryItem());
-                                })
-                                .OnClicked_Lambda([this]()
-                                {
-                                    if (ASurvivalCharacter* Character = Player.Get())
-                                    {
-                                        Character->UseItem(Character->GetSelectedInventoryItem());
-                                    }
-                                    return FReply::Handled();
-                                })
-                            ]
-                        ]
-                        + SHorizontalBox::Slot().AutoWidth()
-                        [
-                            SNew(SBox).WidthOverride(184.0f)
-                            [
-                                SNew(SVerticalBox)
-                                + SVerticalBox::Slot().AutoHeight().Padding(4, 4, 4, 8)
-                                [
-                                    SNew(STextBlock).Text(FText::FromString(TEXT("Crafting")))
-                                    .Font(FCoreStyle::GetDefaultFontStyle("Bold", 14)).ColorAndOpacity(FSlateColor(Accent))
-                                ]
-                                + SVerticalBox::Slot().AutoHeight().Padding(4)
-                                [
-                                    SNew(SImage).Image(FindIcon(ESurvivalItem::Bandage))
-                                ]
-                                + SVerticalBox::Slot().AutoHeight().Padding(4)
-                                [
-                                    SNew(STextBlock).Text_Lambda([this]()
-                                    {
-                                        const int32 Cloth = Player.IsValid() ? Player->GetItemCount(ESurvivalItem::Cloth) : 0;
-                                        return FText::FromString(FString::Printf(TEXT("Bandage\n%d cloth needed (%d held)"),
-                                            FSurvivalItems::BandageCloth, Cloth));
-                                    })
-                                ]
-                                + SVerticalBox::Slot().AutoHeight().Padding(4, 8)
-                                [
-                                    SNew(SButton).HAlign(HAlign_Center).Text(FText::FromString(TEXT("Craft bandage")))
-                                    .IsEnabled_Lambda([this]()
-                                    {
-                                        return Player.IsValid()
-                                            && Player->GetItemCount(ESurvivalItem::Cloth) >= FSurvivalItems::BandageCloth;
-                                    })
-                                    .OnClicked_Lambda([this]()
-                                    {
-                                        if (ASurvivalCharacter* Character = Player.Get())
-                                        {
-                                            Character->CraftBandage();
-                                        }
-                                        return FReply::Handled();
-                                    })
-                                ]
-                            ]
-                        ]
+                        + SHorizontalBox::Slot().FillWidth(0.44f).Padding(0, 0, 20, 0)[MakeRecipeBrowser()]
+                        + SHorizontalBox::Slot().FillWidth(0.56f)[MakeRecipeDetails()]
                     ]
                     + SVerticalBox::Slot().AutoHeight().Padding(3, 16, 3, 5)
                     [
-                        SNew(STextBlock).Text(FText::FromString(TEXT("Select an item, then click a slot or press 1-6 to assign it.")))
-                        .ColorAndOpacity(FSlateColor(Accent))
+                        SNew(STextBlock).Text(FText::FromString(TEXT("Backpack")))
+                        .Font(FCoreStyle::GetDefaultFontStyle("Bold", 15)).ColorAndOpacity(FSlateColor(Accent))
+                    ]
+                    + SVerticalBox::Slot().AutoHeight()[Items]
+                    + SVerticalBox::Slot().AutoHeight().Padding(3, 7, 3, 8)
+                    [
+                        SNew(SHorizontalBox)
+                        + SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 12, 0)
+                        [
+                            SNew(SButton).Text(FText::FromString(TEXT("Use selected")))
+                            .IsEnabled_Lambda([this]()
+                            {
+                                return Player.IsValid() && Player->CanUseItem(Player->GetSelectedInventoryItem());
+                            })
+                            .OnClicked_Lambda([this]()
+                            {
+                                if (ASurvivalCharacter* Character = Player.Get())
+                                {
+                                    Character->UseItem(Character->GetSelectedInventoryItem());
+                                }
+                                return FReply::Handled();
+                            })
+                        ]
+                        + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center)
+                        [
+                            SNew(STextBlock).Text(FText::FromString(TEXT("Select an item, then click a slot or press 1-6 to assign it.")))
+                            .ColorAndOpacity(FSlateColor(Accent))
+                        ]
                     ]
                     + SVerticalBox::Slot().AutoHeight()[Slots]
                 ]
             ]
         ]
     ];
+}
+
+bool SSurvivalInventoryMenu::MatchesFilters(const FSurvivalRecipe& Recipe) const
+{
+    return (Category.IsEmpty() || Category == Recipe.Category)
+        && (SearchText.IsEmpty() || FString(SurvivalItemName(Recipe.Output)).Contains(SearchText));
+}
+
+void SSurvivalInventoryMenu::SelectFirstMatchingRecipe()
+{
+    const TConstArrayView<FSurvivalRecipe> Recipes = GetSurvivalRecipes();
+    if (!Recipes.IsValidIndex(SelectedRecipe) || !MatchesFilters(Recipes[SelectedRecipe]))
+    {
+        SelectedRecipe = INDEX_NONE;
+        for (int32 Index = 0; Index < Recipes.Num(); ++Index)
+        {
+            if (MatchesFilters(Recipes[Index]))
+            {
+                SelectedRecipe = Index;
+                break;
+            }
+        }
+    }
+}
+
+TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeBrowser()
+{
+    TSharedRef<SHorizontalBox> Categories = SNew(SHorizontalBox);
+    for (const TCHAR* Label : {TEXT("All"), TEXT("Medical"), TEXT("Building")})
+    {
+        Categories->AddSlot().FillWidth(1).Padding(0, 0, 4, 0)
+        [
+            SNew(SButton).HAlign(HAlign_Center).Text(FText::FromString(Label))
+            .ButtonColorAndOpacity_Lambda([this, Label]()
+            {
+                return FSlateColor(Category == Label || (Category.IsEmpty() && FCString::Strcmp(Label, TEXT("All")) == 0)
+                    ? Chosen : Tile);
+            })
+            .OnClicked_Lambda([this, Label]()
+            {
+                Category = FCString::Strcmp(Label, TEXT("All")) == 0 ? TEXT("") : Label;
+                SelectFirstMatchingRecipe();
+                return FReply::Handled();
+            })
+        ];
+    }
+
+    TSharedRef<SScrollBox> Rows = SNew(SScrollBox);
+    const TConstArrayView<FSurvivalRecipe> Recipes = GetSurvivalRecipes();
+    for (int32 Index = 0; Index < Recipes.Num(); ++Index)
+    {
+        const ESurvivalItem Item = Recipes[Index].Output;
+        Rows->AddSlot().Padding(0, 3)
+        [
+            SNew(SButton).ButtonColorAndOpacity_Lambda([this, Index]()
+            {
+                return FSlateColor(SelectedRecipe == Index ? Chosen : Tile);
+            })
+            .Visibility_Lambda([this, Index]()
+            {
+                return MatchesFilters(GetSurvivalRecipes()[Index]) ? EVisibility::Visible : EVisibility::Collapsed;
+            })
+            .OnClicked_Lambda([this, Index]()
+            {
+                SelectedRecipe = Index;
+                return FReply::Handled();
+            })
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[SNew(SImage).Image(FindIcon(Item))]
+                + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center)
+                [
+                    SNew(STextBlock).Text(FText::FromString(SurvivalItemName(Item)))
+                ]
+            ]
+        ];
+    }
+
+    return SNew(SVerticalBox)
+        + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 6)
+        [
+            SNew(SSearchBox).HintText(FText::FromString(TEXT("Find recipe")))
+            .OnTextChanged_Lambda([this](const FText& Text)
+            {
+                SearchText = Text.ToString().TrimStartAndEnd();
+                SelectFirstMatchingRecipe();
+            })
+        ]
+        + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 5)[Categories]
+        + SVerticalBox::Slot().AutoHeight()
+        [
+            SNew(SBox).HeightOverride(168.0f)[Rows]
+        ];
+}
+
+FText SSurvivalInventoryMenu::GetIngredientText() const
+{
+    const TConstArrayView<FSurvivalRecipe> Recipes = GetSurvivalRecipes();
+    if (!Recipes.IsValidIndex(SelectedRecipe))
+    {
+        return FText::GetEmpty();
+    }
+
+    FString Ingredients;
+    for (const FSurvivalIngredient& Ingredient : Recipes[SelectedRecipe].Ingredients)
+    {
+        const int32 Held = Player.IsValid() ? Player->GetItemCount(Ingredient.Item) : 0;
+        Ingredients += FString::Printf(TEXT("%s   %d / %d
+"), SurvivalItemName(Ingredient.Item), Held, Ingredient.Count * Quantity);
+    }
+    return FText::FromString(Ingredients.TrimEnd());
+}
+
+TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeDetails()
+{
+    return SNew(SBorder).Padding(FMargin(12.0f))
+        .BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+        .BorderBackgroundColor(FLinearColor(0.08f, 0.14f, 0.17f))
+        [
+            SNew(SVerticalBox)
+            + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 5)
+            [
+                SNew(STextBlock).Font(FCoreStyle::GetDefaultFontStyle("Bold", 20))
+                .Text_Lambda([this]()
+                {
+                    const TConstArrayView<FSurvivalRecipe> Recipes = GetSurvivalRecipes();
+                    return FText::FromString(Recipes.IsValidIndex(SelectedRecipe)
+                        ? SurvivalItemName(Recipes[SelectedRecipe].Output) : TEXT("No matching recipes"));
+                })
+            ]
+            + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 12)
+            [
+                SNew(STextBlock).AutoWrapText(true).Text_Lambda([this]()
+                {
+                    const TConstArrayView<FSurvivalRecipe> Recipes = GetSurvivalRecipes();
+                    return Recipes.IsValidIndex(SelectedRecipe)
+                        ? FText::FromString(Recipes[SelectedRecipe].Description) : FText::GetEmpty();
+                })
+            ]
+            + SVerticalBox::Slot().AutoHeight()
+            [
+                SNew(STextBlock).Text(FText::FromString(TEXT("Ingredients   held / required"))).ColorAndOpacity(FSlateColor(Accent))
+                .Visibility_Lambda([this]() { return SelectedRecipe == INDEX_NONE ? EVisibility::Collapsed : EVisibility::Visible; })
+            ]
+            + SVerticalBox::Slot().FillHeight(1).Padding(0, 6, 0, 10)
+            [
+                SNew(SScrollBox)
+                + SScrollBox::Slot()[SNew(STextBlock).Text(this, &SSurvivalInventoryMenu::GetIngredientText)]
+            ]
+            + SVerticalBox::Slot().AutoHeight()
+            [
+                SNew(SHorizontalBox)
+                .Visibility_Lambda([this]() { return SelectedRecipe == INDEX_NONE ? EVisibility::Collapsed : EVisibility::Visible; })
+                + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 6, 0)
+                [
+                    SNew(STextBlock).Text(FText::FromString(TEXT("Quantity")))
+                ]
+                + SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)
+                [
+                    SNew(SBox).WidthOverride(64.0f)
+                    [
+                        SNew(SSpinBox<int32>).MinValue(1).MaxValue(99).MaxSliderValue(20).Value(1)
+                        .OnValueChanged_Lambda([this](int32 Value) { Quantity = Value; })
+                    ]
+                ]
+                + SHorizontalBox::Slot().FillWidth(1)
+                [
+                    SNew(SButton).HAlign(HAlign_Center).Text(FText::FromString(TEXT("Craft")))
+                    .IsEnabled_Lambda([this]() { return Player.IsValid() && Player->CanCraftRecipe(SelectedRecipe, Quantity); })
+                    .OnClicked_Lambda([this]()
+                    {
+                        if (ASurvivalCharacter* Character = Player.Get())
+                        {
+                            Character->CraftRecipe(SelectedRecipe, Quantity);
+                        }
+                        return FReply::Handled();
+                    })
+                ]
+            ]
+        ];
 }
 
 FReply SSurvivalInventoryMenu::OnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)

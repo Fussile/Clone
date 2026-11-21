@@ -24,9 +24,13 @@ const FLinearColor Blocked(1.0f, 0.51f, 0.36f);
 void ASurvivalHUD::BeginPlay()
 {
     Super::BeginPlay();
+#if WITH_EDITOR
+    MedicineSheet = LoadObject<UTexture2D>(nullptr,
+        TEXT("/Game/Art/Crossroads/Local/MedicineSheet.MedicineSheet"), nullptr, LOAD_NoWarn);
+#endif
     static const TCHAR* Names[] = {
         TEXT("Sidearm"), TEXT("Food"), TEXT("Water"), TEXT("Bandage"), TEXT("Timber"),
-        TEXT("Stone"), TEXT("Cloth"), TEXT("Rounds")
+        TEXT("Stone"), TEXT("Cloth"), TEXT("Rounds"), TEXT("TimberDoor")
     };
     static_assert(UE_ARRAY_COUNT(Names) == static_cast<int32>(ESurvivalItem::None));
     for (const TCHAR* Name : Names)
@@ -38,8 +42,23 @@ void ASurvivalHUD::BeginPlay()
 
 UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item) const
 {
+    if (MedicineSheet && Item == ESurvivalItem::Bandage)
+    {
+        return MedicineSheet.Get();
+    }
     const int32 Index = static_cast<int32>(Item);
     return ItemIcons.IsValidIndex(Index) ? ItemIcons[Index].Get() : nullptr;
+}
+
+FBox2f ASurvivalHUD::GetItemIconUV(ESurvivalItem Item) const
+{
+    if (MedicineSheet && Item == ESurvivalItem::Bandage)
+    {
+        // The first row, fifth tile is the wrapped bandage on the supplied sheet.
+        return FBox2f(FVector2f(491.0f / 1215.0f, 10.0f / 765.0f),
+            FVector2f(607.0f / 1215.0f, 129.0f / 765.0f));
+    }
+    return FBox2f(FVector2f(0.0f, 0.0f), FVector2f(1.0f, 1.0f));
 }
 
 void ASurvivalHUD::SetInventoryVisible(ASurvivalCharacter& Character, bool bVisible)
@@ -107,7 +126,9 @@ void ASurvivalHUD::DrawHotbar(const ASurvivalCharacter& Character)
         const int32 Count = Character.GetItemCount(Item);
         if (UTexture2D* Icon = GetItemIcon(Item))
         {
-            DrawTexture(Icon, X + 7.0f, Y + 7.0f, 40.0f, 40.0f, 0, 0, 1, 1,
+            const FBox2f UV = GetItemIconUV(Item);
+            const FVector2f Size = UV.GetSize();
+            DrawTexture(Icon, X + 7.0f, Y + 7.0f, 40.0f, 40.0f, UV.Min.X, UV.Min.Y, Size.X, Size.Y,
                 FLinearColor(1, 1, 1, Count > 0 ? 1.0f : 0.25f));
         }
         DrawText(FString::FromInt(Index + 1), bSelected ? Cyan : Muted, X + 5.0f, Y + 3.0f);
@@ -269,6 +290,12 @@ void ASurvivalHUD::DrawHUD()
             DrawText(Piece->bDoorOpen ? TEXT("[E] Close door") : TEXT("[E] Open door"),
                 Cyan, CenterX + 14.0f, CenterY + 32.0f);
         }
+        else if (!Character->IsBuilding() && Piece->Placement.GetPiece().bDoorFrame)
+        {
+            const bool bHasDoor = Character->GetItemCount(ESurvivalItem::TimberDoor) > 0;
+            DrawText(bHasDoor ? TEXT("[E] Install timber door") : TEXT("Craft a timber door in the pack"),
+                bHasDoor ? Cyan : Muted, CenterX + 14.0f, CenterY + 32.0f);
+        }
         else if (Piece->Health < Piece->MaxHealth)
         {
             const FSurvivalMaterials Cost = Piece->RepairCost();
@@ -282,7 +309,7 @@ void ASurvivalHUD::DrawHUD()
 
 void ASurvivalHUD::DrawBuildMenu(const ASurvivalCharacter& Character)
 {
-    const TConstArrayView<FSurvivalBuildPiece> Pieces = GetSurvivalBuildPieces();
+    const TConstArrayView<int32> Pieces = GetPlayerBuildPieces();
     const float X = 20.0f;
     const float Y = 106.0f;
     constexpr float Width = 298.0f;
@@ -292,9 +319,9 @@ void ASurvivalHUD::DrawBuildMenu(const ASurvivalCharacter& Character)
     DrawText(TEXT("BUILD PLAN"), Cyan, X + 12.0f, Y + 12.0f, nullptr, 1.25f);
     for (int32 Index = 0; Index < Pieces.Num(); ++Index)
     {
-        const FSurvivalBuildPiece& Piece = Pieces[Index];
+        const FSurvivalBuildPiece& Piece = GetSurvivalBuildPieces()[Pieces[Index]];
         const float Top = Y + 40.0f + Row * Index;
-        const bool bSelected = Index == Character.GetSelectedPiece();
+        const bool bSelected = Pieces[Index] == Character.GetSelectedPiece();
         if (bSelected)
         {
             DrawRect(FLinearColor(0.10f, 0.23f, 0.29f, 0.95f), X + 7.0f, Top, Width - 14.0f, Row);
@@ -318,7 +345,7 @@ void ASurvivalHUD::DrawPlacement(const FSurvivalBuildPlacement& Placement, const
         {
             const FVector Offset(Index & 1 ? Box.Max.X : Box.Min.X, Index & 2 ? Box.Max.Y : Box.Min.Y,
                 Index & 4 ? Box.Max.Z : Box.Min.Z);
-            const FVector Point = Placement.Base + Placement.Rotation.RotateVector(Offset);
+            const FVector Point = Placement.MeshOrigin() + Placement.Rotation.RotateVector(Offset);
             Visible[Index] = PlayerOwner->ProjectWorldLocationToScreen(Point, Corners[Index], true);
         }
 

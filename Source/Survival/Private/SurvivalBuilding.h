@@ -28,25 +28,29 @@ struct FSurvivalBuildPiece
     bool bStairs = false;
     bool bWall = false;
     int32 HeightCells = 1;
-    bool bDoor = false;
+    bool bDoorFrame = false;
 
     int32 SupportCapacity() const { return bStone ? 9 : 5; }
 };
 
 TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces();
+TConstArrayView<int32> GetPlayerBuildPieces();
 
 struct FSurvivalBuildPlacement
 {
-    static constexpr double GridSize = 100.0;
+    static constexpr double GridSize = 105.0;
     static constexpr double HalfWallHeight = GridSize / 2;
 
     FVector Base = FVector::ZeroVector;
+    FVector FrameOffset = FVector::ZeroVector;
     FQuat Rotation = FQuat::Identity;
     int32 PieceIndex = 0;
     bool bClear = false;
 
     const FSurvivalBuildPiece& GetPiece() const { return GetSurvivalBuildPieces()[PieceIndex]; }
-    FVector WorldCenter(const FBox& Box) const { return Base + Rotation.RotateVector(Box.GetCenter()); }
+    FVector MeshOrigin() const { return Base + FrameOffset; }
+    void AlignFrameEdge(const FVector& Point);
+    FVector WorldCenter(const FBox& Box) const { return MeshOrigin() + Rotation.RotateVector(Box.GetCenter()); }
     FBox WorldBounds() const;
     FBox ReservedBounds() const;
     bool OverlapsReservedCells(const FSurvivalBuildPlacement& Other) const;

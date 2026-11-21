@@ -389,14 +389,24 @@ void ASurvivalCharacter::Interact()
             if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
             {
                 if (const FSurvivalFinishedPiece* Piece = Chunk->FindFinished(Hit);
-                    !bBuildMode && Piece && Piece->Placement.GetPiece().bDoor)
+                    !bBuildMode && Piece && Piece->Placement.GetPiece().bDoorFrame)
                 {
-                    if (!Chunk->TryToggleDoor(Hit))
+                    if (Piece->Door.IsValid())
                     {
-                        if (APlayerController* Player = Cast<APlayerController>(GetController()))
+                        if (Chunk->TryToggleDoor(Hit))
                         {
-                            Player->ClientMessage(TEXT("Door swing is blocked."));
+                            return;
                         }
+                    }
+                    else if (Items.TimberDoors > 0 && Chunk->TryInstallDoor(Hit))
+                    {
+                        --Items.TimberDoors;
+                        return;
+                    }
+                    if (APlayerController* Player = Cast<APlayerController>(GetController()))
+                    {
+                        Player->ClientMessage(!Piece->Door.IsValid() && Items.TimberDoors == 0
+                            ? TEXT("Craft a timber door first.") : TEXT("Doorway is blocked."));
                     }
                 }
                 else
@@ -469,7 +479,7 @@ void ASurvivalCharacter::UpdateSidearmView()
 
 void ASurvivalCharacter::LoadSidearmViewmodel()
 {
-    constexpr TCHAR MeshPath[] = TEXT("/Game/Art/Crossroads/SightedViewmodel/SK_SidearmViewmodel.SK_SidearmViewmodel");
+    constexpr TCHAR MeshPath[] = TEXT("/Game/Art/Crossroads/MagazineViewmodel/SK_SidearmViewmodel.SK_SidearmViewmodel");
     USkeletalMesh* Arms = LoadObject<USkeletalMesh>(nullptr, MeshPath, nullptr, LOAD_NoWarn);
     if (!Arms)
     {
@@ -526,7 +536,7 @@ void ASurvivalCharacter::LoadSidearmViewmodel()
 
     const auto LoadClip = [](const TCHAR* Name)
     {
-        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/SightedViewmodel/%s.%s"), Name, Name);
+        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/MagazineViewmodel/%s.%s"), Name, Name);
         return LoadObject<UAnimSequence>(nullptr, *Path);
     };
     ViewmodelIdle = LoadClip(TEXT("ViewmodelIdle"));
@@ -826,6 +836,7 @@ int32 ASurvivalCharacter::GetItemCount(ESurvivalItem Item) const
     case ESurvivalItem::Stone: return Inventory.Stone;
     case ESurvivalItem::Cloth: return Items.Cloth;
     case ESurvivalItem::Rounds: return Items.Rounds;
+    case ESurvivalItem::TimberDoor: return Items.TimberDoors;
     default: return 0;
     }
 }
@@ -896,11 +907,50 @@ void ASurvivalCharacter::ChooseHotbarSlot(int32 Slot)
     UpdateSidearmView();
 }
 
-void ASurvivalCharacter::CraftBandage()
+bool ASurvivalCharacter::CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const
 {
-    if (bInventoryOpen && HealthPoints > 0)
+    const TConstArrayView<FSurvivalRecipe> Recipes = GetSurvivalRecipes();
+    if (!bInventoryOpen || HealthPoints <= 0 || !Recipes.IsValidIndex(RecipeIndex) || Quantity < 1 || Quantity > 99)
     {
-        Items.CraftBandage();
+        return false;
+    }
+    for (const FSurvivalIngredient& Ingredient : Recipes[RecipeIndex].Ingredients)
+    {
+        if (GetItemCount(Ingredient.Item) < Ingredient.Count * Quantity)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+void ASurvivalCharacter::CraftRecipe(int32 RecipeIndex, int32 Quantity)
+{
+    if (!CanCraftRecipe(RecipeIndex, Quantity))
+    {
+        return;
+    }
+    const FSurvivalRecipe& Recipe = GetSurvivalRecipes()[RecipeIndex];
+    for (const FSurvivalIngredient& Ingredient : Recipe.Ingredients)
+    {
+        ChangeItemCount(Ingredient.Item, -Ingredient.Count * Quantity);
+    }
+    ChangeItemCount(Recipe.Output, Quantity);
+}
+
+void ASurvivalCharacter::ChangeItemCount(ESurvivalItem Item, int32 Delta)
+{
+    switch (Item)
+    {
+    case ESurvivalItem::Food: Items.Food += Delta; break;
+    case ESurvivalItem::Water: Items.Water += Delta; break;
+    case ESurvivalItem::Bandage: Items.Bandages += Delta; break;
+    case ESurvivalItem::Timber: Inventory.Timber += Delta; break;
+    case ESurvivalItem::Stone: Inventory.Stone += Delta; break;
+    case ESurvivalItem::Cloth: Items.Cloth += Delta; break;
+    case ESurvivalItem::Rounds: Items.Rounds += Delta; break;
+    case ESurvivalItem::TimberDoor: Items.TimberDoors += Delta; break;
+    default: checkNoEntry(); break;
     }
 }
 
@@ -927,7 +977,7 @@ void ASurvivalCharacter::NextPiece()
 {
     if (bBuildMode)
     {
-        SelectedPiece = (SelectedPiece + 1) % GetSurvivalBuildPieces().Num();
+        SelectedPiece = (SelectedPiece + 1) % GetPlayerBuildPieces().Num();
     }
     else if (!bInventoryOpen)
     {
@@ -939,7 +989,7 @@ void ASurvivalCharacter::PreviousPiece()
 {
     if (bBuildMode)
     {
-        const int32 Count = GetSurvivalBuildPieces().Num();
+        const int32 Count = GetPlayerBuildPieces().Num();
         SelectedPiece = (SelectedPiece + Count - 1) % Count;
     }
     else if (!bInventoryOpen)
@@ -983,7 +1033,7 @@ bool ASurvivalCharacter::IsFootprintClear(const FSurvivalBuildPlacement& Placeme
             return false;
         }
     }
-    return !Placement.GetPiece().bDoor || IsClear(FSurvivalBuildPlacement::ClosedDoor());
+    return true;
 }
 
 TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
@@ -1012,7 +1062,7 @@ TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
     Placement.Base = FVector(FMath::GridSnap(Hit.ImpactPoint.X, FSurvivalBuildPlacement::GridSize),
         FMath::GridSnap(Hit.ImpactPoint.Y, FSurvivalBuildPlacement::GridSize), Hit.ImpactPoint.Z);
     Placement.Rotation = FRotator(0, QuarterTurns * 90.0, 0).Quaternion();
-    Placement.PieceIndex = SelectedPiece;
+    Placement.PieceIndex = GetSelectedPiece();
     FVector ReachPoint = Hit.ImpactPoint;
     if (Source)
     {
@@ -1031,6 +1081,7 @@ TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
         ReachPoint = Placement.Base + FVector(0, 0, SupportTolerance + 2.0);
     }
 
+    Placement.AlignFrameEdge(Hit.ImpactPoint);
     const bool bPlannedSupport = bPlanHit && Source && Placement.SupportCostFrom(*Source) >= 0;
     Placement.bClear = HasReachTo(ReachPoint, BuildReach) && IsFootprintClear(Placement, true)
         && (bPlannedSupport || HasSupport(Placement));

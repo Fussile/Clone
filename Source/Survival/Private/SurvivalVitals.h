@@ -1,13 +1,30 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/ArrayView.h"
 
 enum class ESurvivalItem : uint8
 {
-    Sidearm, Food, Water, Bandage, Timber, Stone, Cloth, Rounds, None
+    Sidearm, Food, Water, Bandage, Timber, Stone, Cloth, Rounds, TimberDoor, None
 };
 
 const TCHAR* SurvivalItemName(ESurvivalItem Item);
+
+struct FSurvivalIngredient
+{
+    ESurvivalItem Item;
+    int32 Count;
+};
+
+struct FSurvivalRecipe
+{
+    ESurvivalItem Output;
+    const TCHAR* Category;
+    const TCHAR* Description;
+    TArray<FSurvivalIngredient> Ingredients;
+};
+
+TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes();
 
 struct FSurvivalItems
 {
@@ -17,10 +34,9 @@ struct FSurvivalItems
     int32 Bandages = 0;
     int32 Rounds = 0;
 
-    static constexpr int32 BandageCloth = 2;
+    int32 TimberDoors = 0;
 
     void Add(const FSurvivalItems& Other);
-    bool CraftBandage();
 };
 
 struct FSurvivalVitals

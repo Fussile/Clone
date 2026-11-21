@@ -166,7 +166,7 @@ bool ASurvivalGameMode::HasGroundFooting(const FSurvivalBuildPlacement& Placemen
         {
             for (double Y : {Box.Min.Y + 2.0, Box.Max.Y - 2.0})
             {
-                const FVector Foot = Placement.Base + Placement.Rotation.RotateVector(FVector(X, Y, 0));
+                const FVector Foot = Placement.MeshOrigin() + Placement.Rotation.RotateVector(FVector(X, Y, 0));
                 FHitResult Hit;
                 if (!GetWorld()->LineTraceSingleByChannel(Hit, Foot + Probe, Foot - Probe, ECC_Visibility, Query)
                     || Hit.ImpactNormal.Z < 0.95 || !Hit.GetActor() || !Hit.GetActor()->ActorHasTag(GroundTag))

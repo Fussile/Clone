@@ -37,11 +37,12 @@ public:
     void SetSelectedInventoryItem(ESurvivalItem Item) { SelectedInventoryItem = Item; }
     void ChooseHotbarSlot(int32 Slot);
     void UseItem(ESurvivalItem Item);
-    void CraftBandage();
+    bool CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const;
+    void CraftRecipe(int32 RecipeIndex, int32 Quantity);
     void ToggleInventory();
     bool IsInventoryOpen() const { return bInventoryOpen; }
     bool IsBuilding() const { return bBuildMode; }
-    int32 GetSelectedPiece() const { return SelectedPiece; }
+    int32 GetSelectedPiece() const { return GetPlayerBuildPieces()[SelectedPiece]; }
     TOptional<FSurvivalBuildPlacement> FindPlacement() const;
     bool CanFinish(const FSurvivalBuildPlacement& Placement) const;
     const FSurvivalFinishedPiece* FindFinishedPiece() const;
@@ -82,6 +83,7 @@ private:
     void SetStance(EStance NewStance);
     void UpdateMovementPresentation();
     void Interact();
+    void ChangeItemCount(ESurvivalItem Item, int32 Delta);
     void SetInventoryOpen(bool bOpen);
     void HotbarOne() { ChooseHotbarSlot(0); }
     void HotbarTwo() { ChooseHotbarSlot(1); }
