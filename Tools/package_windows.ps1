@@ -66,6 +66,7 @@ try {
     if (Test-Path -LiteralPath $importedSidearm -PathType Leaf) {
         Copy-Item -LiteralPath (Join-Path $projectRoot 'Docs\SidearmAttribution.txt') -Destination $package[0]
     }
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'Docs\SurvivorAttribution.txt') -Destination $package[0]
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Docs\ZombieAttribution.txt') -Destination $package[0]
     Copy-Item -LiteralPath (Join-Path $projectRoot 'Docs\SidearmViewmodelAttribution.txt') -Destination $package[0]
 

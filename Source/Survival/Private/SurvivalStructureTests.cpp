@@ -48,6 +48,19 @@ bool FSurvivalContactsTest::RunTest(const FString& Parameters)
     Adjacent.Base.Y = 0;
     Adjacent.Base.Z += 50;
     TestEqual(TEXT("An air gap carries no support"), Adjacent.SupportCostFrom(Floor), INDEX_NONE);
+
+    FSurvivalBuildPlacement HalfWall;
+    HalfWall.PieceIndex = 1;
+    FSurvivalBuildPlacement Stairs;
+    Stairs.PieceIndex = 5;
+    TestEqual(TEXT("Stairs rise to the half-wall height"), Stairs.GetPiece().Boxes.Last().Max.Z,
+        HalfWall.GetPiece().Boxes.Last().Max.Z);
+    FSurvivalBuildPlacement NextStairs = Stairs;
+    NextStairs.Base = Stairs.StairContinuation();
+    TestEqual(TEXT("A flush stair flight supports the flight above it"), NextStairs.SupportCostFrom(Stairs), 1);
+    TestEqual(TEXT("The higher flight cannot support the lower one"), Stairs.SupportCostFrom(NextStairs), INDEX_NONE);
+    NextStairs.Base.Z += 2;
+    TestEqual(TEXT("A vertical gap breaks the stair joint"), NextStairs.SupportCostFrom(Stairs), INDEX_NONE);
     return true;
 }
 #endif

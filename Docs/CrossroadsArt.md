@@ -7,7 +7,7 @@
 | Asphalt021 | Cracked roads and the gas station forecourt |
 | Concrete034 | Foundations, curbs and warehouse walls |
 | Ground036 | Dirt shoulders and farm ground |
-| Kenney characterMedium | Rigged low-poly placeholder for the player |
+| Basic Human Male by DNC44 | Rigged third-person survivor |
 
 ## Surfaces
 
@@ -15,9 +15,7 @@ For each surface, import Color, NormalDX and Roughness under `/Game/Art/Crossroa
 
 ## Survivor
 
-Import `Kenney/Model/characterMedium.fbx` as a skeletal mesh under `/Game/Art/Crossroads/Survivor`. Create a new skeleton on this first import, then reuse that skeleton for the animation FBXs. Import `Kenney/Skins/survivorMaleB.png` and assign it as Base Color on the mesh material. Import the three FBXs in `Kenney/Animations` as animation sequences using the skeleton from the mesh import. Preview each clip on that skeleton before wiring locomotion.
-
-The native pawn loads the survivor mesh and plays the imported idle, run and jump clips. Press **V** to see the survivor in third person.
+Preparation imports `Survivor/SK_Survivor.glb` into `/Game/Art/Crossroads/Player`. The mesh, skin material, and eight locomotion clips share one rig. Press **V** to see the survivor in third person. [Survivor attribution](SurvivorAttribution.txt)
 
 ## Building
 

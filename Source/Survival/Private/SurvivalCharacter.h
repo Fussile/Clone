@@ -49,6 +49,7 @@ protected:
 
 private:
     const UCameraComponent& GetAimCamera() const;
+    bool FindPlanAimHit(double Reach, FHitResult& Hit) const;
     bool FindWorldAimHit(double Reach, FHitResult& Hit) const;
     bool HasReachTo(const FVector& Point, double Reach) const;
     bool HasSupport(const FSurvivalBuildPlacement& Placement) const;
@@ -56,6 +57,14 @@ private:
 
     void MoveForward(float Value);
     void MoveRight(float Value);
+    enum class EStance : uint8 { Standing, Crouched, Prone };
+    void StartJump();
+    void StartSprint();
+    void StopSprint();
+    void ToggleCrouch();
+    void ToggleProne();
+    void SetStance(EStance NewStance);
+    void UpdateMovementPresentation();
     void Interact();
     void ToggleBuildMode();
     void RotatePiece();
@@ -76,6 +85,9 @@ private:
     void StartDefense();
     void RestartDefense();
 
+    EStance Stance = EStance::Standing;
+    bool bSprintHeld = false;
+    double BodyMeshBottom = 0.0;
     FSurvivalMaterials Inventory;
     int32 SelectedPiece = 0;
     int32 QuarterTurns = 0;
@@ -130,7 +142,22 @@ private:
     TObjectPtr<UAnimSequence> IdleAnimation;
 
     UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> WalkAnimation;
+
+    UPROPERTY(Transient)
     TObjectPtr<UAnimSequence> RunAnimation;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> CrouchIdleAnimation;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> CrouchMoveAnimation;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> ProneIdleAnimation;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> ProneMoveAnimation;
 
     UPROPERTY(Transient)
     TObjectPtr<UAnimSequence> JumpAnimation;

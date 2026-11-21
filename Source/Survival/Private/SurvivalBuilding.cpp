@@ -37,9 +37,10 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces()
         return FBox(FVector(X0, Y0, Z0), FVector(X1, Y1, Z1));
     };
 
+    constexpr double Rise = FSurvivalBuildPlacement::HalfWallHeight;
     static const FSurvivalBuildPiece Pieces[] = {
         {TEXT("Timber wall"), {3, 0}, false, {Box(-50, -12, 0, 50, 12, 220)}},
-        {TEXT("Half wall"), {2, 0}, false, {Box(-50, -12, 0, 50, 12, 110)}},
+        {TEXT("Half wall"), {2, 0}, false, {Box(-50, -12, 0, 50, 12, Rise)}},
         {TEXT("Floor"), {2, 0}, false, {Box(-50, -50, 0, 50, 50, 18)}, true},
         {TEXT("Door frame"), {4, 0}, false, {
             Box(-50, -12, 0, -45, 12, 220), Box(45, -12, 0, 50, 12, 220), Box(-45, -12, 200, 45, 12, 220)}},
@@ -47,8 +48,8 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces()
             Box(-50, -12, 0, 50, 12, 90), Box(-50, -12, 170, 50, 12, 220),
             Box(-50, -12, 90, -32, 12, 170), Box(32, -12, 90, 50, 12, 170)}},
         {TEXT("Stairs"), {5, 0}, false, {
-            Box(-50, -50, 0, 50, -25, 25), Box(-50, -25, 0, 50, 0, 50),
-            Box(-50, 0, 0, 50, 25, 75), Box(-50, 25, 0, 50, 50, 100)}},
+            Box(-50, -50, 0, 50, -25, Rise / 4), Box(-50, -25, 0, 50, 0, Rise / 2),
+            Box(-50, 0, 0, 50, 25, Rise * 3 / 4), Box(-50, 25, 0, 50, 50, Rise)}, false, true},
         {TEXT("Stone wall"), {0, 5}, true, {Box(-50, -14, 0, 50, 14, 220)}},
         {TEXT("Stone foundation"), {0, 4}, true, {Box(-50, -50, 0, 50, 50, 25)}},
         {TEXT("Stone pillar"), {0, 3}, true, {Box(-13, -13, 0, 13, 13, 220)}},
@@ -56,9 +57,31 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces()
     return MakeArrayView(Pieces);
 }
 
+FVector FSurvivalBuildPlacement::StairContinuation() const
+{
+    return Base + Rotation.RotateVector(FVector(0, GridSize, HalfWallHeight));
+}
+
+bool FSurvivalBuildPlacement::IsUpperStairEdge(const FVector& Point, const FVector& Normal) const
+{
+    if (!GetPiece().bStairs)
+    {
+        return false;
+    }
+    const FVector LocalPoint = Rotation.Inverse().RotateVector(Point - Base);
+    const FVector LocalNormal = Rotation.Inverse().RotateVector(Normal);
+    return (LocalNormal.Z >= 0.95 && LocalPoint.Z >= HalfWallHeight - 1.0)
+        || (LocalNormal.Y >= 0.95 && LocalPoint.Z >= HalfWallHeight * 0.75);
+}
+
 int32 FSurvivalBuildPlacement::SupportCostFrom(const FSurvivalBuildPlacement& Other) const
 {
     constexpr double Contact = 1.0;
+    if (GetPiece().bStairs && Other.GetPiece().bStairs
+        && Rotation.Equals(Other.Rotation) && Base.Equals(Other.StairContinuation(), Contact))
+    {
+        return 1;
+    }
     const auto Overlaps = [](double MinA, double MaxA, double MinB, double MaxB)
     {
         return FMath::Min(MaxA, MaxB) - FMath::Max(MinA, MinB) > 1.0;

@@ -13,7 +13,6 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Kismet/GameplayStatics.h"
-#include "Materials/MaterialInterface.h"
 #include "SurvivalBuildChunk.h"
 #include "SurvivalGameMode.h"
 #include "SurvivalSidearm.h"
@@ -25,6 +24,12 @@ namespace
 constexpr double InteractReach = 260.0;
 constexpr double BuildReach = 500.0;
 constexpr double SupportTolerance = 8.0;
+constexpr float WalkSpeed = 600.0f;
+constexpr float SprintSpeed = 800.0f;
+constexpr float CrouchSpeed = 280.0f;
+constexpr float ProneSpeed = 120.0f;
+constexpr float CrouchHalfHeight = 56.0f;
+constexpr float ProneHalfHeight = 34.0f;
 constexpr int32 SidearmCapacity = 12;
 const FName ViewmodelGripBone(TEXT("PBody_058"));
 }
@@ -35,6 +40,11 @@ ASurvivalCharacter::ASurvivalCharacter()
     bReplicates = true;
     SetReplicateMovement(true);
     bUseControllerRotationYaw = true;
+    GetCapsuleComponent()->InitCapsuleSize(ProneHalfHeight, 88.0f);
+    GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;
+    GetCharacterMovement()->SetCrouchedHalfHeight(CrouchHalfHeight);
+    GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+    GetCharacterMovement()->MaxWalkSpeedCrouched = CrouchSpeed;
 
     FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
     FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
@@ -68,7 +78,7 @@ void ASurvivalCharacter::BeginPlay()
 {
     Super::BeginPlay();
     USkeletalMesh* SurvivorMesh = LoadObject<USkeletalMesh>(nullptr,
-        TEXT("/Game/Art/Crossroads/Survivor/characterMedium.characterMedium"));
+        TEXT("/Game/Art/Crossroads/Player/SK_Survivor.SK_Survivor"));
     if (!SurvivorMesh)
     {
         return;
@@ -76,24 +86,26 @@ void ASurvivalCharacter::BeginPlay()
 
     USkeletalMeshComponent* Body = GetMesh();
     Body->SetSkeletalMesh(SurvivorMesh);
-    if (UMaterialInterface* Skin = LoadObject<UMaterialInterface>(nullptr,
-        TEXT("/Game/Art/Crossroads/Survivor/M_Survivor.M_Survivor")))
-    {
-        for (int32 Slot = 0; Slot < Body->GetNumMaterials(); ++Slot)
-        {
-            Body->SetMaterial(Slot, Skin);
-        }
-    }
     const FBoxSphereBounds Bounds = SurvivorMesh->GetBounds();
     const double Scale = 175.0 / FMath::Max(1.0, 2.0 * Bounds.BoxExtent.Z);
-    const double MeshBottom = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * Scale;
+    BodyMeshBottom = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * Scale;
     Body->SetRelativeScale3D(FVector(Scale));
-    Body->SetRelativeLocation(FVector(0, 0, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - MeshBottom));
     Body->SetRelativeRotation(FRotator(0, -90, 0));
+    UpdateMovementPresentation();
 
-    IdleAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Art/Crossroads/Survivor/idle.idle"));
-    RunAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Art/Crossroads/Survivor/run.run"));
-    JumpAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Art/Crossroads/Survivor/jump.jump"));
+    const auto LoadClip = [](const TCHAR* Name)
+    {
+        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Player/%s.%s"), Name, Name);
+        return LoadObject<UAnimSequence>(nullptr, *Path);
+    };
+    IdleAnimation = LoadClip(TEXT("SurvivorIdle"));
+    WalkAnimation = LoadClip(TEXT("SurvivorWalk"));
+    RunAnimation = LoadClip(TEXT("SurvivorRun"));
+    JumpAnimation = LoadClip(TEXT("SurvivorJump"));
+    CrouchIdleAnimation = LoadClip(TEXT("SurvivorCrouchIdle"));
+    CrouchMoveAnimation = LoadClip(TEXT("SurvivorCrouchMove"));
+    ProneIdleAnimation = LoadClip(TEXT("SurvivorProneIdle"));
+    ProneMoveAnimation = LoadClip(TEXT("SurvivorProneMove"));
     UpdateSurvivorAnimation();
 }
 
@@ -109,15 +121,24 @@ void ASurvivalCharacter::Tick(float DeltaSeconds)
 
 void ASurvivalCharacter::UpdateSurvivorAnimation()
 {
-    const bool bAirborne = GetCharacterMovement()->IsFalling();
+    const bool bMoving = GetVelocity().SizeSquared2D() > FMath::Square(20.0);
     UAnimSequence* Desired = IdleAnimation.Get();
-    if (bAirborne && JumpAnimation)
+    if (Stance == EStance::Prone)
+    {
+        Desired = bMoving ? ProneMoveAnimation.Get() : ProneIdleAnimation.Get();
+    }
+    else if (bIsCrouched)
+    {
+        Desired = bMoving ? CrouchMoveAnimation.Get() : CrouchIdleAnimation.Get();
+    }
+    else if (GetCharacterMovement()->IsFalling() && JumpAnimation)
     {
         Desired = JumpAnimation.Get();
     }
-    else if (RunAnimation && GetVelocity().SizeSquared2D() > FMath::Square(20.0))
+    else if (bMoving)
     {
-        Desired = RunAnimation.Get();
+        Desired = GetVelocity().SizeSquared2D() > FMath::Square(WalkSpeed)
+            ? RunAnimation.Get() : WalkAnimation.Get();
     }
     if (Desired && Desired != CurrentAnimation.Get())
     {
@@ -133,8 +154,12 @@ void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
     PlayerInputComponent->BindAxis(TEXT("MoveRight"), this, &ASurvivalCharacter::MoveRight);
     PlayerInputComponent->BindAxis(TEXT("Turn"), this, &APawn::AddControllerYawInput);
     PlayerInputComponent->BindAxis(TEXT("LookUp"), this, &APawn::AddControllerPitchInput);
-    PlayerInputComponent->BindAction(TEXT("Jump"), IE_Pressed, this, &ACharacter::Jump);
+    PlayerInputComponent->BindAction(TEXT("Jump"), IE_Pressed, this, &ASurvivalCharacter::StartJump);
     PlayerInputComponent->BindAction(TEXT("Jump"), IE_Released, this, &ACharacter::StopJumping);
+    PlayerInputComponent->BindAction(TEXT("Sprint"), IE_Pressed, this, &ASurvivalCharacter::StartSprint);
+    PlayerInputComponent->BindAction(TEXT("Sprint"), IE_Released, this, &ASurvivalCharacter::StopSprint);
+    PlayerInputComponent->BindAction(TEXT("Crouch"), IE_Pressed, this, &ASurvivalCharacter::ToggleCrouch);
+    PlayerInputComponent->BindAction(TEXT("Prone"), IE_Pressed, this, &ASurvivalCharacter::ToggleProne);
     PlayerInputComponent->BindAction(TEXT("Interact"), IE_Pressed, this, &ASurvivalCharacter::Interact);
     PlayerInputComponent->BindAction(TEXT("ToggleBuildMode"), IE_Pressed, this, &ASurvivalCharacter::ToggleBuildMode);
     PlayerInputComponent->BindAction(TEXT("RotatePiece"), IE_Pressed, this, &ASurvivalCharacter::RotatePiece);
@@ -156,6 +181,88 @@ void ASurvivalCharacter::MoveForward(float Value)
 void ASurvivalCharacter::MoveRight(float Value)
 {
     AddMovementInput(GetActorRightVector(), Value);
+}
+
+void ASurvivalCharacter::StartJump()
+{
+    if (!bIsCrouched)
+    {
+        Jump();
+    }
+}
+
+void ASurvivalCharacter::StartSprint()
+{
+    bSprintHeld = true;
+    UpdateMovementPresentation();
+}
+
+void ASurvivalCharacter::StopSprint()
+{
+    bSprintHeld = false;
+    UpdateMovementPresentation();
+}
+
+void ASurvivalCharacter::ToggleCrouch()
+{
+    SetStance(Stance == EStance::Crouched ? EStance::Standing : EStance::Crouched);
+}
+
+void ASurvivalCharacter::ToggleProne()
+{
+    SetStance(Stance == EStance::Prone ? EStance::Standing : EStance::Prone);
+}
+
+void ASurvivalCharacter::SetStance(EStance NewStance)
+{
+    UCharacterMovementComponent* Movement = GetCharacterMovement();
+    if (HealthPoints <= 0 || !Movement->IsMovingOnGround())
+    {
+        return;
+    }
+    if (NewStance == EStance::Standing)
+    {
+        Movement->UnCrouch(false);
+        if (bIsCrouched)
+        {
+            return;
+        }
+        Movement->bWantsToCrouch = false;
+    }
+    else
+    {
+        const float DesiredHeight = NewStance == EStance::Prone ? ProneHalfHeight : CrouchHalfHeight;
+        Movement->SetCrouchedHalfHeight(DesiredHeight);
+        Movement->Crouch(false);
+        if (!FMath::IsNearlyEqual(GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight(), DesiredHeight))
+        {
+            Movement->SetCrouchedHalfHeight(Stance == EStance::Prone ? ProneHalfHeight : CrouchHalfHeight);
+            return;
+        }
+        Movement->bWantsToCrouch = true;
+    }
+    Stance = NewStance;
+    UpdateMovementPresentation();
+}
+
+void ASurvivalCharacter::UpdateMovementPresentation()
+{
+    UCharacterMovementComponent* Movement = GetCharacterMovement();
+    Movement->MaxWalkSpeed = bSprintHeld ? SprintSpeed : WalkSpeed;
+    Movement->MaxWalkSpeedCrouched = Stance == EStance::Prone ? ProneSpeed : CrouchSpeed;
+
+    double EyeHeight = BaseEyeHeight;
+    if (Stance == EStance::Crouched)
+    {
+        EyeHeight = 36.0;
+    }
+    else if (Stance == EStance::Prone)
+    {
+        EyeHeight = 4.0;
+    }
+    FirstPersonCamera->SetRelativeLocation(FVector(0, 0, EyeHeight));
+    CameraBoom->SetRelativeLocation(FVector(0, 0, EyeHeight));
+    GetMesh()->SetRelativeLocation(FVector(0, 0, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - BodyMeshBottom));
 }
 
 void ASurvivalCharacter::ToggleView()
@@ -205,19 +312,24 @@ ASurvivalSupplyCrate* ASurvivalCharacter::FindSupplyCrate() const
     return nullptr;
 }
 
-FSurvivalPlanTarget ASurvivalCharacter::FindPlan() const
+bool ASurvivalCharacter::FindPlanAimHit(double Reach, FHitResult& Hit) const
 {
     const UCameraComponent& Camera = GetAimCamera();
     const FVector Start = Camera.GetComponentLocation();
     FHitResult Blocker;
-    const FVector End = FindWorldAimHit(InteractReach, Blocker) ? Blocker.ImpactPoint :
+    const FVector End = FindWorldAimHit(Reach, Blocker) ? Blocker.ImpactPoint :
         Start + Camera.GetForwardVector() *
-        (InteractReach + FVector::Dist(Start, FirstPersonCamera->GetComponentLocation()));
+        (Reach + FVector::Dist(Start, FirstPersonCamera->GetComponentLocation()));
 
-    FHitResult Hit;
-    if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_GameTraceChannel1,
+    return GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_GameTraceChannel1,
         FCollisionQueryParams(SCENE_QUERY_STAT(SelectBuildPlan), false, this))
-        && HasReachTo(Hit.ImpactPoint, InteractReach))
+        && HasReachTo(Hit.ImpactPoint, Reach);
+}
+
+FSurvivalPlanTarget ASurvivalCharacter::FindPlan() const
+{
+    FHitResult Hit;
+    if (FindPlanAimHit(InteractReach, Hit))
     {
         if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
         {
@@ -326,7 +438,7 @@ void ASurvivalCharacter::UpdateSidearmView()
         else
         {
             Sidearm->AttachToComponent(FirstPersonCamera, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-            Sidearm->SetActorRelativeLocation(FVector(48, 19, -15));
+            Sidearm->SetActorRelativeLocation(FVector(48, 19, -28));
         }
         Sidearm->SetActorHiddenInGame(!bVisible);
     }
@@ -373,7 +485,7 @@ void ASurvivalCharacter::LoadSidearmViewmodel()
     const double Scale = 43.0 / Reach.Size();
     SidearmViewmodel->SetRelativeScale3D(FVector(Scale));
     SidearmViewmodel->SetRelativeRotation(CameraAlignment);
-    SidearmViewmodel->SetRelativeLocation(FVector(10, 0, -4) - CameraAlignment.RotateVector(Eye.GetLocation() * Scale));
+    SidearmViewmodel->SetRelativeLocation(FVector(10, 0, -26) - CameraAlignment.RotateVector(Eye.GetLocation() * Scale));
 
     const FVector GripOffset = CameraAlignment.UnrotateVector(FVector(1, 2.5, 8) / Scale);
     ViewmodelGrip = FTransform(Grip.GetRotation().Inverse() * CameraAlignment.Inverse(),
@@ -620,9 +732,23 @@ bool ASurvivalCharacter::IsFootprintClear(const FSurvivalBuildPlacement& Placeme
 TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
 {
     FHitResult Hit;
-    if (!FindWorldAimHit(BuildReach, Hit))
+    const bool bPlanHit = FindPlanAimHit(BuildReach, Hit);
+    if (!bPlanHit && !FindWorldAimHit(BuildReach, Hit))
     {
         return {};
+    }
+
+    const FSurvivalBuildPlacement* Source = nullptr;
+    if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
+    {
+        if (bPlanHit)
+        {
+            Source = Chunk->GetPlanTarget(Hit).GetPlan();
+        }
+        else if (const FSurvivalFinishedPiece* Finished = Chunk->FindFinished(Hit))
+        {
+            Source = &Finished->Placement;
+        }
     }
 
     FSurvivalBuildPlacement Placement;
@@ -630,19 +756,21 @@ TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
         FMath::GridSnap(Hit.ImpactPoint.Y, FSurvivalBuildPlacement::GridSize), Hit.ImpactPoint.Z);
     Placement.Rotation = FRotator(0, QuarterTurns * 90.0, 0).Quaternion();
     Placement.PieceIndex = SelectedPiece;
-    FVector ReachPoint = Placement.Base + FVector(0, 0, SupportTolerance + 2.0);
-    if (Hit.ImpactNormal.Z < 0.95)
+    FVector ReachPoint = Hit.ImpactPoint;
+    if (Source && Placement.GetPiece().bStairs && Source->IsUpperStairEdge(Hit.ImpactPoint, Hit.ImpactNormal))
     {
-        const ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor());
-        const FSurvivalFinishedPiece* Support = Chunk ? Chunk->FindFinished(Hit) : nullptr;
-        if (!Support || !Placement.GetPiece().bCarriesLateralSupport || FMath::Abs(Hit.ImpactNormal.Z) > 0.1)
+        Placement.Base = Source->StairContinuation();
+        Placement.Rotation = Source->Rotation;
+    }
+    else if (Hit.ImpactNormal.Z < 0.95)
+    {
+        if (!Source || !Placement.GetPiece().bCarriesLateralSupport || FMath::Abs(Hit.ImpactNormal.Z) > 0.1)
         {
             return {};
         }
 
-        const FSurvivalBuildPlacement& Source = Support->Placement;
-        Placement.Base = Source.Base;
-        if (Source.GetPiece().bCarriesLateralSupport)
+        Placement.Base = Source->Base;
+        if (Source->GetPiece().bCarriesLateralSupport)
         {
             const FVector Normal = Hit.ImpactNormal;
             const FVector Axis = FMath::Abs(Normal.X) > FMath::Abs(Normal.Y)
@@ -652,16 +780,26 @@ TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
         else
         {
             double Top = 0.0;
-            for (const FBox& Box : Source.GetPiece().Boxes)
+            for (const FBox& Box : Source->GetPiece().Boxes)
             {
                 Top = FMath::Max(Top, Box.Max.Z);
             }
             Placement.Base.Z += Top;
         }
-        ReachPoint = Hit.ImpactPoint;
     }
-    Placement.bClear = HasReachTo(ReachPoint, BuildReach)
-        && HasSupport(Placement) && IsFootprintClear(Placement, true);
+    else if (Source)
+    {
+        Placement.Base.X = Source->Base.X;
+        Placement.Base.Y = Source->Base.Y;
+    }
+    else
+    {
+        ReachPoint = Placement.Base + FVector(0, 0, SupportTolerance + 2.0);
+    }
+
+    const bool bPlannedSupport = bPlanHit && Source && Placement.SupportCostFrom(*Source) >= 0;
+    Placement.bClear = HasReachTo(ReachPoint, BuildReach) && IsFootprintClear(Placement, true)
+        && (bPlannedSupport || HasSupport(Placement));
     return TOptional<FSurvivalBuildPlacement>(Placement);
 }
 

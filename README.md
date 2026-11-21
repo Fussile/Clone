@@ -6,9 +6,9 @@ UE5.8 C++ survival-crafting project inspired by the mechanics and atmosphere of 
 
 Download `Survival-Windows-x64.zip` from [Releases](https://github.com/Fussile/Clone/releases) when a playtest is published. Extract the entire ZIP and open `Survival.exe`. GitHub's **Code → Download ZIP** and **Source code (zip)** downloads contain the Unreal project for developers.
 
-The solo playtest starts outside the Southern Crossroads gas station. Use **WASD** and the mouse to move and look, **Space** to jump, **V** to switch to third person, and **E** to search the building materials crate in the shop.
+The solo playtest starts outside the Southern Crossroads gas station. Use **WASD** and the mouse to move and look, **Space** to jump, **Left Shift** to sprint, **C** to toggle crouch, **Z** to toggle prone, **V** to switch to third person, and **E** to search the building materials crate in the shop.
 
-Press **B** to open the build menu, **scroll** to select a piece, and **R** to rotate it. **Left-click** to place a free blueprint. Aim at the blueprint and press **E** to finish it with timber or stone, or **X** to remove it. The HUD shows the total materials required and how many you still need to collect.
+Press **B** to open the build menu, **scroll** to select a piece, and **R** to rotate it. **Left-click** to place a free blueprint. Aim at an unfinished piece to snap another blueprint to it. Finish the supporting pieces first. Aim at the top step to continue a staircase. Aim at the blueprint and press **E** to finish it with timber or stone, or **X** to remove it. The HUD shows the total materials required and how many you still need to collect.
 
 Loot the darker case inside the shop for the sidearm. With the build menu closed, **left-click** fires and **R** reloads from reserve. **E** repairs a damaged piece. In build mode, aim at a finished piece and press **K** to dismantle it. Structures collapse when they lose their last viable path to ground. There's a destructible canopy east of the station. **F5** restarts Crossroads.
 
@@ -22,6 +22,6 @@ powershell -ExecutionPolicy Bypass -File .\Tools\package_windows.ps1 -EngineRoot
 
 The script builds the editor target, imports the starter art, generates the playtest map if needed, places the crate, and cooks a standalone Windows build. It writes `Dist/Survival-Windows-x64.zip` with app-local prerequisites. Before publishing, extract the ZIP on a Windows PC without Unreal Editor and run the [scavenging and building playtest](Docs/CrossroadsScavenging.md). Attach the verified ZIP to a GitHub Release for the commit you built.
 
-For editor-only work, build and open `Survival.uproject`, then use **File → Execute Python Script** to run `Tools/prepare_crossroads.py`. See the [blockout guide](Docs/CrossroadsBlockout.md) for level editing and the [art guide](Docs/CrossroadsArt.md) for the imported assets.
+For editor-only work, build and open `Survival.uproject`. The first editor launch prepares and saves Crossroads and its imported assets. Subsequent launches reuse those assets. See the [blockout guide](Docs/CrossroadsBlockout.md) for level editing and the [art guide](Docs/CrossroadsArt.md) for the imported assets.
 
 See [architecture](ARCHITECTURE.md), [decisions](DECISIONS.md), [asset manifest](ASSETS.md), and [M0 checklist](Docs/M0.md). Proposed choices remain provisional until confirmed by the developer.

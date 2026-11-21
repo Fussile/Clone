@@ -1,0 +1,9 @@
+Basic Human Male by DNC44
+https://sketchfab.com/3d-models/basic-human-male-598d1d1866df48f999fabadb017429d1
+
+Licensed under Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/
+
+Adapted from the rigged FBX in the project's content branch. The model was
+normalized to game scale and converted to glTF. The adaptation adds a skin
+material and eight original locomotion clips.

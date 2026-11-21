@@ -9,7 +9,6 @@
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
-#include "Materials/MaterialInterface.h"
 #include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
 
@@ -36,49 +35,27 @@ void ASurvivalZombie::BeginPlay()
     Super::BeginPlay();
     USkeletalMesh* ZombieAsset = LoadObject<USkeletalMesh>(nullptr,
         TEXT("/Game/Art/Crossroads/StationZombie/SK_StationZombie.SK_StationZombie"), nullptr, LOAD_NoWarn);
-    const bool bHasImportedBody = ZombieAsset != nullptr;
-    if (!bHasImportedBody)
-    {
-        ZombieAsset = LoadObject<USkeletalMesh>(nullptr,
-            TEXT("/Game/Art/Crossroads/Survivor/characterMedium.characterMedium"));
-    }
     if (!ZombieAsset)
     {
         return;
     }
     USkeletalMeshComponent* Body = GetMesh();
     Body->SetSkeletalMesh(ZombieAsset);
-    const FBoxSphereBounds Bounds = ZombieAsset->GetBounds();
     // The imported asset's static bounds can describe the unposed mesh in a different basis.
     // Use the prepared GLB's measured skinned reference height and floor in Unreal centimeters.
-    const double ReferenceHeight = bHasImportedBody ? 131.1 : FMath::Max(1.0, 2.0 * Bounds.BoxExtent.Z);
-    const double ReferenceBottom = bHasImportedBody ? 1.3 : Bounds.Origin.Z - Bounds.BoxExtent.Z;
+    const double ReferenceHeight = 131.1;
+    const double ReferenceBottom = 1.3;
     const double Scale = 175.0 / ReferenceHeight;
     const double Bottom = ReferenceBottom * Scale;
     Body->SetRelativeScale3D(FVector(Scale));
     Body->SetRelativeLocation(FVector(0, 0, -GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() - Bottom));
     Body->SetRelativeRotation(FRotator(0, -90, 0));
-    if (bHasImportedBody)
-    {
-        IdleAnimation = LoadObject<UAnimSequence>(nullptr,
-            TEXT("/Game/Art/Crossroads/StationZombie/StationZombieIdle.StationZombieIdle"));
-        WalkAnimation = LoadObject<UAnimSequence>(nullptr,
-            TEXT("/Game/Art/Crossroads/StationZombie/StationZombieWalk.StationZombieWalk"));
-        AttackAnimation = LoadObject<UAnimSequence>(nullptr,
-            TEXT("/Game/Art/Crossroads/StationZombie/StationZombieAttack.StationZombieAttack"));
-    }
-    else
-    {
-        if (UMaterialInterface* Skin = LoadObject<UMaterialInterface>(nullptr,
-            TEXT("/Game/Art/Crossroads/Survivor/M_StationZombie.M_StationZombie")))
-        {
-            for (int32 Slot = 0; Slot < Body->GetNumMaterials(); ++Slot)
-            {
-                Body->SetMaterial(Slot, Skin);
-            }
-        }
-        WalkAnimation = LoadObject<UAnimSequence>(nullptr, TEXT("/Game/Art/Crossroads/Survivor/run.run"));
-    }
+    IdleAnimation = LoadObject<UAnimSequence>(nullptr,
+        TEXT("/Game/Art/Crossroads/StationZombie/StationZombieIdle.StationZombieIdle"));
+    WalkAnimation = LoadObject<UAnimSequence>(nullptr,
+        TEXT("/Game/Art/Crossroads/StationZombie/StationZombieWalk.StationZombieWalk"));
+    AttackAnimation = LoadObject<UAnimSequence>(nullptr,
+        TEXT("/Game/Art/Crossroads/StationZombie/StationZombieAttack.StationZombieAttack"));
     UpdateLocomotion(false);
 }
 

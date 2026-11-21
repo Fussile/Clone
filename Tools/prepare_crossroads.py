@@ -11,7 +11,7 @@ TOOLS = Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir
 SOURCE = TOOLS.parent / "SourceArt" / "Crossroads"
 ART = "/Game/Art/Crossroads"
 SURFACES = ART + "/Surfaces"
-SURVIVOR = ART + "/Survivor"
+PLAYER = ART + "/Player"
 BUILDING = ART + "/Building"
 ZOMBIE = ART + "/StationZombie"
 WEAPON_AUDIO = "/Game/Audio/Weapons"
@@ -108,52 +108,6 @@ def import_surfaces():
         ))
 
 
-def import_survivor():
-    source = SOURCE / "Kenney"
-    mesh_options = unreal.FbxImportUI()
-    mesh_options.set_editor_property("automated_import_should_detect_type", False)
-    mesh_options.set_editor_property("original_import_type", unreal.FBXImportType.FBXIT_SKELETAL_MESH)
-    mesh_options.set_editor_property("mesh_type_to_import", unreal.FBXImportType.FBXIT_SKELETAL_MESH)
-    mesh_options.set_editor_property("import_mesh", True)
-    mesh_options.set_editor_property("import_as_skeletal", True)
-    mesh_options.set_editor_property("import_materials", False)
-    mesh_options.set_editor_property("import_textures", False)
-    mesh_options.set_editor_property("import_animations", False)
-    mesh = import_asset(source / "Model" / "characterMedium.fbx", SURVIVOR, unreal.SkeletalMesh, mesh_options)
-    skin = import_asset(source / "Skins" / "survivorMaleB.png", SURVIVOR, unreal.Texture2D)
-    material = make_material(SURVIVOR, "M_Survivor", (
-        (skin, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, "RGB", unreal.MaterialProperty.MP_BASE_COLOR),
-    ))
-    zombie = make_material(SURVIVOR, "M_StationZombie", (
-        (skin, unreal.MaterialSamplerType.SAMPLERTYPE_COLOR, "RGB", unreal.MaterialProperty.MP_BASE_COLOR),
-    ), tint=unreal.LinearColor(0.47, 0.95, 0.38, 1.0))
-    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
-    for visual in (material, zombie):
-        unreal.MaterialEditingLibrary.set_material_usage(visual, unreal.MaterialUsage.MATUSAGE_SKELETAL_MESH)
-        if not assets.save_loaded_asset(visual):
-            raise RuntimeError(f"Could not save {visual.get_path_name()}.")
-
-    materials = mesh.get_editor_property("materials")
-    if not materials:
-        raise RuntimeError("The survivor mesh has no material slots.")
-    for slot in materials:
-        slot.set_editor_property("material_interface", material)
-    mesh.set_editor_property("materials", materials)
-    if not assets.save_loaded_asset(mesh):
-        raise RuntimeError("Could not save the survivor material assignment.")
-
-    anim_options = unreal.FbxImportUI()
-    anim_options.set_editor_property("automated_import_should_detect_type", False)
-    anim_options.set_editor_property("original_import_type", unreal.FBXImportType.FBXIT_ANIMATION)
-    anim_options.set_editor_property("mesh_type_to_import", unreal.FBXImportType.FBXIT_ANIMATION)
-    anim_options.set_editor_property("import_mesh", False)
-    anim_options.set_editor_property("import_animations", True)
-    anim_options.set_editor_property("skeleton", mesh.get_editor_property("skeleton"))
-    for clip in ("idle", "run", "jump"):
-        anim_options.set_editor_property("override_animation_name", clip)
-        import_asset(source / "Animations" / f"{clip}.fbx", SURVIVOR, unreal.AnimSequence, anim_options)
-
-
 def import_building():
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     editing = unreal.MaterialEditingLibrary
@@ -209,14 +163,16 @@ def import_building():
             raise RuntimeError(f"Could not save {path}.")
 
 
-def import_skeletal_pack(directory, names, source, prepared, generator):
+def import_skeletal_pack(directory, names, source, prepared=None, generator=None):
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     if all(assets.does_asset_exist(f"{directory}/{name}") for name in names):
         return
 
-    runpy.run_path(str(TOOLS / f"{generator}.py"))[generator](source, prepared)
+    if generator is not None:
+        runpy.run_path(str(TOOLS / f"{generator}.py"))[generator](source, prepared)
+        source = prepared
     task = unreal.AssetImportTask()
-    task.set_editor_property("filename", str(prepared))
+    task.set_editor_property("filename", str(source))
     task.set_editor_property("destination_path", directory)
     task.set_editor_property("automated", True)
     task.set_editor_property("replace_existing", False)
@@ -233,7 +189,7 @@ def import_skeletal_pack(directory, names, source, prepared, generator):
             matching = [item for item in imported
                         if isinstance(item, unreal.AnimSequence) and name.lower() in item.get_name().lower()]
         if len(matching) != 1 or not assets.rename_loaded_asset(matching[0], path):
-            raise RuntimeError(f"Could not resolve {name} from {prepared.name}.")
+            raise RuntimeError(f"Could not resolve {name} from {source.name}.")
 
     mesh = assets.load_asset(f"{directory}/{names[0]}")
     skeleton = mesh.get_editor_property("skeleton")
@@ -251,7 +207,10 @@ def prepare():
         editor.get_editor_world(), "Interchange.FeatureFlags.Import.FBX 0"
     )
     import_surfaces()
-    import_survivor()
+    import_skeletal_pack(PLAYER, (
+        "SK_Survivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",
+        "SurvivorCrouchIdle", "SurvivorCrouchMove", "SurvivorProneIdle", "SurvivorProneMove",
+    ), SOURCE / "Survivor" / "SK_Survivor.glb")
     generated = TOOLS.parent / "Saved" / "GeneratedArt"
     for directory, file, generator, source, names in (
         (ZOMBIE, "StationZombie.glb", "prepare_zombie_glb",
