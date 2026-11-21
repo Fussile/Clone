@@ -27,10 +27,8 @@ const FLinearColor Blocked(1.0f, 0.51f, 0.36f);
 void ASurvivalHUD::BeginPlay()
 {
     Super::BeginPlay();
-#if WITH_EDITOR
-    MedicineSheet = LoadObject<UTexture2D>(nullptr,
-        TEXT("/Game/Art/Crossroads/Local/MedicineSheet.MedicineSheet"), nullptr, LOAD_NoWarn);
-#endif
+    ItemAtlas = LoadObject<UTexture2D>(nullptr,
+        TEXT("/Game/Art/Crossroads/Interface/T_UI_ItemAtlas.T_UI_ItemAtlas"), nullptr, LOAD_NoWarn);
     static const TCHAR* Names[] = {
         TEXT("Sidearm"), TEXT("Food"), TEXT("Water"), TEXT("Bandage"), TEXT("Timber"),
         TEXT("Stone"), TEXT("Cloth"), TEXT("Rounds"), TEXT("TimberDoor"),
@@ -48,9 +46,10 @@ void ASurvivalHUD::BeginPlay()
 
 UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item) const
 {
-    if (MedicineSheet && Item == ESurvivalItem::Bandage)
+    if (ItemAtlas && Item != ESurvivalItem::None && Item != ESurvivalItem::TimberDoor
+        && Item != ESurvivalItem::RifleStock && Item != ESurvivalItem::RifleReceiver && Item != ESurvivalItem::RifleBarrel)
     {
-        return MedicineSheet.Get();
+        return ItemAtlas.Get();
     }
     const int32 Index = static_cast<int32>(Item);
     return ItemIcons.IsValidIndex(Index) ? ItemIcons[Index].Get() : nullptr;
@@ -58,11 +57,11 @@ UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item) const
 
 FBox2f ASurvivalHUD::GetItemIconUV(ESurvivalItem Item) const
 {
-    if (MedicineSheet && Item == ESurvivalItem::Bandage)
+    if (ItemAtlas && GetItemIcon(Item) == ItemAtlas.Get())
     {
-        // The first row, fifth tile is the wrapped bandage on the supplied sheet.
-        return FBox2f(FVector2f(491.0f / 1215.0f, 10.0f / 765.0f),
-            FVector2f(607.0f / 1215.0f, 129.0f / 765.0f));
+        const int32 Cell = static_cast<int32>(Item);
+        const FVector2f Start((Cell % 5) * 100.f / 512.f, (Cell / 5) * 96.f / 512.f);
+        return FBox2f(Start, Start + FVector2f(100.f / 512.f, 96.f / 512.f));
     }
     return FBox2f(FVector2f(0.0f, 0.0f), FVector2f(1.0f, 1.0f));
 }

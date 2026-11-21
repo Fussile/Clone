@@ -40,6 +40,9 @@ public:
     static ESurvivalItem TrainingBook(ETraining Entry);
     ESurvivalItem GetSelectedInventoryItem() const { return SelectedInventoryItem; }
     void SetSelectedInventoryItem(ESurvivalItem Item) { SelectedInventoryItem = Item; }
+    static constexpr int32 PackSize = 24;
+    ESurvivalItem GetPackItem(int32 Slot) const { return PackOrder[Slot]; }
+    bool MoveMenuItem(bool bFromBelt, int32 From, bool bToBelt, int32 To);
     void ChooseHotbarSlot(int32 Slot);
     void UseItem(ESurvivalItem Item);
     bool CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const;
@@ -184,6 +187,7 @@ private:
     FSurvivalItems Items;
     FSurvivalVitals Vitals;
     bool bInventoryOpen = false;
+    ESurvivalItem PackOrder[PackSize];
     int32 ActiveHotbarSlot = 0;
     ESurvivalItem SelectedInventoryItem = ESurvivalItem::Food;
     ESurvivalItem Hotbar[HotbarSize] = {

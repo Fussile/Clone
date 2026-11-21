@@ -36,7 +36,7 @@ private:
     TArray<TObjectPtr<UTexture2D>> ItemIcons;
 
     UPROPERTY(Transient)
-    TObjectPtr<UTexture2D> MedicineSheet;
+    TObjectPtr<UTexture2D> ItemAtlas;
 
     TSharedPtr<SWidget> InventoryWidget;
 };

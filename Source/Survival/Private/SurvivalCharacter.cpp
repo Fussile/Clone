@@ -48,6 +48,12 @@ const FName ViewmodelGripBone(TEXT("PBody_058"));
 
 ASurvivalCharacter::ASurvivalCharacter()
 {
+    static_assert(static_cast<int32>(ESurvivalItem::None) <= PackSize);
+    for (int32 Slot = 0; Slot < PackSize; ++Slot)
+    {
+        PackOrder[Slot] = Slot < static_cast<int32>(ESurvivalItem::None)
+            ? static_cast<ESurvivalItem>(Slot) : ESurvivalItem::None;
+    }
     PrimaryActorTick.bCanEverTick = true;
     bReplicates = true;
     SetReplicateMovement(true);
@@ -1264,6 +1270,48 @@ void ASurvivalCharacter::UseItem(ESurvivalItem Item)
     default:
         break;
     }
+}
+
+bool ASurvivalCharacter::MoveMenuItem(bool bFromBelt, int32 From, bool bToBelt, int32 To)
+{
+    if (!bInventoryOpen || HealthPoints <= 0 || From < 0 || From >= (bFromBelt ? HotbarSize : PackSize)
+        || To < 0 || To >= (bToBelt ? HotbarSize : PackSize))
+    {
+        return false;
+    }
+    const ESurvivalItem Item = bFromBelt ? Hotbar[From] : PackOrder[From];
+    if (Item == ESurvivalItem::None || (!bFromBelt && GetItemCount(Item) <= 0))
+    {
+        return false;
+    }
+    if (bFromBelt && bToBelt)
+    {
+        Swap(Hotbar[From], Hotbar[To]);
+    }
+    else if (bToBelt)
+    {
+        SelectedInventoryItem = Item;
+        ChooseHotbarSlot(To);
+        return true;
+    }
+    else
+    {
+        for (int32 Index = 0; Index < PackSize; ++Index)
+        {
+            if (PackOrder[Index] == Item)
+            {
+                Swap(PackOrder[Index], PackOrder[To]);
+                break;
+            }
+        }
+        if (bFromBelt)
+        {
+            Hotbar[From] = ESurvivalItem::None;
+        }
+    }
+    SelectedInventoryItem = Item;
+    UpdateSidearmView();
+    return true;
 }
 
 void ASurvivalCharacter::ChooseHotbarSlot(int32 Slot)

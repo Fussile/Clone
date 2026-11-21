@@ -3,6 +3,9 @@
 #include "Brushes/SlateColorBrush.h"
 #include "Engine/Texture2D.h"
 #include "Input/Events.h"
+#include "Input/DragAndDrop.h"
+#include "Widgets/SOverlay.h"
+#include "Widgets/Layout/SWrapBox.h"
 #include "InputCoreTypes.h"
 #include "Styling/CoreStyle.h"
 #include "Styling/SlateTypes.h"
@@ -30,7 +33,7 @@ const FLinearColor Muted(0.62f, 0.64f, 0.62f);
 const FLinearColor Backdrop(0.019f, 0.024f, 0.027f, 0.97f);
 const FLinearColor PanelColor(0.043f, 0.050f, 0.054f);
 const FLinearColor Tile(0.081f, 0.093f, 0.101f);
-const FLinearColor Chosen(0.22f, 0.11f, 0.066f);
+const FLinearColor Chosen(0.46f, 0.23f, 0.095f);
 
 struct FTrainingTree { const TCHAR* Label; const TCHAR* Category; const TCHAR* Icon; };
 constexpr FTrainingTree TrainingTrees[] = {
@@ -65,6 +68,131 @@ const FButtonStyle& MenuButtonStyle()
         .SetPressedPadding(FMargin(11, 7));
     return Style;
 }
+
+class FPackDrag : public FDragDropOperation
+{
+public:
+    DRAG_DROP_OPERATOR_TYPE(FPackDrag, FDragDropOperation)
+    bool bBelt;
+    int32 Slot;
+    FText Label;
+    FSlateBrush Icon;
+
+    virtual TSharedPtr<SWidget> GetDefaultDecorator() const override
+    {
+        return SNew(SBorder).BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(8)
+        [
+            SNew(SHorizontalBox)
+            + SHorizontalBox::Slot().AutoWidth()[SNew(SImage).Image(&Icon)]
+            + SHorizontalBox::Slot().AutoWidth().Padding(6).VAlign(VAlign_Center)[SNew(STextBlock).Text(Label)]
+        ];
+    }
+
+    static TSharedRef<FPackDrag> Start(bool bIsBelt, int32 SourceSlot, ESurvivalItem Item, const FSlateBrush* SourceIcon)
+    {
+        auto Op = MakeShared<FPackDrag>();
+        Op->bBelt = bIsBelt;
+        Op->Slot = SourceSlot;
+        Op->Label = FText::FromString(SurvivalItemName(Item));
+        if (SourceIcon) { Op->Icon = *SourceIcon; }
+        Op->Construct();
+        return Op;
+    }
+};
+
+class SPackCell : public SCompoundWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SPackCell) {}
+        SLATE_ARGUMENT(ASurvivalCharacter*, Player)
+        SLATE_ARGUMENT(bool, Belt)
+        SLATE_ARGUMENT(int32, Index)
+        SLATE_ARGUMENT(const FSlateBrush*, Icons)
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& Args)
+    {
+        Player = Args._Player;
+        bBelt = Args._Belt;
+        Index = Args._Index;
+        Icons = Args._Icons;
+        SetToolTipText(TAttribute<FText>::CreateLambda([this]() {
+            return Item() == ESurvivalItem::None ? FText::GetEmpty() : FText::FromString(SurvivalItemName(Item()));
+        }));
+        ChildSlot
+        [
+            SNew(SBorder).BorderImage(WhiteBrush()).Padding(2)
+            .BorderBackgroundColor_Lambda([this]() {
+                const bool bSelected = Player.IsValid() && (bBelt ? Index == Player->GetActiveHotbarSlot()
+                    : Item() != ESurvivalItem::None && Item() == Player->GetSelectedInventoryItem());
+                return FSlateColor(IsHovered() ? Accent : bSelected ? Chosen : PanelColor);
+            })
+            [
+                SNew(SBorder).Padding(4).BorderImage(WhiteBrush()).BorderBackgroundColor(Tile)
+                [
+                    SNew(SOverlay)
+                    + SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+                    [SNew(SImage).DesiredSizeOverride(FVector2D(52,52)).Image_Lambda([this]() { return Icon(); })]
+                    + SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Top)
+                    [SNew(STextBlock).ColorAndOpacity(Muted).Text(bBelt ? FText::AsNumber(Index + 1) : FText::GetEmpty())]
+                    + SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom)
+                    [SNew(STextBlock).ShadowOffset(FVector2D(1,1)).Text_Lambda([this]() {
+                        return Item() == ESurvivalItem::None ? FText::GetEmpty() : FText::AsNumber(Player->GetItemCount(Item()));
+                    })]
+                ]
+            ]
+        ];
+    }
+
+    virtual FReply OnMouseButtonDown(const FGeometry&, const FPointerEvent& Event) override
+    {
+        if (Event.GetEffectingButton() != EKeys::LeftMouseButton) { return FReply::Unhandled(); }
+        return FReply::Handled().CaptureMouse(SharedThis(this)).DetectDrag(SharedThis(this), EKeys::LeftMouseButton);
+    }
+
+    virtual FReply OnMouseButtonUp(const FGeometry& Geometry, const FPointerEvent& Event) override
+    {
+        if (!HasMouseCapture() || Event.GetEffectingButton() != EKeys::LeftMouseButton) { return FReply::Unhandled(); }
+        if (Player.IsValid() && Geometry.IsUnderLocation(Event.GetScreenSpacePosition()))
+        {
+            if (bBelt) { Player->ChooseHotbarSlot(Index); }
+            else { Player->SetSelectedInventoryItem(Item()); }
+        }
+        return FReply::Handled().ReleaseMouseCapture();
+    }
+
+    virtual FReply OnDragDetected(const FGeometry&, const FPointerEvent&) override
+    {
+        if (Item() == ESurvivalItem::None) { return FReply::Unhandled(); }
+        return FReply::Handled().ReleaseMouseCapture().BeginDragDrop(FPackDrag::Start(bBelt, Index, Item(), Icon()));
+    }
+
+    virtual FReply OnDrop(const FGeometry&, const FDragDropEvent& Event) override
+    {
+        const auto Op = Event.GetOperationAs<FPackDrag>();
+        return Player.IsValid() && Op && Player->MoveMenuItem(Op->bBelt, Op->Slot, bBelt, Index)
+            ? FReply::Handled() : FReply::Unhandled();
+    }
+
+private:
+    ESurvivalItem Item() const
+    {
+        if (!Player.IsValid()) { return ESurvivalItem::None; }
+        if (bBelt) { return Player->GetHotbarItem(Index); }
+        const auto Value = Player->GetPackItem(Index);
+        return Value != ESurvivalItem::None && Player->GetItemCount(Value) > 0 ? Value : ESurvivalItem::None;
+    }
+    const FSlateBrush* Icon() const
+    {
+        const auto Value = Item();
+        return Value == ESurvivalItem::None ? nullptr : Icons + static_cast<int32>(Value);
+    }
+
+    TWeakObjectPtr<ASurvivalCharacter> Player;
+    const FSlateBrush* Icons = nullptr;
+    bool bBelt = false;
+    int32 Index = 0;
+};
 
 const FKey SlotKeys[] = {EKeys::One, EKeys::Two, EKeys::Three, EKeys::Four, EKeys::Five, EKeys::Six};
 static_assert(UE_ARRAY_COUNT(SlotKeys) == ASurvivalCharacter::HotbarSize);
@@ -105,84 +233,17 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
         Icons[Index].SetResourceObject(Args._HUD->GetItemIcon(Item));
         Icons[Index].SetUVRegion(Args._HUD->GetItemIconUV(Item));
         Icons[Index].DrawAs = Icons[Index].GetResourceObject() ? ESlateBrushDrawType::Image : ESlateBrushDrawType::NoDrawType;
-        Items->AddSlot(Index % 5, Index / 5)
-        [
-            SNew(SButton).ButtonStyle(&MenuButtonStyle())
-            .HAlign(HAlign_Center)
-            .ButtonColorAndOpacity_Lambda([this, Item]()
-            {
-                return FSlateColor(Player.IsValid() && Player->GetSelectedInventoryItem() == Item ? Chosen : Tile);
-            })
-            .OnClicked_Lambda([this, Item]()
-            {
-                if (ASurvivalCharacter* Character = Player.Get())
-                {
-                    Character->SetSelectedInventoryItem(Item);
-                }
-                return FReply::Handled();
-            })
-            [
-                SNew(SVerticalBox)
-                + SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
-                [
-                    SNew(SImage).Image(&Icons[Index])
-                    .Visibility(Icons[Index].GetResourceObject() ? EVisibility::Visible : EVisibility::Hidden)
-                ]
-                + SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
-                [
-                    SNew(STextBlock).Text(FText::FromString(SurvivalItemName(Item)))
-                    .Justification(ETextJustify::Center).AutoWrapText(true)
-                ]
-                + SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
-                [
-                    SNew(STextBlock).ColorAndOpacity(FSlateColor(Accent))
-                    .Text_Lambda([this, Item]()
-                    {
-                        return FText::AsNumber(Player.IsValid() ? Player->GetItemCount(Item) : 0);
-                    })
-                ]
-            ]
-        ];
     }
-
+    for (int32 Index = 0; Index < ASurvivalCharacter::PackSize; ++Index)
+    {
+        Items->AddSlot(Index % 6, Index / 6)
+        [SNew(SPackCell).Player(Player.Get()).Index(Index).Belt(false).Icons(Icons)];
+    }
     TSharedRef<SHorizontalBox> Slots = SNew(SHorizontalBox);
     for (int32 Slot = 0; Slot < ASurvivalCharacter::HotbarSize; ++Slot)
     {
-        Slots->AddSlot().FillWidth(1).Padding(2.0f)
-        [
-            SNew(SButton).ButtonStyle(&MenuButtonStyle())
-            .HAlign(HAlign_Center)
-            .ButtonColorAndOpacity_Lambda([this, Slot]()
-            {
-                return FSlateColor(Player.IsValid() && Player->GetActiveHotbarSlot() == Slot ? Chosen : Tile);
-            })
-            .ToolTipText_Lambda([this, Slot]()
-            {
-                return FText::FromString(SurvivalItemName(Player.IsValid() ? Player->GetHotbarItem(Slot) : ESurvivalItem::None));
-            })
-            .OnClicked_Lambda([this, Slot]()
-            {
-                if (ASurvivalCharacter* Character = Player.Get())
-                {
-                    Character->ChooseHotbarSlot(Slot);
-                }
-                return FReply::Handled();
-            })
-            [
-                SNew(SHorizontalBox)
-                + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2.0f)
-                [
-                    SNew(STextBlock).Text(FText::AsNumber(Slot + 1))
-                ]
-                + SHorizontalBox::Slot().AutoWidth().Padding(3.0f)
-                [
-                    SNew(SImage).Image_Lambda([this, Slot]()
-                    {
-                        return Player.IsValid() ? FindIcon(Player->GetHotbarItem(Slot)) : nullptr;
-                    })
-                ]
-            ]
-        ];
+        Slots->AddSlot().FillWidth(1).Padding(2)
+        [SNew(SPackCell).Player(Player.Get()).Index(Slot).Belt(true).Icons(Icons)];
     }
 
     TSharedRef<SHorizontalBox> Tabs = SNew(SHorizontalBox);
@@ -206,6 +267,45 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                     .Font(FCoreStyle::GetDefaultFontStyle("Bold", 13))
                 ]
             ]
+        ];
+    }
+
+    TSharedRef<SVerticalBox> Profile = SNew(SVerticalBox);
+    Profile->AddSlot().AutoHeight().Padding(0, 0, 0, 14)[SectionLabel(TEXT("SURVIVOR"))];
+    Profile->AddSlot().AutoHeight().Padding(0, 0, 0, 20)
+    [
+        SNew(STextBlock).Font(FCoreStyle::GetDefaultFontStyle("Bold", 23)).ColorAndOpacity(Ink)
+        .Text_Lambda([this]() { return Player.IsValid() ? FText::FromString(FString::Printf(TEXT("Level %d"),
+            Player->GetProgression().CharacterLevel)) : FText::GetEmpty(); })
+    ];
+    const TCHAR* VitalNames[] = {TEXT("Health"), TEXT("Stamina"), TEXT("Food"), TEXT("Water")};
+    const FLinearColor VitalColors[] = {{.65f,.21f,.16f}, {.35f,.49f,.20f}, {.67f,.44f,.21f}, {.18f,.43f,.56f}};
+    for (int32 Index = 0; Index < UE_ARRAY_COUNT(VitalNames); ++Index)
+    {
+        auto Value = [this, Index]() -> float
+        {
+            if (!Player.IsValid()) { return 0.f; }
+            const FSurvivalVitals& Vitals = Player->GetVitals();
+            switch (Index)
+            {
+            case 0: return Player->GetHealthPoints();
+            case 1: return Vitals.Stamina;
+            case 2: return Vitals.Hunger;
+            default: return Vitals.Thirst;
+            }
+        };
+        Profile->AddSlot().AutoHeight()
+        [
+            SNew(SHorizontalBox)
+            + SHorizontalBox::Slot().FillWidth(1)[SNew(STextBlock).Text(FText::FromString(VitalNames[Index]))]
+            + SHorizontalBox::Slot().AutoWidth()[SNew(STextBlock).Text_Lambda([Value]() {
+                return FText::AsNumber(FMath::RoundToInt(Value()));
+            })]
+        ];
+        Profile->AddSlot().AutoHeight().Padding(0, 4, 0, 16)
+        [
+            SNew(SBox).HeightOverride(5)[SNew(SProgressBar).FillColorAndOpacity(VitalColors[Index])
+                .Percent_Lambda([Value]() -> TOptional<float> { return Value() / FSurvivalVitals::Max; })]
         ];
     }
 
@@ -243,6 +343,17 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                     + SVerticalBox::Slot().FillHeight(1)
                     [
                         SNew(SHorizontalBox)
+                        + SHorizontalBox::Slot().AutoWidth().Padding(0,0,8,0)
+                        [
+                            SNew(SBox).WidthOverride(146)
+                            [SNew(SBorder).BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(12)[Profile]]
+                        ]
+                        + SHorizontalBox::Slot().FillWidth(1)
+                        [
+                            SNew(SVerticalBox)
+                    + SVerticalBox::Slot().FillHeight(1)
+                    [
+                        SNew(SHorizontalBox)
                         .Visibility_Lambda([this]() { return Page == EPage::Crafting ? EVisibility::Visible : EVisibility::Collapsed; })
                         + SHorizontalBox::Slot().FillWidth(.40f).Padding(0, 0, 12, 0)
                         [
@@ -261,7 +372,7 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                             SNew(SBorder).BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(FMargin(14))
                             [
                                 SNew(SVerticalBox)
-                                + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)[SectionLabel(TEXT("CARRIED ITEMS"))]
+                                + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)[SectionLabel(TEXT("BACKPACK"))]
                                 + SVerticalBox::Slot().FillHeight(1)[Items]
                                 + SVerticalBox::Slot().AutoHeight().Padding(0, 16, 0, 7)[SectionLabel(TEXT("QUICK SLOTS"))]
                                 + SVerticalBox::Slot().AutoHeight()[Slots]
@@ -350,9 +461,11 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                 + SVerticalBox::Slot().AutoHeight()
                                 [
                                     SNew(STextBlock).AutoWrapText(true).ColorAndOpacity(FSlateColor(Muted))
-                                    .Text(FText::FromString(TEXT("Click a quick slot or press 1–6 to assign this item.")))
+                                    .Text(FText::FromString(TEXT("Drag items to rearrange your pack. Drop onto a quick slot to assign, or back into the pack to unpin.")))
                                 ]
                             ]
+                        ]
+                    ]
                         ]
                     ]
                 ]
@@ -476,6 +589,8 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeSkillsPanel()
     }
 
     SAssignNew(TrainingRows, SScrollBox);
+    TSharedRef<SWrapBox> Nodes = SNew(SWrapBox).UseAllottedSize(true);
+    TrainingRows->AddSlot()[Nodes];
     for (const bool bAvailable : {true, false})
     {
         for (int32 Index = 0; Index < FSurvivalProgression::EntryCount; ++Index)
@@ -486,54 +601,28 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeSkillsPanel()
             {
                 continue;
             }
-            TrainingRows->AddSlot().Padding(0, 0, 5, 3)
+            Nodes->AddSlot().Padding(2)
             [
-                SNew(SButton).ButtonStyle(&MenuButtonStyle()).HAlign(HAlign_Fill).ContentPadding(FMargin(10, 9))
+                SNew(SBox).WidthOverride(125).HeightOverride(86)
                 .Visibility_Lambda([this, Entry]() { return MatchesTraining(Entry) ? EVisibility::Visible : EVisibility::Collapsed; })
-                .ButtonColorAndOpacity_Lambda([this, Index]() { return FSlateColor(SelectedTraining == Index ? Chosen : Tile); })
-                .OnClicked_Lambda([this, Index]() { SelectTraining(Index); return FReply::Handled(); })
                 [
-                    SNew(SHorizontalBox)
-                    + SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 9, 0)
-                    [SNew(SImage).Image(FindThemeIcon(Info.Icon)).ColorAndOpacity(bAvailable ? Accent : Muted)]
-                    + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center)
+                    SNew(SButton).ButtonStyle(&MenuButtonStyle()).HAlign(HAlign_Center).ContentPadding(3)
+                    .ButtonColorAndOpacity_Lambda([this, Index]() { return FSlateColor(SelectedTraining == Index ? Chosen : Tile); })
+                    .OnClicked_Lambda([this, Index]() { SelectTraining(Index); return FReply::Handled(); })
                     [
-                        SNew(STextBlock).Text(FText::FromString(Info.Name))
-                        .ColorAndOpacity(FSlateColor(bAvailable ? Ink : Muted))
-                    ]
-                    + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
-                    [
-                        SNew(SBox).WidthOverride(57)
-                        [
-                            SNew(STextBlock).ColorAndOpacity(FSlateColor(Muted))
-                            .Text_Lambda([this, Entry]()
-                            {
-                                const int32 Rank = Player.IsValid() ? Player->GetProgression().Rank(Entry) : 0;
-                                return FText::FromString(FString::Printf(TEXT("%d / %d"), Rank, GetTrainingInfo(Entry).MaxRank));
-                            })
-                        ]
-                    ]
-                    + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
-                    [
-                        SNew(SBox).WidthOverride(64)
-                        [
-                            SNew(STextBlock).ColorAndOpacity(FSlateColor(Muted))
-                            .Text_Lambda([this, Entry]()
-                            {
-                                const FTrainingInfo& Training = GetTrainingInfo(Entry);
-                                if (!Training.bAvailable)
-                                {
-                                    return FText::FromString(TEXT("Planned"));
-                                }
-                                if (!Player.IsValid() || Training.IsPractice())
-                                {
-                                    return FText::FromString(TEXT("Practice"));
-                                }
-                                const int32 Rank = Player->GetProgression().Rank(Entry);
-                                return Rank >= Training.MaxRank ? FText::FromString(TEXT("Learned"))
-                                    : FText::FromString(FString::Printf(TEXT("%d pts"), Training.PointCost(Rank + 1)));
-                            })
-                        ]
+                        SNew(SVerticalBox)
+                        + SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
+                        [SNew(SImage).Image(FindThemeIcon(Info.Icon)).ColorAndOpacity(bAvailable ? Accent : Muted)]
+                        + SVerticalBox::Slot().AutoHeight()
+                        [SNew(STextBlock).Text(FText::FromString(Info.Name)).Justification(ETextJustify::Center)
+                            .WrapTextAt(115.f).ColorAndOpacity(bAvailable ? Ink : Muted)]
+                        + SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
+                        [SNew(STextBlock).ColorAndOpacity(Muted).Text_Lambda([this, Entry]() {
+                            const FTrainingInfo& Skill = GetTrainingInfo(Entry);
+                            if (!Skill.bAvailable) { return FText::FromString(TEXT("Planned")); }
+                            return FText::FromString(FString::Printf(TEXT("%d / %d"),
+                                Player.IsValid() ? Player->GetProgression().Rank(Entry) : 0, Skill.MaxRank));
+                        })]
                     ]
                 ]
             ];
@@ -577,7 +666,7 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeSkillsPanel()
             SNew(SHorizontalBox)
             + SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 12, 0)
             [
-                SNew(SBox).WidthOverride(170)
+                SNew(SBox).WidthOverride(148)
                 [
                     SNew(SBorder).BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(FMargin(9))
                     [Navigation]
@@ -596,13 +685,6 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeSkillsPanel()
                             TrainingSearch = Value.ToString().TrimStartAndEnd();
                             SelectFirstTraining();
                         })
-                    ]
-                    + SVerticalBox::Slot().AutoHeight().Padding(10, 0, 15, 7)
-                    [
-                        SNew(SHorizontalBox)
-                        + SHorizontalBox::Slot().FillWidth(1)[SectionLabel(TEXT("SKILL"))]
-                        + SHorizontalBox::Slot().AutoWidth()[SNew(SBox).WidthOverride(57)[SectionLabel(TEXT("RANK"))]]
-                        + SHorizontalBox::Slot().AutoWidth()[SNew(SBox).WidthOverride(64)[SectionLabel(TEXT("NEXT"))]]
                     ]
                     + SVerticalBox::Slot().FillHeight(1)[TrainingRows.ToSharedRef()]
                 ]
@@ -741,19 +823,24 @@ void SSurvivalInventoryMenu::SelectFirstMatchingRecipe()
 TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeBrowser()
 {
     TSharedRef<SHorizontalBox> Categories = SNew(SHorizontalBox);
-    for (const TCHAR* Label : {TEXT("All"), TEXT("Medical"), TEXT("Building")})
+    TArray<FString> RecipeCategories = {TEXT("All")};
+    for (const FSurvivalRecipe& Recipe : GetSurvivalRecipes())
+    {
+        RecipeCategories.AddUnique(FString(Recipe.Category));
+    }
+    for (const FString& Label : RecipeCategories)
     {
         Categories->AddSlot().FillWidth(1).Padding(0, 0, 4, 0)
         [
             SNew(SButton).ButtonStyle(&MenuButtonStyle()).HAlign(HAlign_Center).Text(FText::FromString(Label))
             .ButtonColorAndOpacity_Lambda([this, Label]()
             {
-                return FSlateColor(Category == Label || (Category.IsEmpty() && FCString::Strcmp(Label, TEXT("All")) == 0)
+                return FSlateColor(Category == Label || (Category.IsEmpty() && Label == TEXT("All"))
                     ? Chosen : Tile);
             })
             .OnClicked_Lambda([this, Label]()
             {
-                Category = FCString::Strcmp(Label, TEXT("All")) == 0 ? TEXT("") : Label;
+                Category = Label == TEXT("All") ? TEXT("") : Label;
                 SelectFirstMatchingRecipe();
                 return FReply::Handled();
             })
@@ -839,6 +926,11 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeDetails()
         .BorderBackgroundColor(PanelColor)
         [
             SNew(SVerticalBox)
+            + SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Left).Padding(0,0,0,8)
+            [SNew(SImage).DesiredSizeOverride(FVector2D(65,65)).Image_Lambda([this]() {
+                const auto Recipes = GetSurvivalRecipes();
+                return Recipes.IsValidIndex(SelectedRecipe) ? FindIcon(Recipes[SelectedRecipe].Output) : nullptr;
+            })]
             + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 5)
             [
                 SNew(STextBlock).Font(FCoreStyle::GetDefaultFontStyle("Bold", 20))
