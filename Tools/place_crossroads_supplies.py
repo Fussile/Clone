@@ -50,7 +50,16 @@ def place():
                             ("food_amount", food), ("water_amount", water), ("cloth_amount", cloth)):
             crate.set_editor_property(prop, value)
 
+    # Slots are stock, receiver, barrel, and optic in FSurvivalRifle.
+    rifle_parts = (
+        "CrossroadsStationTimber", "CrossroadsHouseProvisions",
+        "CrossroadsStationStone", "CrossroadsStationProvisions",
+    )
     for actor in actors.get_all_level_actors():
+        for slot, tag in enumerate(rifle_parts):
+            if actor.actor_has_tag(unreal.Name(tag)):
+                actor.set_editor_property("rifle_part_slot", slot)
+                break
         if actor.actor_has_tag(unreal.Name("CrossroadsStationProvisions")):
             actor.set_editor_property("scavenger_notes_amount", 1)
         elif actor.actor_has_tag(unreal.Name("CrossroadsHouseProvisions")):

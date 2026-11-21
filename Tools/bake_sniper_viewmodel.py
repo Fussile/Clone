@@ -154,6 +154,9 @@ bpy.context.view_layer.update()
 arm_mesh_inverse = arms.matrix_world.inverted()
 for name in parts:
     prop = props[name]
+    # The joined material reads the arms' primary UV channel. Merge the FBX UVs
+    # into that layer instead of leaving its faces at (0, 0) in the joined mesh.
+    prop.data.uv_layers.active.name = arms.data.uv_layers.active.name
     prop.data.transform(arm_mesh_inverse @ align @ prop.matrix_world)
     prop.parent = None
     prop.matrix_world = arms.matrix_world.copy()

@@ -33,9 +33,10 @@ ASurvivalRound::ASurvivalRound()
     InitialLifeSpan = 0.65f;
 }
 
-void ASurvivalRound::SetRifleRound()
+void ASurvivalRound::SetRifleRound(float BaseDamage)
 {
     bRifleRound = true;
+    RifleBaseDamage = BaseDamage;
     Movement->Velocity *= 1.8;
     SetLifeSpan(0.8f);
 }
@@ -75,7 +76,7 @@ void ASurvivalRound::HandleImpact(const FHitResult& Hit)
     }
     else if (ASurvivalZombie* Zombie = Cast<ASurvivalZombie>(Hit.GetActor()))
     {
-        float Damage = bRifleRound ? 70.0f : 32.0f;
+        float Damage = bRifleRound ? RifleBaseDamage : 32.0f;
         if (Shooter)
         {
             const FSurvivalProgression& Progress = Shooter->GetProgression();

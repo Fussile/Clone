@@ -29,21 +29,22 @@ def prepare_if_needed():
     required = (
         "/Game/Maps/L_SouthernCrossroads",
         "/Game/Art/Crossroads/Player/SK_Survivor",
-        "/Game/Art/Crossroads/SniperOptics/SK_SniperViewmodel",
-        "/Game/Art/Crossroads/SniperOptics/SM_CrossroadsSniper",
-        "/Game/Art/Crossroads/SniperOptics/SniperHold",
-        "/Game/Art/Crossroads/SniperOptics/SniperFire",
-        "/Game/Art/Crossroads/SniperOptics/SniperReload",
+        "/Game/Art/Crossroads/SniperSurface/SK_SniperViewmodel",
+        "/Game/Art/Crossroads/SniperSurface/SM_CrossroadsSniper",
+        "/Game/Art/Crossroads/SniperSurface/SniperHold",
+        "/Game/Art/Crossroads/SniperSurface/SniperFire",
+        "/Game/Art/Crossroads/SniperSurface/SniperReload",
         "/Game/Art/Crossroads/StationZombie/SK_StationZombie",
-        "/Game/Art/Crossroads/SightedSidearm/SK_SidearmViewmodel",
-        "/Game/Art/Crossroads/SightedSidearm/ViewmodelReload",
-        "/Game/Art/Crossroads/SightedSidearm/ViewmodelReloadEmpty",
+        "/Game/Art/Crossroads/AlignedSidearm/SK_SidearmViewmodel",
+        "/Game/Art/Crossroads/AlignedSidearm/ViewmodelReload",
+        "/Game/Art/Crossroads/AlignedSidearm/ViewmodelReloadEmpty",
         "/Game/Art/Crossroads/Building/M_BuildPlan",
         "/Game/Art/Crossroads/Building/M_CrossroadsTimber",
     )
     required += tuple(
         f"/Game/Art/Crossroads/Inventory/T_Item_{name}"
-        for name in ("Sidearm", "Food", "Water", "Bandage", "Timber", "Stone", "Cloth", "Rounds", "TimberDoor", "Rifle", "RifleRounds", "BuilderGuide", "ScavengerNotes", "DressingSchematic", "FieldDressing")
+        for name in ("Sidearm", "Food", "Water", "Bandage", "Timber", "Stone", "Cloth", "Rounds", "TimberDoor", "Rifle", "RifleRounds", "BuilderGuide", "ScavengerNotes", "DressingSchematic", "FieldDressing",
+                     "RifleStock", "RifleReceiver", "RifleBarrel", "RifleOptic")
     )
     required += tuple(
         f"/Game/Art/Crossroads/Interface/{icon.stem}"

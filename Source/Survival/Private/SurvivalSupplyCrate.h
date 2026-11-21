@@ -30,7 +30,8 @@ public:
     {
         return !bSearched && (TimberAmount > 0 || StoneAmount > 0 || FoodAmount > 0
             || WaterAmount > 0 || ClothAmount > 0 || bContainsRifle || BuilderGuideAmount > 0
-            || ScavengerNotesAmount > 0 || DressingSchematicAmount > 0);
+            || ScavengerNotesAmount > 0 || DressingSchematicAmount > 0
+            || (RiflePartSlot >= 0 && RiflePartSlot < FSurvivalRifle::PartCount));
     }
 
 protected:
@@ -69,6 +70,9 @@ private:
 
     UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0"))
     int32 DressingSchematicAmount = 0;
+
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "-1", ClampMax = "3"))
+    int32 RiflePartSlot = -1;
 
     bool bSearched = false;
 };

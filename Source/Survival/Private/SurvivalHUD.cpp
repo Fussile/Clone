@@ -35,7 +35,8 @@ void ASurvivalHUD::BeginPlay()
         TEXT("Sidearm"), TEXT("Food"), TEXT("Water"), TEXT("Bandage"), TEXT("Timber"),
         TEXT("Stone"), TEXT("Cloth"), TEXT("Rounds"), TEXT("TimberDoor"),
         TEXT("Rifle"), TEXT("RifleRounds"), TEXT("BuilderGuide"), TEXT("ScavengerNotes"),
-        TEXT("DressingSchematic"), TEXT("FieldDressing")
+        TEXT("DressingSchematic"), TEXT("FieldDressing"),
+        TEXT("RifleStock"), TEXT("RifleReceiver"), TEXT("RifleBarrel"), TEXT("RifleOptic")
     };
     static_assert(UE_ARRAY_COUNT(Names) == static_cast<int32>(ESurvivalItem::None));
     for (const TCHAR* Name : Names)

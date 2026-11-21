@@ -16,7 +16,7 @@ PLAYER = ART + "/Player"
 BUILDING = ART + "/Building"
 ZOMBIE = ART + "/StationZombie"
 WEAPON_AUDIO = "/Game/Audio/Weapons"
-VIEWMODEL = ART + "/SightedSidearm"
+VIEWMODEL = ART + "/AlignedSidearm"
 LEVEL = "/Game/Maps/L_SouthernCrossroads"
 
 
@@ -266,7 +266,7 @@ def prepare():
         SOURCE / "Enemy" / "zombie_rigged__animated.glb", generated / "StationZombie.glb", "prepare_zombie_glb")
     import_skeletal_pack(VIEWMODEL,
         ("SK_SidearmViewmodel", "ViewmodelIdle", "ViewmodelWalk", "ViewmodelFire", "ViewmodelReload", "ViewmodelReloadEmpty"),
-        SOURCE / "Weapons" / "fps_pistol_animations.glb", generated / "SightedSidearm.glb", "prepare_sidearm_glb",
+        SOURCE / "Weapons" / "fps_pistol_animations.glb", generated / "AlignedSidearm.glb", "prepare_sidearm_glb",
         sidearm, SOURCE / "Weapons" / "SM_Magazine.glb")
     if sidearm.is_file():
         import_asset(sidearm, BUILDING, unreal.StaticMesh)
@@ -277,7 +277,7 @@ def prepare():
         "SK_Survivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",
         "SurvivorCrouchIdle", "SurvivorCrouchMove", "SurvivorProneIdle", "SurvivorProneMove",
     ), SOURCE / "Survivor" / "SK_Survivor.glb")
-    sniper = ART + "/SniperOptics"
+    sniper = ART + "/SniperSurface"
     import_skeletal_pack(sniper, ("SK_SniperViewmodel", "SniperHold", "SniperFire", "SniperReload"),
                          SOURCE / "Weapons" / "SK_SniperViewmodel.glb")
     world_rifle = SOURCE / "Weapons" / "SM_CrossroadsSniper.glb"

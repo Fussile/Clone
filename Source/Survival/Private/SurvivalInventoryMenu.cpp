@@ -294,11 +294,46 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                             Player->GetItemCount(Player->GetSelectedInventoryItem()))) : FText::GetEmpty();
                                     })
                                 ]
+                                + SVerticalBox::Slot().AutoHeight().Padding(0, 18, 0, 0)
+                                [
+                                    SNew(STextBlock).ColorAndOpacity(FSlateColor(Ink)).AutoWrapText(true)
+                                    .Text_Lambda([this]()
+                                    {
+                                        const ASurvivalCharacter* Character = Player.Get();
+                                        if (!Character) { return FText::GetEmpty(); }
+                                        const FSurvivalRifle& Rifle = Character->GetRifle();
+                                        const ESurvivalItem Item = Character->GetSelectedInventoryItem();
+                                        if (Item == ESurvivalItem::Rifle && Character->HasRifle())
+                                        {
+                                            FString Details = FString::Printf(TEXT("Quality %d   /   Base damage %d"),
+                                                Rifle.GetQuality(), FMath::RoundToInt(Rifle.GetDamage()));
+                                            for (int32 Slot = 0; Slot < FSurvivalRifle::PartCount; ++Slot)
+                                            {
+                                                Details += FString::Printf(TEXT("\n%s   %d"), FSurvivalRifle::PartName(Slot),
+                                                    Rifle.GetPartQuality(Slot));
+                                            }
+                                            return FText::FromString(Details);
+                                        }
+                                        if (const int32 Slot = FSurvivalRifle::PartIndex(Item); Slot != INDEX_NONE)
+                                        {
+                                            const int32 Spare = FSurvivalRifle::SpareQuality(Slot);
+                                            return FText::FromString(Character->HasRifle()
+                                                ? FString::Printf(TEXT("Installed   %d\nReplacement   %d"), Rifle.GetPartQuality(Slot), Spare)
+                                                : FString::Printf(TEXT("Quality   %d\nRequires a bolt-action rifle"), Spare));
+                                        }
+                                        return FText::GetEmpty();
+                                    })
+                                ]
                                 + SVerticalBox::Slot().FillHeight(1)[SNew(SSpacer)]
                                 + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 12)
                                 [
                                     SNew(SButton).ButtonStyle(&MenuButtonStyle()).ButtonColorAndOpacity(Chosen)
-                                    .HAlign(HAlign_Center).Text(FText::FromString(TEXT("Use selected item")))
+                                    .HAlign(HAlign_Center).Text_Lambda([this]()
+                                    {
+                                        const bool bPart = Player.IsValid()
+                                            && FSurvivalRifle::PartIndex(Player->GetSelectedInventoryItem()) != INDEX_NONE;
+                                        return FText::FromString(bPart ? TEXT("Install rifle part") : TEXT("Use selected item"));
+                                    })
                                     .IsEnabled_Lambda([this]()
                                     {
                                         return Player.IsValid() && Player->CanUseItem(Player->GetSelectedInventoryItem());

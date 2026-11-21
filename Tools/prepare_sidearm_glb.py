@@ -162,6 +162,9 @@ def mount_pistol(model, binary, arms, frame, pistol_source):
         center = (min(point[0] for point in crown) + max(point[0] for point in crown)) * .5
         lengthwise = (min(point[2] for point in crown) + max(point[2] for point in crown)) * .5
         add_sight(model, binary, joint, name, (center, ceiling, lengthwise))
+        if name == "RearSight":
+            # Use the pistol's physical up axis to remove roll as well as yaw and pitch.
+            add_sight(model, binary, joint, "SightUp", (center, ceiling + .06 * scale, lengthwise))
 
 
 def mount_magazine(model, binary, arms, original, source):

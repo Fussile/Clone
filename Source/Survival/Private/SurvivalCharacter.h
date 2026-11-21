@@ -74,6 +74,7 @@ public:
     bool HasRifle() const { return bHasRifle; }
     int32 GetRifleAmmo() const { return RifleAmmo; }
     int32 GetRifleReserve() const { return Items.RifleRounds; }
+    const FSurvivalRifle& GetRifle() const { return RifleAssembly; }
     bool IsRifleReloading() const { return RifleReloadAt >= 0.0; }
     bool ShowHitMarker() const;
     void NotifyRoundHit(bool bHitZombie, bool bRifleRound);
@@ -155,6 +156,7 @@ private:
     FSurvivalProgression Progression;
     float SprintPracticeTime = 0.0f;
     bool bHasRifle = false;
+    FSurvivalRifle RifleAssembly;
     int32 RifleAmmo = 0;
     double RifleReadyAt = 0.0;
     double RifleReloadAt = -1.0;
@@ -190,6 +192,7 @@ private:
     };
     double ReloadCompleteAt = -1.0;
     double NextShotAt = 0.0;
+    double SidearmAimedShotAt = -1.0;
     bool bViewmodelReady = false;
     bool bAimHeld = false;
     float AimBlend = 0.0f;

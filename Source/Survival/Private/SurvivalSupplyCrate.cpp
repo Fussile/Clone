@@ -46,6 +46,10 @@ FSurvivalLoot ASurvivalSupplyCrate::TakeLoot()
     Loot.Items.BuilderGuides = FMath::Max(0, BuilderGuideAmount);
     Loot.Items.ScavengerNotes = FMath::Max(0, ScavengerNotesAmount);
     Loot.Items.DressingSchematics = FMath::Max(0, DressingSchematicAmount);
+    if (RiflePartSlot >= 0 && RiflePartSlot < FSurvivalRifle::PartCount)
+    {
+        Loot.Items.RifleParts[RiflePartSlot] = 1;
+    }
     Loot.Items.RifleRounds = bContainsRifle ? 8 : 0;
     Loot.bSidearm = bContainsSidearm;
     Loot.bRifle = bContainsRifle;

@@ -19,8 +19,51 @@ const TCHAR* SurvivalItemName(ESurvivalItem Item)
     case ESurvivalItem::ScavengerNotes: return TEXT("Scavenger's field notes");
     case ESurvivalItem::DressingSchematic: return TEXT("Field dressing schematic");
     case ESurvivalItem::FieldDressing: return TEXT("Field dressing");
+    case ESurvivalItem::RifleStock: return TEXT("Rifle stock");
+    case ESurvivalItem::RifleReceiver: return TEXT("Rifle receiver");
+    case ESurvivalItem::RifleBarrel: return TEXT("Rifle barrel");
+    case ESurvivalItem::RifleOptic: return TEXT("Rifle optic");
     default: return TEXT("Empty");
     }
+}
+
+const TCHAR* FSurvivalRifle::PartName(int32 Slot)
+{
+    const TCHAR* Names[] = {TEXT("Stock"), TEXT("Receiver"), TEXT("Barrel"), TEXT("Optic")};
+    static_assert(UE_ARRAY_COUNT(Names) == PartCount);
+    return Names[Slot];
+}
+
+int32 FSurvivalRifle::SpareQuality(int32 Slot)
+{
+    constexpr int32 Quality[] = {72, 84, 76, 80};
+    static_assert(UE_ARRAY_COUNT(Quality) == PartCount);
+    return Quality[Slot];
+}
+
+int32 FSurvivalRifle::GetQuality() const
+{
+    int32 Sum = 0;
+    for (int32 Part : Parts)
+    {
+        Sum += Part;
+    }
+    return FMath::RoundToInt(static_cast<float>(Sum) / PartCount);
+}
+
+float FSurvivalRifle::GetDamage() const
+{
+    return 70.0f + (GetQuality() - FactoryQuality) * 0.5f;
+}
+
+bool FSurvivalRifle::InstallSpare(int32 Slot)
+{
+    if (Slot < 0 || Slot >= PartCount || Parts[Slot] >= SpareQuality(Slot))
+    {
+        return false;
+    }
+    Parts[Slot] = SpareQuality(Slot);
+    return true;
 }
 
 TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes()
@@ -48,6 +91,10 @@ void FSurvivalItems::Add(const FSurvivalItems& Other)
     ScavengerNotes += Other.ScavengerNotes;
     DressingSchematics += Other.DressingSchematics;
     FieldDressings += Other.FieldDressings;
+    for (int32 Slot = 0; Slot < FSurvivalRifle::PartCount; ++Slot)
+    {
+        RifleParts[Slot] += Other.RifleParts[Slot];
+    }
 }
 
 int32 FSurvivalVitals::Advance(float DeltaSeconds, bool bSprinting, float MovementEffort, float AmbientCelsius,

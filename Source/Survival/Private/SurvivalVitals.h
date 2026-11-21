@@ -6,10 +6,33 @@
 
 enum class ESurvivalItem : uint8
 {
-    Sidearm, Food, Water, Bandage, Timber, Stone, Cloth, Rounds, TimberDoor, Rifle, RifleRounds, BuilderGuide, ScavengerNotes, DressingSchematic, FieldDressing, None
+    Sidearm, Food, Water, Bandage, Timber, Stone, Cloth, Rounds, TimberDoor, Rifle, RifleRounds, BuilderGuide, ScavengerNotes, DressingSchematic, FieldDressing,
+    RifleStock, RifleReceiver, RifleBarrel, RifleOptic, None
 };
 
 const TCHAR* SurvivalItemName(ESurvivalItem Item);
+
+struct FSurvivalRifle
+{
+    static constexpr int32 PartCount = 4;
+    static constexpr int32 FactoryQuality = 40;
+    static constexpr int32 PartIndex(ESurvivalItem Item)
+    {
+        const int32 Slot = static_cast<int32>(Item) - static_cast<int32>(ESurvivalItem::RifleStock);
+        return Slot >= 0 && Slot < PartCount ? Slot : INDEX_NONE;
+    }
+
+    static const TCHAR* PartName(int32 Slot);
+    static int32 SpareQuality(int32 Slot);
+    int32 GetPartQuality(int32 Slot) const { return Parts[Slot]; }
+    int32 GetQuality() const;
+    float GetDamage() const;
+    bool InstallSpare(int32 Slot);
+
+private:
+    int32 Parts[PartCount] = {FactoryQuality, FactoryQuality, FactoryQuality, FactoryQuality};
+};
+static_assert(FSurvivalRifle::PartIndex(ESurvivalItem::RifleOptic) == FSurvivalRifle::PartCount - 1);
 
 struct FSurvivalIngredient
 {
@@ -42,6 +65,7 @@ struct FSurvivalItems
     int32 ScavengerNotes = 0;
     int32 DressingSchematics = 0;
     int32 FieldDressings = 0;
+    int32 RifleParts[FSurvivalRifle::PartCount]{};
 
     void Add(const FSurvivalItems& Other);
 };
