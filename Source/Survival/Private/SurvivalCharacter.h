@@ -119,7 +119,7 @@ private:
     void FireRifle();
     void ReloadRifle();
     void UpdateRifle();
-    void UpdateRifleVisibility();
+    void UpdateWeaponRigVisibility();
     void UpdateSidearmView();
     void LoadSidearmViewmodel();
     void UpdateSidearmAnimation();
@@ -170,6 +170,7 @@ private:
     double ReloadCompleteAt = -1.0;
     double NextShotAt = 0.0;
     bool bViewmodelReady = false;
+    bool bBodyPistolReady = false;
     bool bAimHeld = false;
     float AimBlend = 0.0f;
     FVector ViewmodelHip = FVector::ZeroVector;
