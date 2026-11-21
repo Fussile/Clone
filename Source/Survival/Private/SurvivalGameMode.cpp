@@ -6,6 +6,7 @@
 #include "Engine/HitResult.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Kismet/GameplayStatics.h"
 #include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
 #include "SurvivalHUD.h"
@@ -66,6 +67,18 @@ void ASurvivalGameMode::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds);
     ElapsedSurvivalSeconds += DeltaSeconds;
     UpdateDaylight();
+
+    constexpr int32 FirstHordeMinute = 22 * 60;
+    const double Now = GetWorld()->GetTimeSeconds();
+    if (!bFirstHordeStarted && Now >= NextHordeAttempt && GetWorldMinutes() >= FirstHordeMinute
+        && GetWorld()->GetMapName().EndsWith(TEXT("L_SouthernCrossroads")))
+    {
+        NextHordeAttempt = Now + 2.0;
+        if (ASurvivalCharacter* Player = Cast<ASurvivalCharacter>(UGameplayStatics::GetPlayerPawn(this, 0)))
+        {
+            bFirstHordeStarted = Player->TryStartFirstHorde();
+        }
+    }
 }
 
 int32 ASurvivalGameMode::GetWorldMinutes() const

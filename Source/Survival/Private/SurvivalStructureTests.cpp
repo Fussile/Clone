@@ -49,12 +49,32 @@ bool FSurvivalContactsTest::RunTest(const FString& Parameters)
     Adjacent.Base.Z += 50;
     TestEqual(TEXT("An air gap carries no support"), Adjacent.SupportCostFrom(Floor), INDEX_NONE);
 
-    FSurvivalBuildPlacement HalfWall;
-    HalfWall.PieceIndex = 1;
     FSurvivalBuildPlacement Stairs;
     Stairs.PieceIndex = 5;
-    TestEqual(TEXT("Stairs rise to the half-wall height"), Stairs.GetPiece().Boxes.Last().Max.Z,
-        HalfWall.GetPiece().Boxes.Last().Max.Z);
+    const double Cell = FSurvivalBuildPlacement::GridSize;
+    TestTrue(TEXT("Stairs fit a full cube"),
+        Stairs.WorldBounds().GetExtent().Equals(FVector(Cell / 2, Cell / 2, Cell / 2), 0.001));
+    TestTrue(TEXT("A continuing flight rises exactly one cell"),
+        Stairs.StairContinuation().Equals(FVector(0, Cell, Cell), 0.001));
+
+    FSurvivalStructure Cantilever;
+    FSurvivalBuildPlacement Timber;
+    const int32 Budget = Timber.GetPiece().SupportCapacity();
+    Cantilever.Add(1, Budget, true, {}, {});
+    FSurvivalBuildPlacement Previous = Timber;
+    Previous.Base.Z += Cell;
+    Cantilever.Add(2, Budget, false, {{1, Previous.SupportCostFrom(Timber)}}, {});
+    for (int32 Id = 3; Id <= 7; ++Id)
+    {
+        FSurvivalBuildPlacement Next = Previous;
+        Next.Base.X += Cell;
+        Cantilever.Add(Id, Budget, false, {{Id - 1, Next.SupportCostFrom(Previous)}}, {});
+        Previous = Next;
+    }
+    TestEqual(TEXT("Five cubes can hang from a one-block timber wall"), Cantilever.GetBudget(7), 0);
+    TestTrue(TEXT("A sixth block needs more support"), Cantilever.GetBudget(7) < 2);
+    TestEqual(TEXT("Removing the footing collapses the entire span"), Cantilever.Remove(1).Num(), 6);
+
     FSurvivalBuildPlacement NextStairs = Stairs;
     NextStairs.Base = Stairs.StairContinuation();
     TestEqual(TEXT("A flush stair flight supports the flight above it"), NextStairs.SupportCostFrom(Stairs), 1);

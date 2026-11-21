@@ -54,6 +54,9 @@ public:
     bool IsAimingSidearm() const;
     bool HasSidearm() const { return bHasSidearm; }
     int32 GetLivingAttackers() const;
+    int32 GetLivingNightHorde() const;
+    bool HasFirstHordeStarted() const { return bFirstHordeStarted; }
+    bool TryStartFirstHorde();
     int32 GetDefenseWave() const { return DefenseWave; }
     static constexpr int32 DefenseWaveCount = 3;
     bool ShowHitMarker() const;
@@ -113,6 +116,7 @@ private:
     void PlaySidearmAnimation(UAnimSequence* Sequence, bool bLoop);
     void StartReload();
     void StartDefense();
+    bool SpawnAttackers(int32 Count, TArray<TWeakObjectPtr<ASurvivalZombie>>& Group);
     void RestartDefense();
 
     EStance Stance = EStance::Standing;
@@ -145,6 +149,8 @@ private:
     double HitMarkerUntil = -1.0;
     int32 DefenseWave = 0;
     TArray<TWeakObjectPtr<ASurvivalZombie>> Attackers;
+    TArray<TWeakObjectPtr<ASurvivalZombie>> NightHorde;
+    bool bFirstHordeStarted = false;
 
     UPROPERTY(Transient)
     TObjectPtr<ASurvivalSidearm> Sidearm;

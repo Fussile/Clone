@@ -40,6 +40,7 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces()
     constexpr double Half = FSurvivalBuildPlacement::GridSize / 2;
     constexpr double Height = FSurvivalBuildPlacement::GridSize;
     constexpr double Rise = FSurvivalBuildPlacement::HalfWallHeight;
+    constexpr double Step = Height / 5;
     constexpr double DoorHeight = Height * 2;
     static const TArray<FBox> Frame = {Box(-Half, -6, 0, -Half + 8, 6, DoorHeight),
         Box(Half - 8, -6, 0, Half, 6, DoorHeight), Box(-Half + 8, -6, DoorHeight - 8, Half - 8, 6, DoorHeight)};
@@ -52,8 +53,11 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces()
             Box(-Half, -Half, 0, Half, Half, 25), Box(-Half, -Half, 85, Half, Half, Height),
             Box(-Half, -Half, 25, -35, Half, 85), Box(35, -Half, 25, Half, Half, 85)}, false, false, true},
         {TEXT("Stairs"), {5, 0}, false, {
-            Box(-Half, -Half, 0, Half, -Half / 2, Rise / 4), Box(-Half, -Half / 2, 0, Half, 0, Rise / 2),
-            Box(-Half, 0, 0, Half, Half / 2, Rise * 3 / 4), Box(-Half, Half / 2, 0, Half, Half, Rise)},
+            Box(-Half, -Half, 0, Half, -Half + Step, Step),
+            Box(-Half, -Half + Step, 0, Half, -Half + Step * 2, Step * 2),
+            Box(-Half, -Half + Step * 2, 0, Half, -Half + Step * 3, Step * 3),
+            Box(-Half, -Half + Step * 3, 0, Half, -Half + Step * 4, Step * 4),
+            Box(-Half, -Half + Step * 4, 0, Half, Half, Height)},
             false, true},
         {TEXT("Stone block"), {0, 5}, true, {Box(-Half, -Half, 0, Half, Half, Height)}, false, false, true},
         {TEXT("Stone foundation"), {0, 4}, true, {Box(-Half, -Half, 0, Half, Half, 25)}},
@@ -178,7 +182,7 @@ bool FSurvivalBuildPlacement::SnapTo(const FSurvivalBuildPlacement& Source, cons
 
 FVector FSurvivalBuildPlacement::StairContinuation() const
 {
-    return Base + Rotation.RotateVector(FVector(0, GridSize, HalfWallHeight));
+    return Base + Rotation.RotateVector(FVector(0, GridSize, GridSize));
 }
 
 bool FSurvivalBuildPlacement::IsUpperStairEdge(const FVector& Point, const FVector& Normal) const
@@ -189,8 +193,8 @@ bool FSurvivalBuildPlacement::IsUpperStairEdge(const FVector& Point, const FVect
     }
     const FVector LocalPoint = Rotation.Inverse().RotateVector(Point - Base);
     const FVector LocalNormal = Rotation.Inverse().RotateVector(Normal);
-    return (LocalNormal.Z >= 0.95 && LocalPoint.Z >= HalfWallHeight - 1.0)
-        || (LocalNormal.Y >= 0.95 && LocalPoint.Z >= HalfWallHeight * 0.75);
+    return (LocalNormal.Z >= 0.95 && LocalPoint.Z >= GridSize - 1.0)
+        || (LocalNormal.Y >= 0.95 && LocalPoint.Z >= GridSize * 0.75);
 }
 
 int32 FSurvivalBuildPlacement::SupportCostFrom(const FSurvivalBuildPlacement& Other) const

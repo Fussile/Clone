@@ -59,6 +59,8 @@ private:
     TWeakObjectPtr<ADirectionalLight> Moon;
     float DaylightIntensity = 0.0f;
     float MoonlightIntensity = 0.0f;
+    double NextHordeAttempt = 0.0;
+    bool bFirstHordeStarted = false;
     double ElapsedSurvivalSeconds = 0.0;
     FSurvivalMaterials PlannedCost;
     FSurvivalStructure Structure;

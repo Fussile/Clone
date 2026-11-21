@@ -176,7 +176,8 @@ void ASurvivalHUD::DrawHUD()
             Character->IsReloading() ? TEXT("  Reloading") : TEXT(""))
         : TEXT("Sidearm   search the shop");
     const int32 Wave = Character->GetDefenseWave();
-    DrawRect(Panel, 20.0f, 20.0f, 420.0f, Wave > 0 ? 74.0f : 54.0f);
+    const bool bHordeStarted = Character->HasFirstHordeStarted();
+    DrawRect(Panel, 20.0f, 20.0f, 420.0f, Wave > 0 || bHordeStarted ? 74.0f : 54.0f);
     DrawText(FString::Printf(TEXT("Health   %d   |   %s"), Character->GetHealthPoints(), *Loadout),
         FLinearColor::White, 32.0f, 28.0f);
     if (const ASurvivalGameMode* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>())
@@ -194,7 +195,12 @@ void ASurvivalHUD::DrawHUD()
 
     const int32 Alive = Character->GetLivingAttackers();
     FString DefenseStatus;
-    if (Alive > 0)
+    const int32 NightAlive = Character->GetLivingNightHorde();
+    if (NightAlive > 0)
+    {
+        DefenseStatus = FString::Printf(TEXT("First-night horde   %d remaining"), NightAlive);
+    }
+    else if (Alive > 0)
     {
         DefenseStatus = FString::Printf(TEXT("Wave %d / %d   |   %d remaining"),
             Wave, ASurvivalCharacter::DefenseWaveCount, Alive);
@@ -207,7 +213,11 @@ void ASurvivalHUD::DrawHUD()
     {
         DefenseStatus = TEXT("Wave clear   [G] Next wave (+6 rounds)");
     }
-    if (Wave > 0)
+    if (DefenseStatus.IsEmpty() && bHordeStarted)
+    {
+        DefenseStatus = TEXT("First-night horde cleared");
+    }
+    if (!DefenseStatus.IsEmpty())
     {
         DrawText(DefenseStatus, Muted, 32.0f, 68.0f);
     }

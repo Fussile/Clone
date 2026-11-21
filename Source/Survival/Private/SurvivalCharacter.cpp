@@ -699,60 +699,88 @@ void ASurvivalCharacter::NotifySidearmHit()
     HitMarkerUntil = GetWorld()->GetTimeSeconds() + 0.15;
 }
 
+namespace
+{
+int32 CountLivingZombies(const TArray<TWeakObjectPtr<ASurvivalZombie>>& Group)
+{
+    int32 Count = 0;
+    for (const TWeakObjectPtr<ASurvivalZombie>& Zombie : Group)
+    {
+        Count += Zombie.IsValid() ? 1 : 0;
+    }
+    return Count;
+}
+}
+
 int32 ASurvivalCharacter::GetLivingAttackers() const
 {
-    int32 Alive = 0;
-    for (const TWeakObjectPtr<ASurvivalZombie>& Attacker : Attackers)
+    return CountLivingZombies(Attackers);
+}
+
+int32 ASurvivalCharacter::GetLivingNightHorde() const
+{
+    return CountLivingZombies(NightHorde);
+}
+
+bool ASurvivalCharacter::TryStartFirstHorde()
+{
+    if (!bFirstHordeStarted && HealthPoints > 0 && GetLivingAttackers() == 0)
     {
-        if (Attacker.IsValid())
-        {
-            ++Alive;
-        }
+        bFirstHordeStarted = SpawnAttackers(3, NightHorde);
     }
-    return Alive;
+    return bFirstHordeStarted;
 }
 
 void ASurvivalCharacter::StartDefense()
 {
-    if (HealthPoints <= 0 || bInventoryOpen || DefenseWave >= DefenseWaveCount || GetLivingAttackers() > 0)
+    if (HealthPoints <= 0 || bInventoryOpen || DefenseWave >= DefenseWaveCount
+        || GetLivingAttackers() > 0 || GetLivingNightHorde() > 0)
     {
         return;
     }
 
+    const int32 NextWave = DefenseWave + 1;
+    if (SpawnAttackers(NextWave, Attackers))
+    {
+        DefenseWave = NextWave;
+        if (DefenseWave > 1 && bHasSidearm)
+        {
+            Items.Rounds += 6;
+        }
+    }
+}
+
+bool ASurvivalCharacter::SpawnAttackers(int32 Count, TArray<TWeakObjectPtr<ASurvivalZombie>>& Group)
+{
     const FVector SpawnPoints[] = {
         FVector(3700.0, 1650.0, 112.0),
         FVector(3490.0, 1410.0, 112.0),
         FVector(3920.0, 1240.0, 112.0)
     };
     static_assert(UE_ARRAY_COUNT(SpawnPoints) == DefenseWaveCount);
-    const int32 NextWave = DefenseWave + 1;
-    Attackers.Reset();
+    Group.Reset();
     FActorSpawnParameters SpawnParameters;
     SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
-    for (int32 Index = 0; Index < NextWave; ++Index)
+    for (int32 Index = 0; Index < Count; ++Index)
     {
         ASurvivalZombie* Zombie = GetWorld()->SpawnActor<ASurvivalZombie>(
             SpawnPoints[Index], FRotator(0, 90, 0), SpawnParameters);
         if (!Zombie)
         {
-            for (const TWeakObjectPtr<ASurvivalZombie>& Spawned : Attackers)
+            for (const TWeakObjectPtr<ASurvivalZombie>& Spawned : Group)
             {
                 if (ASurvivalZombie* PartialWave = Spawned.Get())
                 {
                     PartialWave->Destroy();
                 }
             }
-            Attackers.Reset();
-            return;
+            Group.Reset();
+            return false;
         }
-        Attackers.Add(Zombie);
+        Group.Add(Zombie);
     }
 
-    DefenseWave = NextWave;
-    if (DefenseWave > 1 && bHasSidearm)
-    {
-        Items.Rounds += 6;
-    }
+    return true;
 }
 
 void ASurvivalCharacter::TakeSurvivalDamage(int32 Amount)

@@ -30,7 +30,7 @@ struct FSurvivalBuildPiece
     int32 HeightCells = 1;
     bool bDoorFrame = false;
 
-    int32 SupportCapacity() const { return bStone ? 9 : 5; }
+    int32 SupportCapacity() const { return bStone ? 15 : 11; }
 };
 
 TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces();
