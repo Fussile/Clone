@@ -33,6 +33,13 @@ ASurvivalRound::ASurvivalRound()
     InitialLifeSpan = 0.65f;
 }
 
+void ASurvivalRound::SetRifleRound()
+{
+    bRifleRound = true;
+    Movement->Velocity *= 1.8;
+    SetLifeSpan(0.8f);
+}
+
 void ASurvivalRound::BeginPlay()
 {
     Super::BeginPlay();
@@ -45,6 +52,7 @@ void ASurvivalRound::BeginPlay()
 void ASurvivalRound::HandleImpact(const FHitResult& Hit)
 {
     bool bDamaged = false;
+    bool bHitZombie = false;
     if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
     {
         FHitResult InstanceHit = Hit;
@@ -61,18 +69,19 @@ void ASurvivalRound::HandleImpact(const FHitResult& Hit)
         }
         if (Piece)
         {
-            bDamaged = Chunk->DamageFinished(InstanceHit, Piece->Placement.GetPiece().bStone ? 4 : 12);
+            bDamaged = Chunk->DamageFinished(InstanceHit, Piece->Placement.GetPiece().bStone ? (bRifleRound ? 9 : 4) : (bRifleRound ? 26 : 12));
         }
     }
     else if (ASurvivalZombie* Zombie = Cast<ASurvivalZombie>(Hit.GetActor()))
     {
-        Zombie->HitBySidearm(Cast<ASurvivalCharacter>(GetInstigator()));
+        Zombie->HitByShot(Cast<ASurvivalCharacter>(GetInstigator()), bRifleRound ? 70 : 32);
         bDamaged = true;
+        bHitZombie = true;
     }
 
     if (ASurvivalCharacter* Shooter = Cast<ASurvivalCharacter>(GetInstigator()); bDamaged && Shooter)
     {
-        Shooter->NotifySidearmHit();
+        Shooter->NotifySidearmHit(bHitZombie);
     }
     Destroy();
 }

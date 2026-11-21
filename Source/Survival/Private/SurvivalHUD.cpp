@@ -30,7 +30,8 @@ void ASurvivalHUD::BeginPlay()
 #endif
     static const TCHAR* Names[] = {
         TEXT("Sidearm"), TEXT("Food"), TEXT("Water"), TEXT("Bandage"), TEXT("Timber"),
-        TEXT("Stone"), TEXT("Cloth"), TEXT("Rounds"), TEXT("TimberDoor")
+        TEXT("Stone"), TEXT("Cloth"), TEXT("Rounds"), TEXT("TimberDoor"),
+        TEXT("Rifle"), TEXT("RifleRounds"), TEXT("BuilderGuide")
     };
     static_assert(UE_ARRAY_COUNT(Names) == static_cast<int32>(ESurvivalItem::None));
     for (const TCHAR* Name : Names)
@@ -171,7 +172,10 @@ void ASurvivalHUD::DrawHUD()
         }
     }
 
-    const FString Loadout = Character->HasSidearm()
+    const FString Loadout = Character->HasRifle() && Character->IsRifleSelected()
+        ? FString::Printf(TEXT("Rifle   %d / %d%s"), Character->GetRifleAmmo(), Character->GetRifleReserve(),
+            Character->IsRifleReloading() ? TEXT("  Reloading") : TEXT(""))
+        : Character->HasSidearm()
         ? FString::Printf(TEXT("Sidearm   %d / %d%s"), Character->GetAmmo(), Character->GetReserveAmmo(),
             Character->IsReloading() ? TEXT("  Reloading") : TEXT(""))
         : TEXT("Sidearm   search the shop");
@@ -282,7 +286,8 @@ void ASurvivalHUD::DrawHUD()
     }
     else if (const ASurvivalSupplyCrate* Crate = Character->FindSupplyCrate())
     {
-        const TCHAR* Prompt = Crate->HasSidearm() ? TEXT("[E] Take sidearm and ammo") :
+        const TCHAR* Prompt = Crate->HasRifle() ? TEXT("[E] Take rifle, ammunition and guide") :
+            Crate->HasSidearm() ? TEXT("[E] Take sidearm and ammo") :
             (Crate->HasSupplies() ? TEXT("[E] Scavenge supplies") : TEXT("Crate empty"));
         DrawText(Prompt,
             FLinearColor::White, CenterX + 14.0f, CenterY + 12.0f);

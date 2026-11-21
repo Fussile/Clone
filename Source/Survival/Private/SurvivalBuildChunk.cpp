@@ -385,7 +385,7 @@ void ASurvivalBuildChunk::SpawnDebris(const FSurvivalBuildPlacement& Placement)
     DebrisActor->SetLifeSpan(2.5f);
 }
 
-bool ASurvivalBuildChunk::RepairFinished(const FHitResult& Hit, FSurvivalMaterials& Inventory)
+bool ASurvivalBuildChunk::RepairFinished(const FHitResult& Hit, FSurvivalMaterials& Inventory, int32 RepairHealth)
 {
     const int32 Index = FindFinishedIndex(Hit);
     if (!Finished.IsValidIndex(Index))
@@ -399,7 +399,7 @@ bool ASurvivalBuildChunk::RepairFinished(const FHitResult& Hit, FSurvivalMateria
         return false;
     }
     Inventory.Spend(Cost);
-    Piece.Health = FMath::Min(Piece.MaxHealth, Piece.Health + 30);
+    Piece.Health = FMath::Min(Piece.MaxHealth, Piece.Health + RepairHealth);
     return true;
 }
 

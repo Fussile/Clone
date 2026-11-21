@@ -109,7 +109,14 @@ bool ASurvivalGameMode::SetTimeOfDay(double Hour)
 void ASurvivalGameMode::UpdateDaylight()
 {
     const double Hours = StartHour + ElapsedSurvivalSeconds * 24.0 / FMath::Max(60.0f, DayLengthSeconds);
-    const double SolarAngle = (FMath::Fmod(Hours, 24.0) - 6.0) * 15.0;
+    constexpr double Dawn = 4.0;
+    constexpr double Dusk = 22.0;
+    const double Hour = FMath::Fmod(Hours, 24.0);
+    const double SinceDawn = FMath::Fmod(Hour - Dawn + 24.0, 24.0);
+    constexpr double DaylightHours = Dusk - Dawn;
+    const double SolarAngle = SinceDawn < DaylightHours
+        ? SinceDawn * 180.0 / DaylightHours
+        : 180.0 + (SinceDawn - DaylightHours) * 180.0 / (24.0 - DaylightHours);
     const double Elevation = FMath::Sin(FMath::DegreesToRadians(SolarAngle));
     const auto UpdateLight = [](ADirectionalLight* Actor, double Pitch, double Intensity)
     {

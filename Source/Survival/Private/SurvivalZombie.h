@@ -13,7 +13,7 @@ class ASurvivalZombie : public ACharacter
 
 public:
     ASurvivalZombie();
-    void HitBySidearm(ASurvivalCharacter* Shooter);
+    void HitByShot(ASurvivalCharacter* Shooter, int32 Damage);
 
 protected:
     virtual void BeginPlay() override;

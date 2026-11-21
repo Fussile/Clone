@@ -4,6 +4,7 @@
 #include "Misc/Optional.h"
 #include "SurvivalBuilding.h"
 #include "SurvivalVitals.h"
+#include "SurvivalProgression.h"
 #include "SurvivalCharacter.generated.h"
 
 class ASurvivalSupplyCrate;
@@ -59,8 +60,15 @@ public:
     bool TryStartFirstHorde();
     int32 GetDefenseWave() const { return DefenseWave; }
     static constexpr int32 DefenseWaveCount = 3;
+    bool IsRifleSelected() const { return Hotbar[ActiveHotbarSlot] == ESurvivalItem::Rifle; }
+    bool HasRifle() const { return bHasRifle; }
+    int32 GetRifleAmmo() const { return RifleAmmo; }
+    int32 GetRifleReserve() const { return Items.RifleRounds; }
+    bool IsRifleReloading() const { return RifleReloadAt >= 0.0; }
     bool ShowHitMarker() const;
-    void NotifySidearmHit();
+    void NotifySidearmHit(bool bHitZombie);
+    const FSurvivalProgression& GetProgression() const { return Progression; }
+    void BuySkillPerk(ESurvivalSkill Skill);
 
 protected:
     virtual void BeginPlay() override;
@@ -107,6 +115,11 @@ private:
     void UpdateSurvivorAnimation();
     void PrimaryAction();
     void EquipSidearm();
+    bool FireRound(const FVector& Muzzle, double Range, bool bRifleRound);
+    void FireRifle();
+    void ReloadRifle();
+    void UpdateRifle();
+    void UpdateRifleVisibility();
     void UpdateSidearmView();
     void LoadSidearmViewmodel();
     void UpdateSidearmAnimation();
@@ -127,6 +140,22 @@ private:
     int32 QuarterTurns = 0;
     bool bBuildMode = false;
     bool bThirdPerson = false;
+    FSurvivalProgression Progression;
+    float SprintPracticeTime = 0.0f;
+    bool bHasRifle = false;
+    int32 RifleAmmo = 0;
+    double RifleReadyAt = 0.0;
+    double RifleReloadAt = -1.0;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> RifleHold;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> RifleFire;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UAnimSequence> RifleReload;
+
     bool bHasSidearm = false;
     int32 Ammo = 0;
     FSurvivalItems Items;
@@ -136,7 +165,7 @@ private:
     ESurvivalItem SelectedInventoryItem = ESurvivalItem::Food;
     ESurvivalItem Hotbar[HotbarSize] = {
         ESurvivalItem::Sidearm, ESurvivalItem::Food, ESurvivalItem::Water,
-        ESurvivalItem::Bandage, ESurvivalItem::None, ESurvivalItem::None
+        ESurvivalItem::Bandage, ESurvivalItem::Rifle, ESurvivalItem::None
     };
     double ReloadCompleteAt = -1.0;
     double NextShotAt = 0.0;

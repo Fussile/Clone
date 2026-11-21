@@ -53,7 +53,7 @@ private:
     void UpdateDaylight();
 
     UPROPERTY(EditDefaultsOnly, Category = "Survival", meta = (ClampMin = "60"))
-    float DayLengthSeconds = 1200.0f;
+    float DayLengthSeconds = 3600.0f;
 
     TWeakObjectPtr<ADirectionalLight> Sun;
     TWeakObjectPtr<ADirectionalLight> Moon;

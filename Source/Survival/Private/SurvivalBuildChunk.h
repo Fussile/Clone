@@ -43,7 +43,7 @@ public:
     bool TryToggleDoor(const FHitResult& Hit);
     bool HasReservedCellConflict(const FSurvivalBuildPlacement& Placement, bool bIncludePlans) const;
     bool DamageFinished(const FHitResult& Hit, int32 Amount);
-    bool RepairFinished(const FHitResult& Hit, FSurvivalMaterials& Inventory);
+    bool RepairFinished(const FHitResult& Hit, FSurvivalMaterials& Inventory, int32 RepairHealth);
 
 protected:
     virtual void BeginPlay() override;

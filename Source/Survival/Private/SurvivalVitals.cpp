@@ -13,6 +13,9 @@ const TCHAR* SurvivalItemName(ESurvivalItem Item)
     case ESurvivalItem::Cloth: return TEXT("Cloth");
     case ESurvivalItem::Rounds: return TEXT("Pistol rounds");
     case ESurvivalItem::TimberDoor: return TEXT("Timber door");
+    case ESurvivalItem::Rifle: return TEXT("Bolt-action rifle");
+    case ESurvivalItem::RifleRounds: return TEXT("Rifle rounds");
+    case ESurvivalItem::BuilderGuide: return TEXT("Builder's guide");
     default: return TEXT("Empty");
     }
 }
@@ -35,14 +38,16 @@ void FSurvivalItems::Add(const FSurvivalItems& Other)
     Bandages += Other.Bandages;
     Rounds += Other.Rounds;
     TimberDoors += Other.TimberDoors;
+    RifleRounds += Other.RifleRounds;
+    BuilderGuides += Other.BuilderGuides;
 }
 
-int32 FSurvivalVitals::Advance(float DeltaSeconds, bool bSprinting, float MovementEffort, float AmbientCelsius)
+int32 FSurvivalVitals::Advance(float DeltaSeconds, bool bSprinting, float MovementEffort, float AmbientCelsius, float SprintCost)
 {
     const float ColdDegrees = FMath::Max(0.0f, 12.0f - AmbientCelsius);
     const float CalorieUse = 0.013f + 0.043f * FMath::Square(MovementEffort) + 0.0035f * ColdDegrees;
     const float Before = Stamina;
-    Stamina = FMath::Clamp(Stamina + DeltaSeconds * (bSprinting ? -18.0f : 13.0f), 0.0f, Max);
+    Stamina = FMath::Clamp(Stamina + DeltaSeconds * (bSprinting ? -18.0f * SprintCost : 13.0f), 0.0f, Max);
     const float StaminaSpent = FMath::Max(0.0f, Before - Stamina);
 
     Hunger = FMath::Max(0.0f, Hunger - DeltaSeconds * CalorieUse);

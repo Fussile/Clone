@@ -5,7 +5,7 @@
 
 enum class ESurvivalItem : uint8
 {
-    Sidearm, Food, Water, Bandage, Timber, Stone, Cloth, Rounds, TimberDoor, None
+    Sidearm, Food, Water, Bandage, Timber, Stone, Cloth, Rounds, TimberDoor, Rifle, RifleRounds, BuilderGuide, None
 };
 
 const TCHAR* SurvivalItemName(ESurvivalItem Item);
@@ -35,6 +35,8 @@ struct FSurvivalItems
     int32 Rounds = 0;
 
     int32 TimberDoors = 0;
+    int32 RifleRounds = 0;
+    int32 BuilderGuides = 0;
 
     void Add(const FSurvivalItems& Other);
 };
@@ -48,7 +50,7 @@ struct FSurvivalVitals
     float Stamina = Max;
 
     bool CanSprint() const { return !bExhausted; }
-    int32 Advance(float DeltaSeconds, bool bSprinting, float MovementEffort, float AmbientCelsius);
+    int32 Advance(float DeltaSeconds, bool bSprinting, float MovementEffort, float AmbientCelsius, float SprintCost = 1.0f);
 
 private:
     float DeprivationTime = 0.0f;

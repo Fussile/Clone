@@ -52,3 +52,10 @@ The material counts, plans, completed pieces, health and loot reset when the sol
 2. Scavenge the station provisions and press **I**. Use a mouse or **Tab** and **Enter** to select an item and use it. Assign food to a slot by clicking that slot or pressing **1–6**. Close the menu, select the slot, and left-click to consume it.
 3. Compare standing still at midday, standing still at midnight, and repeated sprinting. Food expenditure should rise with movement and cold. Thirst should drain slowly at rest, then accelerate while spending stamina.
 4. Search for a bandage, choose a quantity, and craft from the listed cloth requirements. Take damage and use the bandage from the pack or hotbar. Approach the zombie east of the station, break line of sight, and verify it investigates the last known location. Sprint behind a block within hearing range and check that the zombie attacks blocking construction.
+
+
+## M3 rifle, skills and night
+
+1. Open the dark rifle locker at the back of the station, select slot **5**, and fire. The survivor's right hand should cycle the bolt before another shot is available. Reload with **R**, then check the left-hand motion and the separately tracked rifle reserve. Switch between first and third person to check that the same survivor rig carries the rifle.
+2. Use the builder's guide from the pack. **I** then **Skills** should show one additional Building rank. Finish construction, land hits on zombies and sprint to check that each activity trains its corresponding skill. Buy a perk after reaching rank 3 and earning a point.
+3. Use `SetTimeOfDay 21.9` to approach dusk and the first horde. Check that daylight begins at 04:00. A complete day takes 60 real minutes, including 15 minutes of darkness.

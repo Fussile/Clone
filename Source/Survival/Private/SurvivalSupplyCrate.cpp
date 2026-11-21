@@ -21,7 +21,7 @@ ASurvivalSupplyCrate::ASurvivalSupplyCrate()
 void ASurvivalSupplyCrate::BeginPlay()
 {
     Super::BeginPlay();
-    if (bContainsSidearm)
+    if (bContainsSidearm || bContainsRifle)
     {
         if (UMaterialInterface* Steel = LoadObject<UMaterialInterface>(nullptr,
             TEXT("/Game/Art/Crossroads/Building/M_DefenseSteel.M_DefenseSteel")))
@@ -38,6 +38,14 @@ FSurvivalLoot ASurvivalSupplyCrate::TakeLoot()
         return {};
     }
     bSearched = true;
-    return {{FMath::Max(0, TimberAmount), FMath::Max(0, StoneAmount)},
-        {FMath::Max(0, FoodAmount), FMath::Max(0, WaterAmount), FMath::Max(0, ClothAmount)}, bContainsSidearm};
+    FSurvivalLoot Loot;
+    Loot.Materials = {FMath::Max(0, TimberAmount), FMath::Max(0, StoneAmount)};
+    Loot.Items.Food = FMath::Max(0, FoodAmount);
+    Loot.Items.Water = FMath::Max(0, WaterAmount);
+    Loot.Items.Cloth = FMath::Max(0, ClothAmount);
+    Loot.Items.BuilderGuides = FMath::Max(0, BuilderGuideAmount);
+    Loot.Items.RifleRounds = bContainsRifle ? 8 : 0;
+    Loot.bSidearm = bContainsSidearm;
+    Loot.bRifle = bContainsRifle;
+    return Loot;
 }

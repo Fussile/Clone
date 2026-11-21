@@ -29,6 +29,10 @@ def prepare_if_needed():
     required = (
         "/Game/Maps/L_SouthernCrossroads",
         "/Game/Art/Crossroads/Player/SK_Survivor",
+        "/Game/Art/Crossroads/ArmedPlayer/SK_ArmedSurvivor",
+        "/Game/Art/Crossroads/ArmedPlayer/SurvivorRifleHold",
+        "/Game/Art/Crossroads/ArmedPlayer/SurvivorRifleFire",
+        "/Game/Art/Crossroads/ArmedPlayer/SurvivorRifleReload",
         "/Game/Art/Crossroads/StationZombie/SK_StationZombie",
         "/Game/Art/Crossroads/MagazineViewmodel/SK_SidearmViewmodel",
         "/Game/Art/Crossroads/MagazineViewmodel/ViewmodelReload",
@@ -38,7 +42,7 @@ def prepare_if_needed():
     )
     required += tuple(
         f"/Game/Art/Crossroads/Inventory/T_Item_{name}"
-        for name in ("Sidearm", "Food", "Water", "Bandage", "Timber", "Stone", "Cloth", "Rounds", "TimberDoor")
+        for name in ("Sidearm", "Food", "Water", "Bandage", "Timber", "Stone", "Cloth", "Rounds", "TimberDoor", "Rifle", "RifleRounds", "BuilderGuide")
     )
     if medicine_sheet.is_file():
         required += ("/Game/Art/Crossroads/Local/MedicineSheet",)

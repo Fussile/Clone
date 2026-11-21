@@ -12,6 +12,7 @@ struct FSurvivalLoot
     FSurvivalMaterials Materials;
     FSurvivalItems Items;
     bool bSidearm = false;
+    bool bRifle = false;
 };
 
 UCLASS()
@@ -24,10 +25,11 @@ public:
 
     FSurvivalLoot TakeLoot();
     bool HasSidearm() const { return !bSearched && bContainsSidearm; }
+    bool HasRifle() const { return !bSearched && bContainsRifle; }
     bool HasSupplies() const
     {
         return !bSearched && (TimberAmount > 0 || StoneAmount > 0 || FoodAmount > 0
-            || WaterAmount > 0 || ClothAmount > 0);
+            || WaterAmount > 0 || ClothAmount > 0 || bContainsRifle || BuilderGuideAmount > 0);
     }
 
 protected:
@@ -54,6 +56,12 @@ private:
 
     UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0"))
     int32 ClothAmount = 0;
+
+    UPROPERTY(EditAnywhere, Category = "Scavenging")
+    bool bContainsRifle = false;
+
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0"))
+    int32 BuilderGuideAmount = 0;
 
     bool bSearched = false;
 };

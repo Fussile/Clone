@@ -1,0 +1,11 @@
+Rifle mesh from Rifle by Yudin Vadim:
+https://sketchfab.com/3d-models/rifle-c2c569b6250743c7bf66297413045313
+
+Rifle hand motion adapted from sniper animated by DJMaesen:
+https://sketchfab.com/3d-models/sniper-animated-eae1ba5b43ae4bc89b0647fb5d8a2d27
+
+Both source assets are licensed under Creative Commons Attribution 4.0:
+https://creativecommons.org/licenses/by/4.0/
+
+The game bundles the rifle on the survivor rig with resized textures.
+The hand motion was segmented and retargeted to the survivor skeleton.

@@ -13,11 +13,14 @@ class ASurvivalRound : public AActor
 
 public:
     ASurvivalRound();
+    void SetRifleRound();
 
 protected:
     virtual void BeginPlay() override;
 
 private:
+    bool bRifleRound = false;
+
     UFUNCTION()
     void HandleImpact(const FHitResult& Hit);
 

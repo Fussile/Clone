@@ -24,6 +24,7 @@ private:
     bool MatchesFilters(const FSurvivalRecipe& Recipe) const;
     void SelectFirstMatchingRecipe();
     TSharedRef<SWidget> MakeRecipeBrowser();
+    TSharedRef<SWidget> MakeSkillsPanel();
     TSharedRef<SWidget> MakeRecipeDetails();
     FText GetIngredientText() const;
 
@@ -31,6 +32,7 @@ private:
     FString Category;
     int32 SelectedRecipe = INDEX_NONE;
     int32 Quantity = 1;
+    bool bShowSkills = false;
 
     TWeakObjectPtr<ASurvivalCharacter> Player;
     FSlateBrush Icons[static_cast<int32>(ESurvivalItem::None)];

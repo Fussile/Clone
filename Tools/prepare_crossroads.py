@@ -277,6 +277,11 @@ def prepare():
         "SK_Survivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",
         "SurvivorCrouchIdle", "SurvivorCrouchMove", "SurvivorProneIdle", "SurvivorProneMove",
     ), SOURCE / "Survivor" / "SK_Survivor.glb")
+    import_skeletal_pack(ART + "/ArmedPlayer", (
+        "SK_ArmedSurvivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",
+        "SurvivorCrouchIdle", "SurvivorCrouchMove", "SurvivorProneIdle", "SurvivorProneMove",
+        "SurvivorRifleHold", "SurvivorRifleFire", "SurvivorRifleReload",
+    ), SOURCE / "Survivor" / "SK_ArmedSurvivor.glb")
     if not os.environ.get("SURVIVAL_PREPARED_MARKER"):
         import_local_medicine_sheet()
     if marker := os.environ.get("SURVIVAL_PREPARED_MARKER"):

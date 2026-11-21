@@ -232,13 +232,13 @@ void ASurvivalZombie::Tick(float DeltaSeconds)
     }
 }
 
-void ASurvivalZombie::HitBySidearm(ASurvivalCharacter* Shooter)
+void ASurvivalZombie::HitByShot(ASurvivalCharacter* Shooter, int32 Damage)
 {
     if (Shooter)
     {
         RememberTarget(*Shooter, GetWorld()->GetTimeSeconds());
     }
-    Health -= 32;
+    Health -= Damage;
     if (Health <= 0)
     {
         Destroy();

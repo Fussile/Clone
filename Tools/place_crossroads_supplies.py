@@ -50,6 +50,17 @@ def place():
                             ("food_amount", food), ("water_amount", water), ("cloth_amount", cloth)):
             crate.set_editor_property(prop, value)
 
+    rifle_tag = unreal.Name("CrossroadsRifleLocker")
+    if not any(actor.actor_has_tag(rifle_tag) for actor in existing):
+        locker = actors.spawn_actor_from_class(crate_class, unreal.Vector(3950, 5310, 36))
+        if not locker:
+            raise RuntimeError("Could not place the rifle locker.")
+        locker.set_actor_label("Rifle and field guide")
+        locker.set_actor_scale3d(unreal.Vector(1.1, 0.6, 0.55))
+        for prop, value in (("tags", [rifle_tag]), ("timber_amount", 0), ("stone_amount", 0),
+                            ("contains_rifle", True), ("builder_guide_amount", 1)):
+            locker.set_editor_property(prop, value)
+
     zombie_tag = unreal.Name("CrossroadsRoamingZombie")
     if not any(actor.actor_has_tag(zombie_tag) for actor in existing):
         zombie_type = unreal.load_class(None, "/Script/Survival.SurvivalZombie")
