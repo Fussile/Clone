@@ -1,4 +1,4 @@
-"""Keep Cransh's animated arms and mount the game's own pistol at runtime."""
+"""Bind the bundled pistol mesh to Cransh's animated grip joint."""
 
 import json
 import struct
@@ -13,13 +13,102 @@ CLIPS = {
 }
 
 
-def prepare_sidearm_glb(source, destination):
-    payload = source.read_bytes()
+def read_glb(path):
+    payload = path.read_bytes()
     magic, version, size, json_size, json_type = struct.unpack_from("<4sIII4s", payload)
     if (magic, version, size, json_type) != (b"glTF", 2, len(payload), b"JSON"):
-        raise ValueError(f"Invalid GLB: {source.name}")
+        raise ValueError(f"Invalid GLB: {path.name}")
     model = json.loads(payload[20:20 + json_size])
-    binary = payload[20 + json_size:]
+    binary_size, binary_type = struct.unpack_from("<I4s", payload, 20 + json_size)
+    if binary_type != b"BIN\0" or binary_size != len(payload) - (28 + json_size):
+        raise ValueError(f"Missing binary data in {path.name}")
+    return model, bytearray(payload[28 + json_size:])
+
+
+def mount_pistol(model, binary, arms, frame, pistol_source):
+    pistol, geometry = read_glb(pistol_source)
+    primitives = pistol["meshes"][0]["primitives"]
+    positions = [pistol["accessors"][part["attributes"]["POSITION"]] for part in primitives]
+    original = model["accessors"][frame["attributes"]["POSITION"]]
+    front = max(item["max"][0] for item in positions)
+    rear = min(item["min"][0] for item in positions)
+    top = max(item["max"][1] for item in positions)
+    scale = (original["max"][2] - original["min"][2]) / (front - rear)
+
+    offsets = {key: len(model[key]) for key in
+               ("bufferViews", "accessors", "images", "samplers", "textures", "materials")}
+    geometry_offset = len(binary)
+    binary.extend(geometry)
+    for view in pistol["bufferViews"]:
+        view["byteOffset"] = view.get("byteOffset", 0) + geometry_offset
+    for accessor in pistol["accessors"]:
+        accessor["bufferView"] += offsets["bufferViews"]
+    for image in pistol["images"]:
+        image["bufferView"] += offsets["bufferViews"]
+    for texture in pistol["textures"]:
+        texture["source"] += offsets["images"]
+        texture["sampler"] += offsets["samplers"]
+    for material in pistol["materials"]:
+        locations = (material, material["pbrMetallicRoughness"])
+        for location in locations:
+            for key, info in location.items():
+                if key.endswith("Texture"):
+                    info["index"] += offsets["textures"]
+    for key in offsets:
+        model[key].extend(pistol[key])
+
+    joint = next(i for i, node in enumerate(model["nodes"]) if node.get("name") == "PBody_058")
+    grip = model["skins"][0]["joints"].index(joint)
+
+    def add_vertex_stream(data, count, component_type):
+        view = len(model["bufferViews"])
+        model["bufferViews"].append({
+            "buffer": 0, "byteOffset": len(binary), "byteLength": len(data), "target": 34962,
+        })
+        binary.extend(data)
+        index = len(model["accessors"])
+        model["accessors"].append({
+            "bufferView": view, "componentType": component_type, "count": count, "type": "VEC4",
+        })
+        return index
+
+    for part in primitives:
+        attributes = part["attributes"]
+        for semantic, accessor_index in attributes.items():
+            if semantic not in ("POSITION", "NORMAL", "TANGENT"):
+                continue
+            accessor = pistol["accessors"][accessor_index]
+            view = model["bufferViews"][accessor["bufferView"]]
+            vector = struct.Struct("<ffff" if semantic == "TANGENT" else "<fff")
+            start = view["byteOffset"] + accessor.get("byteOffset", 0)
+            stride = view.get("byteStride", vector.size)
+            transformed = []
+            for i in range(accessor["count"]):
+                offset = start + i * stride
+                x, y, z, *handedness = vector.unpack_from(binary, offset)
+                value = (-z, y, x)
+                if semantic == "POSITION":
+                    value = (-z * scale, original["max"][1] + (y - top) * scale,
+                             original["max"][2] + (x - front) * scale)
+                vector.pack_into(binary, offset, *value, *handedness)
+                transformed.append((*value, *handedness))
+            accessor["min"] = [min(column) for column in zip(*transformed)]
+            accessor["max"] = [max(column) for column in zip(*transformed)]
+
+        count = pistol["accessors"][attributes["POSITION"]]["count"]
+        skin_joints = add_vertex_stream(struct.pack("<4H", grip, 0, 0, 0) * count, count, 5123)
+        skin_weights = add_vertex_stream(struct.pack("<4f", 1, 0, 0, 0) * count, count, 5126)
+        arms["primitives"].append({
+            "attributes": {**{key: value + offsets["accessors"] for key, value in attributes.items()},
+                           "JOINTS_0": skin_joints, "WEIGHTS_0": skin_weights},
+            "indices": part["indices"] + offsets["accessors"],
+            "material": part["material"] + offsets["materials"],
+            "mode": part["mode"],
+        })
+
+
+def prepare_sidearm_glb(source, destination, pistol_source):
+    model, binary = read_glb(source)
     nodes = model["nodes"]
     armature_index = next(i for i, node in enumerate(nodes) if node.get("name") == "Armature")
     armature = nodes[armature_index]
@@ -33,8 +122,7 @@ def prepare_sidearm_glb(source, destination):
     grip_index = next(i for i, mesh in enumerate(model["meshes"]) if mesh["name"] == "xd_frame_Material_0")
     arms = model["meshes"][arms_index]
     arms["name"] = "SK_SidearmViewmodel"
-    # Retain the binding geometry so Unreal evaluates the gun bone with the arm pose.
-    arms["primitives"].extend(model["meshes"][grip_index]["primitives"])
+    frame = model["meshes"][grip_index]["primitives"][0]
     for node in nodes:
         if node.get("mesh") == arms_index:
             node.update(mesh=0, name="SK_SidearmViewmodel")
@@ -50,12 +138,11 @@ def prepare_sidearm_glb(source, destination):
         "metallicFactor": 0.0,
         "roughnessFactor": 0.63,
     }
-    model["materials"] = [material, {
-        "name": "GripBinding",
-        "alphaMode": "MASK",
-        "pbrMetallicRoughness": {"baseColorFactor": [0, 0, 0, 0], "metallicFactor": 0, "roughnessFactor": 1},
-    }]
+    model["materials"] = [material]
+    mount_pistol(model, binary, arms, frame, pistol_source)
     model.pop("extensionsUsed", None)
+    model.pop("extensionsRequired", None)
+    model["buffers"][0]["byteLength"] = len(binary)
     for animation in model["animations"]:
         animation["name"] = CLIPS[animation["name"]]
 
@@ -63,6 +150,6 @@ def prepare_sidearm_glb(source, destination):
     metadata += b" " * (-len(metadata) % 4)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(
-        struct.pack("<4sIII4s", b"glTF", 2, 20 + len(metadata) + len(binary), len(metadata), b"JSON")
-        + metadata + binary
+        struct.pack("<4sIII4s", b"glTF", 2, 28 + len(metadata) + len(binary), len(metadata), b"JSON")
+        + metadata + struct.pack("<I4s", len(binary), b"BIN\0") + binary
     )

@@ -2,4 +2,4 @@ FPS pistol animations by Cransh
 Source: https://sketchfab.com/3d-models/fps-pistol-animations-0d7a343dcb6f401197a73c91aee93f6d
 License: Creative Commons Attribution 4.0 International (CC BY 4.0)
 https://creativecommons.org/licenses/by/4.0/
-Game adaptation keeps the arm rig and clips, converts the arm material, hides the source pistol geometry, and attaches the project's sidearm.
+Game adaptation keeps the arm rig and clips, converts the arm material, and binds the project's sidearm mesh to the animated grip in place of the source pistol.

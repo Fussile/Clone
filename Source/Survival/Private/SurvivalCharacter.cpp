@@ -15,6 +15,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "SurvivalBuildChunk.h"
 #include "SurvivalGameMode.h"
+#include "SurvivalRound.h"
 #include "SurvivalSidearm.h"
 #include "SurvivalSupplyCrate.h"
 #include "SurvivalZombie.h"
@@ -428,25 +429,23 @@ void ASurvivalCharacter::UpdateSidearmView()
     }
     else
     {
+        Sidearm->SetActorHiddenInGame(!bVisible || bViewmodelReady);
         if (bViewmodelReady)
         {
             Sidearm->AttachToComponent(SidearmViewmodel, FAttachmentTransformRules::SnapToTargetNotIncludingScale,
                 ViewmodelGripBone);
-            Sidearm->SetActorRelativeLocation(ViewmodelGrip.GetLocation());
-            Sidearm->SetActorRelativeRotation(ViewmodelGrip.GetRotation());
         }
         else
         {
             Sidearm->AttachToComponent(FirstPersonCamera, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
             Sidearm->SetActorRelativeLocation(FVector(48, 19, -28));
         }
-        Sidearm->SetActorHiddenInGame(!bVisible);
     }
 }
 
 void ASurvivalCharacter::LoadSidearmViewmodel()
 {
-    constexpr TCHAR MeshPath[] = TEXT("/Game/Art/Crossroads/SidearmViewmodel/SK_SidearmViewmodel.SK_SidearmViewmodel");
+    constexpr TCHAR MeshPath[] = TEXT("/Game/Art/Crossroads/ArmedViewmodel/SK_SidearmViewmodel.SK_SidearmViewmodel");
     USkeletalMesh* Arms = LoadObject<USkeletalMesh>(nullptr, MeshPath, nullptr, LOAD_NoWarn);
     if (!Arms)
     {
@@ -487,12 +486,9 @@ void ASurvivalCharacter::LoadSidearmViewmodel()
     SidearmViewmodel->SetRelativeRotation(CameraAlignment);
     SidearmViewmodel->SetRelativeLocation(FVector(10, 0, -26) - CameraAlignment.RotateVector(Eye.GetLocation() * Scale));
 
-    const FVector GripOffset = CameraAlignment.UnrotateVector(FVector(1, 2.5, 8) / Scale);
-    ViewmodelGrip = FTransform(Grip.GetRotation().Inverse() * CameraAlignment.Inverse(),
-        Grip.GetRotation().UnrotateVector(GripOffset));
     const auto LoadClip = [](const TCHAR* Name)
     {
-        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/SidearmViewmodel/%s.%s"), Name, Name);
+        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/ArmedViewmodel/%s.%s"), Name, Name);
         return LoadObject<UAnimSequence>(nullptr, *Path);
     };
     ViewmodelIdle = LoadClip(TEXT("ViewmodelIdle"));
@@ -565,6 +561,36 @@ void ASurvivalCharacter::PrimaryAction()
         return;
     }
 
+    constexpr double AimRange = 5500.0;
+    const UCameraComponent& Camera = GetAimCamera();
+    FHitResult Aim;
+    const FVector Target = FindWorldAimHit(AimRange, Aim)
+        ? Aim.ImpactPoint : Camera.GetComponentLocation() + Camera.GetForwardVector() * AimRange;
+    const FVector Eyes = FirstPersonCamera->GetComponentLocation();
+    FVector Muzzle = bThirdPerson && Sidearm && !Sidearm->IsHidden()
+        ? Sidearm->GetActorTransform().TransformPosition(FVector(18, 0, 5))
+        : FirstPersonCamera->GetComponentTransform().TransformPosition(FVector(52, 9, -14));
+    FHitResult Obstruction;
+    if (GetWorld()->SweepSingleByChannel(Obstruction, Eyes, Muzzle, FQuat::Identity, ECC_Visibility,
+        FCollisionShape::MakeSphere(1.0), FCollisionQueryParams(SCENE_QUERY_STAT(SidearmClearance), false, this))
+        || FVector::DotProduct(Target - Muzzle, Camera.GetForwardVector()) <= 0.0)
+    {
+        Muzzle = Eyes;
+    }
+    const FVector Direction = (Target - Muzzle).GetSafeNormal();
+    if (Direction.IsNearlyZero())
+    {
+        return;
+    }
+    FActorSpawnParameters Parameters;
+    Parameters.Owner = this;
+    Parameters.Instigator = this;
+    Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+    if (!GetWorld()->SpawnActor<ASurvivalRound>(Muzzle, Direction.Rotation(), Parameters))
+    {
+        return;
+    }
+
     --Ammo;
     NextShotAt = Now + (ViewmodelFire ? ViewmodelFire->GetPlayLength() : 0.23);
     PlaySidearmAnimation(ViewmodelFire.Get(), false);
@@ -573,23 +599,11 @@ void ASurvivalCharacter::PrimaryAction()
         Sidearm->PlayShotSound();
     }
     AddControllerPitchInput(-0.65f);
-    constexpr double Range = 4000.0;
-    FHitResult Aim;
-    if (FindWorldAimHit(Range, Aim))
-    {
-        const FVector Eyes = FirstPersonCamera->GetComponentLocation();
-        const FVector End = Aim.ImpactPoint + (Aim.ImpactPoint - Eyes).GetSafeNormal() * 3.0;
-        FHitResult Hit;
-        if (GetWorld()->LineTraceSingleByChannel(Hit, Eyes, End, ECC_Visibility,
-            FCollisionQueryParams(SCENE_QUERY_STAT(Sidearm), false, this)))
-        {
-            if (ASurvivalZombie* Zombie = Cast<ASurvivalZombie>(Hit.GetActor()))
-            {
-                Zombie->HitBySidearm();
-                HitMarkerUntil = GetWorld()->GetTimeSeconds() + 0.15;
-            }
-        }
-    }
+}
+
+void ASurvivalCharacter::NotifySidearmHit()
+{
+    HitMarkerUntil = GetWorld()->GetTimeSeconds() + 0.15;
 }
 
 int32 ASurvivalCharacter::GetLivingAttackers() const
@@ -752,48 +766,25 @@ TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
     }
 
     FSurvivalBuildPlacement Placement;
-    Placement.Base = FVector(FMath::GridSnap(Hit.ImpactPoint.X, FSurvivalBuildPlacement::GridSize),
-        FMath::GridSnap(Hit.ImpactPoint.Y, FSurvivalBuildPlacement::GridSize), Hit.ImpactPoint.Z);
+    Placement.Base = FVector(FMath::GridSnap(Hit.ImpactPoint.X, FSurvivalBuildPlacement::PlacementGrid),
+        FMath::GridSnap(Hit.ImpactPoint.Y, FSurvivalBuildPlacement::PlacementGrid), Hit.ImpactPoint.Z);
     Placement.Rotation = FRotator(0, QuarterTurns * 90.0, 0).Quaternion();
     Placement.PieceIndex = SelectedPiece;
     FVector ReachPoint = Hit.ImpactPoint;
-    if (Source && Placement.GetPiece().bStairs && Source->IsUpperStairEdge(Hit.ImpactPoint, Hit.ImpactNormal))
+    if (Source)
     {
-        Placement.Base = Source->StairContinuation();
-        Placement.Rotation = Source->Rotation;
-    }
-    else if (Hit.ImpactNormal.Z < 0.95)
-    {
-        if (!Source || !Placement.GetPiece().bCarriesLateralSupport || FMath::Abs(Hit.ImpactNormal.Z) > 0.1)
+        const FVector TowardViewer = GetAimCamera().GetComponentLocation() - Hit.ImpactPoint;
+        if (!Placement.SnapTo(*Source, Hit.ImpactPoint, Hit.ImpactNormal, TowardViewer))
         {
             return {};
         }
-
-        Placement.Base = Source->Base;
-        if (Source->GetPiece().bCarriesLateralSupport)
-        {
-            const FVector Normal = Hit.ImpactNormal;
-            const FVector Axis = FMath::Abs(Normal.X) > FMath::Abs(Normal.Y)
-                ? FVector(FMath::Sign(Normal.X), 0, 0) : FVector(0, FMath::Sign(Normal.Y), 0);
-            Placement.Base += Axis * FSurvivalBuildPlacement::GridSize;
-        }
-        else
-        {
-            double Top = 0.0;
-            for (const FBox& Box : Source->GetPiece().Boxes)
-            {
-                Top = FMath::Max(Top, Box.Max.Z);
-            }
-            Placement.Base.Z += Top;
-        }
-    }
-    else if (Source)
-    {
-        Placement.Base.X = Source->Base.X;
-        Placement.Base.Y = Source->Base.Y;
     }
     else
     {
+        if (Hit.ImpactNormal.Z < 0.95)
+        {
+            return {};
+        }
         ReachPoint = Placement.Base + FVector(0, 0, SupportTolerance + 2.0);
     }
 

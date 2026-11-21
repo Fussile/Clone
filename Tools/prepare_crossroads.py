@@ -15,7 +15,7 @@ PLAYER = ART + "/Player"
 BUILDING = ART + "/Building"
 ZOMBIE = ART + "/StationZombie"
 WEAPON_AUDIO = "/Game/Audio/Weapons"
-VIEWMODEL = ART + "/SidearmViewmodel"
+VIEWMODEL = ART + "/ArmedViewmodel"
 LEVEL = "/Game/Maps/L_SouthernCrossroads"
 
 
@@ -163,13 +163,13 @@ def import_building():
             raise RuntimeError(f"Could not save {path}.")
 
 
-def import_skeletal_pack(directory, names, source, prepared=None, generator=None):
+def import_skeletal_pack(directory, names, source, prepared=None, generator=None, *generator_inputs):
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     if all(assets.does_asset_exist(f"{directory}/{name}") for name in names):
         return
 
     if generator is not None:
-        runpy.run_path(str(TOOLS / f"{generator}.py"))[generator](source, prepared)
+        runpy.run_path(str(TOOLS / f"{generator}.py"))[generator](source, prepared, *generator_inputs)
         source = prepared
     task = unreal.AssetImportTask()
     task.set_editor_property("filename", str(source))
@@ -233,17 +233,14 @@ def prepare():
     if not levels.save_current_level():
         raise RuntimeError(f"Could not save the surfaces in {LEVEL}.")
     generated = TOOLS.parent / "Saved" / "GeneratedArt"
-    for directory, file, generator, source, names in (
-        (ZOMBIE, "StationZombie.glb", "prepare_zombie_glb",
-         SOURCE / "Enemy" / "zombie_rigged__animated.glb",
-         ("SK_StationZombie", "StationZombieIdle", "StationZombieWalk", "StationZombieAttack")),
-        (VIEWMODEL, "SidearmViewmodel.glb", "prepare_sidearm_glb",
-         SOURCE / "Weapons" / "fps_pistol_animations.glb",
-         ("SK_SidearmViewmodel", "ViewmodelIdle", "ViewmodelWalk", "ViewmodelFire", "ViewmodelReload", "ViewmodelReloadEmpty")),
-    ):
-        import_skeletal_pack(directory, names, source, generated / file, generator)
-    import_building()
     sidearm = SOURCE / "Weapons" / "SM_CrossroadsSidearm.glb"
+    import_skeletal_pack(ZOMBIE,
+        ("SK_StationZombie", "StationZombieIdle", "StationZombieWalk", "StationZombieAttack"),
+        SOURCE / "Enemy" / "zombie_rigged__animated.glb", generated / "StationZombie.glb", "prepare_zombie_glb")
+    import_skeletal_pack(VIEWMODEL,
+        ("SK_SidearmViewmodel", "ViewmodelIdle", "ViewmodelWalk", "ViewmodelFire", "ViewmodelReload", "ViewmodelReloadEmpty"),
+        SOURCE / "Weapons" / "fps_pistol_animations.glb", generated / "ArmedViewmodel.glb", "prepare_sidearm_glb", sidearm)
+    import_building()
     if sidearm.is_file():
         import_asset(sidearm, BUILDING, unreal.StaticMesh)
     shot = SOURCE / "Audio" / "SW_SidearmShot.wav"

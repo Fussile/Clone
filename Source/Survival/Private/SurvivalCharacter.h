@@ -41,6 +41,7 @@ public:
     int32 GetDefenseWave() const { return DefenseWave; }
     static constexpr int32 DefenseWaveCount = 3;
     bool ShowHitMarker() const;
+    void NotifySidearmHit();
 
 protected:
     virtual void BeginPlay() override;
@@ -99,7 +100,6 @@ private:
     double ReloadCompleteAt = -1.0;
     double NextShotAt = 0.0;
     bool bViewmodelReady = false;
-    FTransform ViewmodelGrip;
     int32 HealthPoints = 100;
     double HitMarkerUntil = -1.0;
     int32 DefenseWave = 0;

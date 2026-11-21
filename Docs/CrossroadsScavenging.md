@@ -30,3 +30,11 @@ The material counts, plans, completed pieces, health and loot reset when the sol
 2. Aim at the pillar while in build mode and press **K**. Confirm the roof pieces fall and their original collision disappears. Dismantling spends no materials and gives no refund.
 3. Walk east from the station to the authored canopy. Remove one pillar and verify that roof tiles close to the other pillar remain. Remove the remaining pillar and verify that the rest falls, including pieces across the chunk border.
 4. Place a plan on supported terrain or on a supporting piece, then dismantle its support before completing the plan. Press **E** and confirm the plan stays unbuilt without spending materials.
+
+
+## Wall corners, roof edges and projectiles
+
+1. Place a timber wall blueprint. Aim near one end of its broad face, rotate the next wall 90 degrees, and place it. Complete a four-wall loop, then check that the two touching faces at each joint meet without gaps.
+2. Aim at a wall's inside face with **Floor** selected. Place a panel and aim at its exposed edge to continue the roof with a blueprint. Fill narrow gaps with the quarter floor strip and corner infill. Finish supporting pieces before their dependents.
+3. Equip the sidearm in first person and verify the pistol follows the hands during idle, walking, firing and both reloads. Switch views and confirm the pistol appears on the third-person hand.
+4. Close the build menu. Shoot a finished timber piece and check that its health drops after impact. A completed wall should stop a shot aimed at a zombie behind it. Fire through a blueprint and verify it stays intact while the round reaches any finished piece behind it.
