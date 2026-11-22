@@ -4,6 +4,7 @@
 #include "CrossroadsWorldBake.generated.h"
 
 class UMaterialInterface;
+class UStaticMesh;
 
 UCLASS()
 class UCrossroadsWorldBake : public UBlueprintFunctionLibrary
@@ -13,4 +14,7 @@ class UCrossroadsWorldBake : public UBlueprintFunctionLibrary
 public:
     UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
     static bool ImportTerrain(const FString& HeightFile, int32 Resolution, FVector Scale, UMaterialInterface* GroundMaterial);
+
+    UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
+    static bool SetStaticMeshCollision(UStaticMesh* Mesh);
 };

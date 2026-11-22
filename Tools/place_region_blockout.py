@@ -51,15 +51,19 @@ def place():
     import_asset = prepare_art["import_asset"]
     world_art = "/Game/Art/Crossroads/World"
     source_art = root / "SourceArt" / "Crossroads" / "World"
-    bed_mesh, bay_mesh, housing_mesh = (
+    bed_mesh, bay_mesh, housing_mesh, warehouse_mesh = (
         import_asset(source_art / f"SM_{name}.glb", world_art, unreal.StaticMesh)
-        for name in ("HospitalBed", "DowntownWindowBay", "PanelHousingExterior")
+        for name in ("HospitalBed", "DowntownWindowBay", "PanelHousingExterior", "WarehouseWalkable")
     )
     crate_class = unreal.load_class(None, "/Script/Survival.SurvivalSupplyCrate")
-    prefab_class = unreal.load_class(None, "/Script/Survival.SurvivalStructurePrefab")
     zombie_class = unreal.load_class(None, "/Script/Survival.SurvivalZombie")
-    if not crate_class or not prefab_class or not zombie_class:
+    if not crate_class or not zombie_class:
         raise RuntimeError("Build SurvivalEditor before placing structures and loot.")
+    if not unreal.CrossroadsWorldBake.set_static_mesh_collision(warehouse_mesh):
+        raise RuntimeError("Could not prepare static collision for the warehouse.")
+    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    if not assets.save_loaded_asset(warehouse_mesh, only_if_is_dirty=True):
+        raise RuntimeError("Could not save the warehouse.")
     surface_path = "/Game/Art/Crossroads/Surfaces"
     asphalt = unreal.load_asset(f"{surface_path}/M_Asphalt021")
     concrete = unreal.load_asset(f"{surface_path}/M_Concrete034")
@@ -69,6 +73,7 @@ def place():
         "late_soviet": (.28, .26, .23), "brick_hardwood": (.30, .115, .065),
         "stucco_metal": (.84, .83, .78), "classical_civic": (.65, .61, .53),
         "modern": (.18, .25, .30), "dark_trim": (.036, .036, .035),
+        "traffic": (.79, .58, .18), "petrol": (.13, .28, .29),
     }
     style_materials = {
         style: prepare_art["make_material"](world_art, f"M_Region_{style}", (),
@@ -76,10 +81,16 @@ def place():
         for style, color in colors.items()
     }
 
-    def spawn(kind, key, label, x, y, z, configure, tags=(), always_loaded=False):
-        if key in actor_tags:
-            return actor_tags[key]
+    style_materials["timber"] = unreal.load_asset("/Game/Art/Crossroads/Building/M_CrossroadsTimber")
+    style_materials["concrete"] = concrete
+
+    def spawn(kind, key, label, x, y, z, configure, tags=(), always_loaded=False, relocate=False):
         pos = unreal.Vector(west + x*100, north + (depth-y)*100, z_zero + z*100)
+        if key in actor_tags:
+            actor = actor_tags[key]
+            if relocate:
+                actor.set_actor_location(pos, False, False)
+            return actor
         actor = actors.spawn_actor_from_class(kind, pos)
         if not actor:
             raise RuntimeError(f"Could not place {label}.")
@@ -95,12 +106,16 @@ def place():
         actor_tags[key] = actor
         return actor
 
-    def box(key, label, x, y, z, w, d, h, ground=False, material=None, hidden=False):
+    def box(key, label, x, y, z, w, d, h, ground=False, material=None, hidden=False,
+            collision=True, rotation=None):
         def configure(actor):
             mesh = actor.get_component_by_class(unreal.StaticMeshComponent)
             mesh.set_static_mesh(cube)
-            mesh.set_collision_profile_name("BlockAll")
+            mesh.set_collision_profile_name("BlockAll" if collision else "NoCollision")
             actor.set_actor_scale3d(unreal.Vector(w, d, h))
+            if rotation:
+                pitch, yaw = rotation
+                actor.set_actor_rotation(unreal.Rotator(pitch=pitch, yaw=yaw), False)
             if hidden:
                 actor.set_actor_hidden_in_game(True)
         actor = spawn(unreal.StaticMeshActor, key, label, x, y, z + h/2, configure,
@@ -110,10 +125,33 @@ def place():
             if component.get_material(0) == cube.get_material(0):
                 component.set_material(0, material)
 
+    def remove_generated(*keys):
+        for key in keys:
+            actor = actor_tags.get(key)
+            if actor:
+                if not actors.destroy_actor(actor):
+                    raise RuntimeError(f"Could not replace generated actor {key}.")
+                actor_tags.pop(key)
+
     def remove_blockout(key):
-        if old_shell := actor_tags.get(key + "_shell"):
-            if not actors.destroy_actor(old_shell):
-                raise RuntimeError(f"Could not replace the old shell at {key}.")
+        remove_generated(key + "_shell")
+
+    def ramp(key, label, x, y0, y1, floor, upper, width, material):
+        pitch = math.atan2(upper-floor, y1-y0)
+        thickness = .26
+        y = (y0+y1)/2 + thickness*math.sin(pitch)/2
+        z = (floor+upper)/2 - thickness*(1+math.cos(pitch))/2
+        box(key, label, x, y, z, math.hypot(y1-y0, upper-floor), width, thickness,
+            material=material, rotation=(math.degrees(pitch), -90))
+
+    def sign(key, label, x, y, z, size=38):
+        def configure(actor):
+            text = actor.get_component_by_class(unreal.TextRenderComponent)
+            text.set_text(label)
+            text.set_world_size(size)
+            text.set_horizontal_alignment(unreal.HorizTextAligment.EHTA_CENTER)
+            actor.set_actor_rotation(unreal.Rotator(yaw=90), False)
+        spawn(unreal.TextRenderActor, key, label, x, y, z, configure)
 
     def exterior(key, label, mesh_asset, x, y, floor):
         def configure(actor):
@@ -122,17 +160,17 @@ def place():
             component.set_collision_profile_name("NoCollision")
         spawn(unreal.StaticMeshActor, key, label, x, y, floor, configure)
 
-    def cache(key, label, x, y, floor, **loot):
+    def cache(key, label, x, y, floor, *, relocate=False, **loot):
         def configure(actor):
             for prop, amount in {"timber_amount": 0, "stone_amount": 0, **loot}.items():
                 actor.set_editor_property(prop, amount)
-        spawn(crate_class, key, label, x, y, floor+.41, configure)
+        spawn(crate_class, key, label, x, y, floor+.41, configure, relocate=relocate)
 
-    def encounter(key, label, x, y, floor, runner=False):
+    def encounter(key, label, x, y, floor, runner=False, relocate=False):
         def configure(actor):
             actor.set_editor_property("aggro_range", 2100.0)
             actor.set_editor_property("is_runner", runner)
-        spawn(zombie_class, key, label, x, y, floor+1.03, configure)
+        spawn(zombie_class, key, label, x, y, floor+1.03, configure, relocate=relocate)
 
     def place_route(route):
         width = route["width_m"]
@@ -174,18 +212,29 @@ def place():
 
     def place_hospital(key, x, y, floor):
         def wall(label, dx, dy, w, d):
-            box(f"{key}_{label}", f"Hospital {label}", x+dx, y+dy, floor, w, d, 3.2)
+            box(f"{key}_{label}", f"Hospital {label}", x+dx, y+dy, floor, w, d, 3.2,
+                material=style_materials["stucco_metal"])
 
         # First wing measures 18 by 14 meters, with a 3 m south entrance.
         wall("west wall", -8.875, 0, .25, 14)
         wall("east wall", 8.875, 0, .25, 14)
         wall("rear wall", 0, 6.875, 17.5, .25)
-        for sign, side in ((-1, "west"), (1, "east")):
-            wall(f"{side} entrance wall", sign*5.125, -6.875, 7.25, .25)
+        for direction, side in ((-1, "west"), (1, "east")):
+            wall(f"{side} entrance wall", direction*5.125, -6.875, 7.25, .25)
             for index, (center, length) in enumerate(((-4.75, 4.5), (0, 2), (4.75, 4.5))):
-                wall(f"{side} hall wall {index}", sign*2.1, center, .25, length)
-            wall(f"{side} room divider", sign*5.425, 0, 6.4, .25)
-        box(f"{key}_roof", "Hospital wing roof", x, y, floor+3.2, 18, 14, .3)
+                wall(f"{side} hall wall {index}", direction*2.1, center, .25, length)
+            wall(f"{side} room divider", direction*5.425, 0, 6.4, .25)
+        box(f"{key}_roof", "Hospital wing roof", x, y, floor+3.2, 18, 14, .3, material=concrete)
+        box(key+"_fascia", "Triage fascia", x, y-7.18, floor+2.65, 7.5, .35, .5,
+            material=style_materials["petrol"])
+        sign(key+"_sign", "TRIAGE", x, y-7.38, floor+3.04)
+        for side in (-1, 1):
+            box(f"{key}_bench_{side}", "Waiting area bench", x+side*4.5, y-6.3,
+                floor, 2.1, .44, .45, material=style_materials["petrol"])
+            box(f"{key}_cabinet_{side}", "Treatment room cabinet", x+side*7.86, y+4.6,
+                floor, .62, 1.5, 1.08, material=style_materials["dark_trim"])
+        box(key+"_reception", "Triage desk", x-.9, y+4.5, floor, 1.64, .66, 1.08,
+            material=style_materials["petrol"])
 
         def furnish_bed(actor):
             component = actor.get_component_by_class(unreal.StaticMeshComponent)
@@ -200,16 +249,12 @@ def place():
               cloth_amount=5, dressing_schematic_amount=1)
         remove_blockout(key)
 
-    def dress_downtown(key, x, y, floor):
+    def storefront_window(key, x, y, floor):
         bounds = bay_mesh.get_bounding_box()
-        size_x = bounds.max.x - bounds.min.x
-        size_y = bounds.max.y - bounds.min.y
-        width = max(size_x, size_y) / 100
-        yaw = 0 if size_x >= size_y else 90
-        # Clear the existing wall so the trim reads from both sides of the street.
-        wall_offset = max(abs(bounds.min.y), abs(bounds.max.y)) if yaw == 0 else max(
+        extent_x, extent_y = bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y
+        yaw = 0 if extent_x >= extent_y else 90
+        depth = max(abs(bounds.min.y), abs(bounds.max.y)) if yaw == 0 else max(
             abs(bounds.min.x), abs(bounds.max.x))
-        street_edge = y - wall_offset / 100 - .02
 
         def configure(actor):
             component = actor.get_component_by_class(unreal.StaticMeshComponent)
@@ -217,9 +262,34 @@ def place():
             component.set_collision_profile_name("NoCollision")
             actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
 
-        for index in range(4):
-            spawn(unreal.StaticMeshActor, f"{key}_bay_{index}", f"Downtown window bay {index + 1}",
-                  x + (index - 1.5) * width, street_edge, floor, configure)
+        spawn(unreal.StaticMeshActor, key, "Storefront window", x, y-depth/100-.015, floor, configure)
+
+    def place_warehouse(key, x, y, floor):
+        bounds = warehouse_mesh.get_bounding_box()
+        size_x, size_y = bounds.max.x - bounds.min.x, bounds.max.y - bounds.min.y
+        if size_x < size_y:
+            yaw = 90 if bounds.max.x + bounds.min.x > 0 else -90
+        else:
+            yaw = 0 if bounds.max.y + bounds.min.y > 0 else 180
+
+        def configure(actor):
+            component = actor.get_component_by_class(unreal.StaticMeshComponent)
+            component.set_static_mesh(warehouse_mesh)
+            component.set_collision_profile_name("BlockAll")
+            actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
+
+        spawn(unreal.StaticMeshActor, key+"_static", "Warehouse loading hall", x, y, floor, configure)
+        remove_generated(key+"_warehouse")
+        site_tools["warehouse_yard"](box, key, x, y, floor, style_materials)
+        box(key+"_signboard", "Warehouse signboard", x, y-3.54, floor+3.26, 5.2, .1, .6,
+            material=style_materials["dark_trim"])
+        sign(key+"_sign", "LOADING 04", x, y-3.61, floor+3.69)
+        cache(key+"_materials", "Warehouse repair materials", x-8, y+1.5, floor,
+              relocate=True, stone_amount=30, timber_amount=24)
+        cache(key+"_supplies", "Warehouse storage crate", x+8, y+1.5, floor,
+              relocate=True, cloth_amount=3, water_amount=2)
+        encounter(key+"_runner", "Loading yard runner", x-9.4, y-7.2, floor, runner=True, relocate=True)
+        encounter(key+"_walker", "Warehouse walker", x+4, y+.75, floor, relocate=True)
 
     has_start = any(isinstance(actor, unreal.PlayerStart) for actor in existing)
     for landscape in landscapes:
@@ -246,21 +316,19 @@ def place():
         if site["id"] == "city-hospital":
             place_hospital(key, x, y, z+.2)
         elif site["id"] == "warehouses":
-            prefab_key = key + "_warehouse"
-
-            def configure_warehouse(actor):
-                site_tools["warehouse_structure"](actor, prefab_key, import_asset, source_art, world_art)
-
-            if prefab_key in actor_tags:
-                configure_warehouse(actor_tags[prefab_key])
-            else:
-                spawn(prefab_class, prefab_key, "Destructible warehouse", x, y, z+.2, configure_warehouse)
-            cache(key+"_materials", "Warehouse repair materials", x-8, y+3.5, z+.2,
-                  stone_amount=30, timber_amount=24)
-            cache(key+"_supplies", "Warehouse storage crate", x+8, y+3.5, z+.2,
-                  cloth_amount=3, water_amount=2)
-            encounter(key+"_runner", "Loading yard runner", x-8, y-8, z+.2, runner=True)
-            encounter(key+"_walker", "Warehouse walker", x+4, y+2.5, z+.2)
+            place_warehouse(key, x, y, z+.2)
+            remove_blockout(key)
+        elif site["id"] == "city-nightlife":
+            site_tools["nightlife_layout"](box, cache, encounter, sign, storefront_window,
+                                          key, x, y, z+.2, style_materials)
+            remove_generated(*(f"{key}_bay_{index}" for index in range(4)))
+            remove_blockout(key)
+        elif site["id"] == "city-police":
+            site_tools["precinct_layout"](box, cache, encounter, sign, key, x, y, z+.2, style_materials)
+            remove_generated(key+"_portico_roof", *(f"{key}_portico_{i}" for i in range(4)))
+            remove_blockout(key)
+        elif site["id"] == "city-parking":
+            site_tools["garage_layout"](box, ramp, cache, encounter, sign, key, x, y, z+.2, style_materials)
             remove_blockout(key)
         elif site["id"] == "southwest-apartments":
             exterior(key+"_exterior", "Panel apartment exterior", housing_mesh, x, y+11, z+.2)
@@ -269,6 +337,7 @@ def place():
             remove_blockout(key)
         elif site["kind"] == "services":
             site_tools["station_layout"](box, key, x, y+.5, z+.2)
+            site_tools["service_forecourt"](box, key, x, y+.5, z+.2, style_materials)
             cache(key+"_provisions", "Station provisions", x+3, y+3, z+.2, food_amount=2, water_amount=3)
             if site["id"] == "south-services":
                 cache(key+"_sidearm", "Station sidearm case", x+2, y+2, z+.2, contains_sidearm=True)
@@ -295,8 +364,6 @@ def place():
                         frontage-2.2, z+.2, .9, .9, 4.2, material=style_materials[style])
                 box(key+"_portico_roof", "Civic portico entablature", x, frontage-1.2,
                     z+4.4, w*.30, 3.4, .45, material=style_materials[style])
-        if site["id"] == "city-nightlife":
-            dress_downtown(key, x, y + d*.12 - d*.59/2, z+.2)
         if site["id"] == "south-services" and not has_start:
             spawn(unreal.PlayerStart, key+"_start", "Start at Southern Crossroads",
                   x, y-d*.31, z+1.3,

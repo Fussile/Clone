@@ -3,9 +3,6 @@
 #include "GameFramework/Actor.h"
 #include "SurvivalStructurePrefab.generated.h"
 
-class UMaterialInterface;
-class UStaticMesh;
-
 USTRUCT()
 struct FSurvivalPrefabPart
 {
@@ -19,9 +16,6 @@ struct FSurvivalPrefabPart
 
     UPROPERTY(EditAnywhere, Category = "Structure")
     int32 QuarterTurns = 0;
-
-    UPROPERTY(EditAnywhere, Category = "Structure")
-    TObjectPtr<UStaticMesh> WallMesh;
 };
 
 UCLASS()
@@ -41,7 +35,4 @@ private:
 
     UPROPERTY(EditAnywhere, Category = "Structure")
     TArray<FSurvivalPrefabPart> Parts;
-
-    UPROPERTY(EditAnywhere, Category = "Structure")
-    TObjectPtr<UMaterialInterface> WallMaterial;
 };

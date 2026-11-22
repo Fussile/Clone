@@ -20,19 +20,13 @@ Use World Partition to load around the player from cooked data. Start profiling 
 
 Keep authoritative loot, destruction and construction changes keyed by stable site, section and piece IDs. A cell unload should preserve these deltas. Cook and test the baseline before implementing save migration or seeded world variants. Profile a drive into downtown, a bridge crossing, several cell unload/reload cycles, and two co-op players traveling apart. Record memory, frame-time spikes and the number of active AI during each route.
 
-## Build a district with shared construction
+## Southern route and downtown stops
 
-Use kit walls, floors and stairs where the current grid fits. Give major landmarks their own art and divide each into purpose-built sections, such as a storefront panel, concrete bay or stair core. A section should own its render mesh, collision and health. A broken section must remove its blocking collision and expose attachment points for replacement pieces. Put the structural component in the support graph wherever its neighbors can depend on it. Bridge decks, terrain, and the first skyline blockouts can start as static geometry. The existing utility canopy is the test case for player-kit pieces, projectile damage and collapse.
+The gas stations share a forecourt kit with pump islands and protective bollards. The Warehouse District uses the original textured warehouse asset as one static building with an open loading bay and side doorway. The loading yard has marked lanes, pallets and cargo stacks. Inside are two supply caches. The warehouse walls are fixed scenery with mesh collision. The player construction system still uses its own structural rules. [Model credits](M4WorldArt.txt)
 
-The warehouse has an open loading bay, a side doorway, interior supplies, and a runner outside. The three-by-three wall section immediately west of the loading opening uses slices of the original textured warehouse mesh. Each slice has a thin collision box and reserves one 1.05 m grid cell. The remaining walls, columns and timber roof use the same damage and support rules. Debris and exposed openings come from the same collapse system as player-built structures. An authored prefab ID prevents cell re-entry from restoring destroyed sections during the same session.
+The northwest downtown access off the city loop leads to Crossroads Police, with a reception area, records room, medical supplies and two encounters. The highway frontage approaches reach two other stops. Freight Bar and Crossroads Diner have separate entrances, dining areas, local loot and walkers. The parking garage has a driveable ramp to the open upper deck and supply cases on both levels.
 
-## First hospital wing and downtown art
-
-General Hospital has an enterable ground-floor wing with four rooms, a central corridor, textured beds, and a dressing supply crate. The region placement script imports the included bed and places the wing on the hospital pad. Rerun it with the hospital cell loaded to upgrade an earlier blockout.
-
-The downtown nightlife blockout uses four textured window bays assembled from James Ray Cock’s CC0 Modular Urban Apartments Facade. The source GLB is included in the project and the region placement script imports it automatically. The bays provide exterior art while the blockout shell provides collision.
-
-Source and license details are in [DowntownFacadeAttribution.txt](DowntownFacadeAttribution.txt).
+General Hospital has an accessible triage wing, four treatment rooms, textured beds, furnishings and dressing supplies. Its approach joins the hospital arterial. The downtown venues use James Ray Cock’s CC0 Modular Urban Apartments Facade for window detailing. [Facade credits](DowntownFacadeAttribution.txt)
 
 ## Architectural direction
 
@@ -44,4 +38,4 @@ The same station layout is used at each fuel stop. Southwest Apartments has an a
 
 Open the generated Crossroads region and play from its Player Start. From Southern Crossroads, collect the starter sidearm and follow the station approach. The industrial spur leads to the warehouse repair cache and runner encounter. Follow the northbound arterial to the highway and the city loop for the hospital road and dressing supplies.
 
-At the warehouse, enter from the south and find the supplies inside. Damage one of the textured cells beside the loading opening and check that its mesh and collision disappear together. Remove two vertically stacked cells to make a passage, then rebuild in the opening. Remove neighboring load-bearing walls and columns to check that unsupported roof panels fall while supported panels remain. Return after streaming out the warehouse cell and check that the damage persists. Runtime building chunks currently hold changes for the session. Cross-session saves and restoration of looted containers or defeated enemies on stream-in are pending.
+At the warehouse, check both entrances and the supply crates inside. From the highway, take the parking and nightlife approaches. Walk up the parking ramp, then visit the bar and diner. Use the downtown loop to reach the police precinct and check the rear records room.

@@ -22,8 +22,11 @@ def bake_route(plan, ground_height, terrain_height):
         return max(ground_height(x, y), terrain_height(x, y))+.12
 
     roads = {road["id"]: road for road in plan["roads"]}
-    links = {"south-services": "southern-arterial", "warehouses": "southern-industrial-road",
-             "city-hospital": "hospital-arterial"}
+    links = {
+        "south-services": "southern-arterial", "warehouses": "southern-industrial-road",
+        "city-hospital": "hospital-arterial", "city-police": "downtown-loop",
+        "city-parking": "east-west-highway", "city-nightlife": "east-west-highway",
+    }
     for site in plan["sites"]:
         if site["id"] not in links:
             continue

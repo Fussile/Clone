@@ -31,7 +31,7 @@ def prepare_if_needed():
         "/Game/Maps/L_SouthernCrossroads",
         "/Game/Maps/L_CrossroadsRelief",
         "/Game/Art/Crossroads/World/SM_PanelHousingExterior",
-        "/Game/Art/Crossroads/World/SM_WarehouseExterior",
+        "/Game/Art/Crossroads/World/SM_WarehouseWalkable",
         "/Game/Art/Crossroads/Player/SK_Survivor",
         "/Game/Art/Crossroads/SniperSurface/SK_SniperViewmodel",
         "/Game/Art/Crossroads/SniperSurface/SM_CrossroadsSniper",
@@ -53,10 +53,6 @@ def prepare_if_needed():
     required += tuple(
         f"/Game/Art/Crossroads/Interface/{icon.stem}"
         for icon in (project / "SourceArt" / "Crossroads" / "Interface").glob("T_UI_*.png")
-    )
-    required += tuple(
-        f"/Game/Art/Crossroads/World/WarehouseBay/{panel.stem}"
-        for panel in (project / "SourceArt" / "Crossroads" / "World" / "WarehouseBay").glob("*.gltf")
     )
     if medicine_sheet.is_file():
         required += ("/Game/Art/Crossroads/Local/MedicineSheet",)

@@ -2,7 +2,7 @@ Warehouse by VertexForge (https://sketchfab.com/prankscare99)
 Source: https://sketchfab.com/3d-models/warehouse-02097a13aec040068629eacc75dffc5e
 License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 Changes: Rescaled and centered at ground level, resized the embedded texture,
-and sliced a section of the original wall into nine structural cells.
+and cut a loading opening and side doorway in the single static mesh.
 
 Soviet Panel Building by input_render.png
 Source: https://sketchfab.com/3d-models/soviet-panel-building-54501c691e25441ca2894f3c15227a1b

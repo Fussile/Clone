@@ -4,7 +4,6 @@
 #include "SurvivalBuilding.h"
 #include "SurvivalBuildChunk.generated.h"
 
-class UBoxComponent;
 class UInstancedStaticMeshComponent;
 class UStaticMeshComponent;
 
@@ -17,8 +16,6 @@ struct FSurvivalFinishedPiece
     TWeakObjectPtr<UStaticMeshComponent> Door{};
     bool bDoorOpen = false;
     int32 DoorHealth = 0;
-    TWeakObjectPtr<UStaticMeshComponent> WallVisual{};
-    TWeakObjectPtr<UBoxComponent> WallCollider{};
 
     FSurvivalMaterials RepairCost() const
     {
@@ -57,7 +54,6 @@ private:
     void RebuildGhosts();
     int32 FindFinishedIndex(const FHitResult& Hit) const;
     bool AddFinishedInstances(int32 Index);
-    bool AddAuthoredWall(FSurvivalFinishedPiece& Piece);
     void RemoveDoorLeaf(FSurvivalFinishedPiece& Piece);
     void SpawnDebris(const FSurvivalBuildPlacement& Placement);
 

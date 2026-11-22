@@ -85,20 +85,11 @@ void FSurvivalBuildPlacement::AlignFrameEdge(const FVector& Point)
     FrameOffset[Axis] = (Point[Axis] >= Base[Axis] ? 1.0 : -1.0) * GridSize / 2.0;
 }
 
-TConstArrayView<FBox> FSurvivalBuildPlacement::CollisionBoxes() const
-{
-    if (AuthoredWallBounds.IsValid)
-    {
-        return TConstArrayView<FBox>(&AuthoredWallBounds, 1);
-    }
-    return GetPiece().Boxes;
-}
-
 FBox FSurvivalBuildPlacement::WorldBounds() const
 {
     FBox Bounds(ForceInit);
     const FTransform Transform(Rotation, MeshOrigin());
-    for (const FBox& Box : CollisionBoxes())
+    for (const FBox& Box : GetPiece().Boxes)
     {
         Bounds += Box.TransformBy(Transform);
     }
@@ -107,7 +98,7 @@ FBox FSurvivalBuildPlacement::WorldBounds() const
 
 FBox FSurvivalBuildPlacement::ReservedBounds() const
 {
-    if (!ReservesFullCells())
+    if (GetPiece().HeightCells == 1)
     {
         return WorldBounds();
     }
@@ -117,7 +108,7 @@ FBox FSurvivalBuildPlacement::ReservedBounds() const
 
 bool FSurvivalBuildPlacement::OverlapsReservedCells(const FSurvivalBuildPlacement& Other) const
 {
-    if (!ReservesFullCells() && !Other.ReservesFullCells())
+    if (GetPiece().HeightCells == 1 && Other.GetPiece().HeightCells == 1)
     {
         return false;
     }
@@ -223,10 +214,10 @@ int32 FSurvivalBuildPlacement::SupportCostFrom(const FSurvivalBuildPlacement& Ot
     const bool bLateral = (GetPiece().bCarriesLateralSupport && Other.GetPiece().bCarriesLateralSupport)
         || (GetPiece().bWall && Other.GetPiece().bWall);
     int32 BestCost = INDEX_NONE;
-    for (const FBox& LocalBox : CollisionBoxes())
+    for (const FBox& LocalBox : GetPiece().Boxes)
     {
         const FBox Box = LocalBox.TransformBy(ThisTransform);
-        for (const FBox& SourceLocal : Other.CollisionBoxes())
+        for (const FBox& SourceLocal : Other.GetPiece().Boxes)
         {
             const FBox Source = SourceLocal.TransformBy(SourceTransform);
             const bool bX = Overlaps(Box.Min.X, Box.Max.X, Source.Min.X, Source.Max.X);

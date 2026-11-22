@@ -1,12 +1,14 @@
 #include "CrossroadsWorldBake.h"
 
 #include "Editor.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Landscape.h"
 #include "LandscapeSubsystem.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/FileHelper.h"
 #include "Modules/ModuleManager.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "UObject/UnrealType.h"
 #include "WorldPartition/WorldPartition.h"
 
@@ -83,5 +85,27 @@ bool UCrossroadsWorldBake::ImportTerrain(const FString& HeightFile, int32 Resolu
         }
     }
     Terrain->MarkPackageDirty();
+    return true;
+}
+
+
+bool UCrossroadsWorldBake::SetStaticMeshCollision(UStaticMesh* Mesh)
+{
+    if (!Mesh)
+    {
+        return false;
+    }
+    Mesh->CreateBodySetup();
+    UBodySetup* Body = Mesh->GetBodySetup();
+    if (Body->CollisionTraceFlag != CTF_UseComplexAsSimple || !Body->bDoubleSidedGeometry)
+    {
+        Mesh->Modify();
+        Body->Modify();
+        Body->CollisionTraceFlag = CTF_UseComplexAsSimple;
+        Body->bDoubleSidedGeometry = true;
+        Body->InvalidatePhysicsData();
+        Body->CreatePhysicsMeshes();
+        Mesh->MarkPackageDirty();
+    }
     return true;
 }

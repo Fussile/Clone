@@ -16,55 +16,135 @@ def station_layout(box, key, x, y, floor):
     box(key+"_counter", "Station counter", x-2.8, y+2.8, floor, 3.8, .75, 1.05)
 
 
-def warehouse_parts():
-    # Cell coordinates in Unreal space. Positive Y faces the southern approach.
-    # Ground, side walls, and jambs go in first. Span the openings before roofing.
-    stone, pillar, roof = 6, 8, 2
-    side_x, side_y, wall_height = 11, 5, 4
-    walls = [(x, y) for x in range(-side_x, side_x+1) for y in range(-side_y, side_y+1)
-             if abs(x) == side_x or abs(y) == side_y]
-    openings = {(x, side_y) for x in range(-1, 2)} | {(side_x, -2)}
-    parts = [(stone, x, y, z) for z in range(wall_height) for x, y in walls
-             if (x, y) not in openings]
-    parts.extend(((stone, side_x, -2, 2), (stone, side_x, -2, 3)))
-    parts.extend((stone, x, side_y, 3) for x in (-1, 0, 1))
-    for x, y in ((-5, 0), (0, -1), (5, 0)):
-        parts.extend((pillar, x, y, layer) for layer in (0, 2))
-    # Work inward from both supported end walls, so every panel has a load path on spawn.
-    rows = (-5, 5, -4, 4, -3, 3, -2, 2, -1, 0, 1)
-    parts.extend((roof, x, y, wall_height) for y in rows for x in range(-side_x, side_x+1))
-    return parts
+def warehouse_yard(box, key, x, y, floor, palette):
+    steel, wood, paint = (palette[name] for name in ("dark_trim", "timber", "traffic"))
+    for side in (-1, 1):
+        for index in range(4):
+            px, py = x + side * (6.5 + index * 2.8), y - 5.7
+            box(f"{key}_bollard_{side}_{index}", "Loading yard bollard",
+                px, py, floor, .22, .22, 1, material=paint)
+        for index in range(3):
+            px, py = x + side * 8.2, y - 8.2 - index * 1.5
+            box(f"{key}_pallet_{side}_{index}", "Shipping pallet",
+                px, py, floor, 1.25, 1.05, .16, material=wood)
+            if index < 2:
+                box(f"{key}_cargo_{side}_{index}", "Weathered cargo crate",
+                    px, py, floor+.16, .95, .85, .58 + .36 * index, material=wood)
+        box(f"{key}_lane_{side}", "Loading lane stripe", x+side*2.2, y-10.5,
+            floor+.015, .12, 10.5, .02, material=paint, collision=False)
+        box(f"{key}_rack_{side}", "Warehouse shelving", x+side*9.7, y+2.25,
+            floor, .65, 1.28, 1.8, material=steel)
 
 
-def warehouse_structure(actor, key, import_asset, source_art, world_art):
-    source = import_asset(source_art / "SM_WarehouseExterior.glb", world_art, unreal.StaticMesh)
-    material = source.get_material(0)
-    if not material:
-        raise RuntimeError("The warehouse source mesh has no surface material.")
-    # Replace the stone cells immediately west of the open loading bay.
-    panels = {
-        (column - 4, 5, row): import_asset(
-            source_art / "WarehouseBay" / f"SM_WarehouseBay_{column}_{row}.gltf",
-            world_art + "/WarehouseBay", unreal.StaticMesh)
-        for row in range(3) for column in range(3)
-    }
+def service_forecourt(box, key, x, y, floor, palette):
+    for dx in (-3.1, 3.1):
+        bay = f"{key}_pump_{dx}"
+        box(bay+"_island", "Fuel island", x+dx, y-6.5, floor, 1.4, 2.7, .16, material=palette["concrete"])
+        box(bay+"_body", "Fuel dispenser", x+dx, y-6.5, floor+.16, .68, .6, 1.4, material=palette["petrol"])
+        box(bay+"_face", "Fuel dispenser panel", x+dx, y-6.82, floor+.89,
+            .47, .05, .33, material=palette["dark_trim"], collision=False)
+        for dy in (-1.05, 1.05):
+            box(f"{bay}_guard_{dy}", "Pump guard", x+dx, y-6.5+dy, floor+.16,
+                .14, .14, .85, material=palette["traffic"])
 
-    cell = 105
-    origin = actor.get_actor_location()
-    actor.set_actor_location(unreal.Vector(round(origin.x/cell)*cell, round(origin.y/cell)*cell,
-                                           origin.z), False, False)
-    parts = []
-    for piece, x, y, z in warehouse_parts():
-        part = unreal.SurvivalPrefabPart()
-        part.set_editor_property("piece_index", piece)
-        part.set_editor_property("offset", unreal.Vector(x*cell, y*cell, z*cell))
-        mesh = panels.get((x, y, z))
-        if mesh:
-            part.set_editor_property("wall_mesh", mesh)
-        parts.append(part)
-    actor.set_editor_property("wall_material", material)
-    actor.set_editor_property("prefab_id", unreal.Name(key))
-    actor.set_editor_property("parts", parts)
+
+def building_shell(box, key, x, y, floor, width, depth, height, doorway, wall, roof):
+    t = .24
+    front = y-depth/2
+    for sign in (-1, 1):
+        box(f"{key}_side_{sign}", "Exterior wall", x+sign*(width-t)/2, y, floor,
+            t, depth, height, material=wall)
+        box(f"{key}_front_{sign}", "Entrance jamb", x+sign*(width+doorway)/4,
+            front+t/2, floor, (width-doorway)/2, t, height, material=wall)
+    box(key+"_back", "Rear wall", x, y+(depth-t)/2, floor, width-2*t, t, height, material=wall)
+    box(key+"_lintel", "Entrance lintel", x, front+t/2, floor+2.35, doorway, t,
+        height-2.35, material=wall)
+    box(key+"_roof", "Roof", x, y, floor+height, width+.45, depth+.45, .25, material=roof)
+    return front
+
+
+def nightlife_layout(box, cache, encounter, sign, facade, key, x, y, floor, palette):
+    trim, brick, wood = (palette[name] for name in ("dark_trim", "brick_hardwood", "timber"))
+    for side, name, shade in ((-1, "Freight Bar", brick), (1, "Crossroads Diner", palette["petrol"])):
+        building = f"{key}_venue_{side}"
+        cx, cy = x+side*7.8, y+1.7
+        front = building_shell(box, building, cx, cy, floor, 13.6, 12, 3.5, 2.2, shade, trim)
+        box(building+"_fascia", "Storefront fascia", cx, front-.13, floor+2.65,
+            12.4, .22, .58, material=trim)
+        sign(building+"_sign", name, cx, front-.26, floor+3.04)
+        box(building+"_canopy", "Entrance canopy", cx, front-.95, floor+2.35,
+            9.8, 1.9, .15, material=trim)
+        facade(building+"_window", cx-3.55, front, floor)
+        facade(building+"_window_2", cx+3.55, front, floor)
+        box(building+"_counter", "Service counter", cx-1.3, cy+2.4, floor,
+            5.9, .75, 1.04, material=wood)
+        for i in range(3):
+            tx, ty = cx+4.05, cy-2.5+i*2.3
+            box(f"{building}_table_{i}", "Dining table", tx, ty, floor+.74,
+                1.2, .75, .09, material=wood)
+            box(f"{building}_table_base_{i}", "Table pedestal", tx, ty, floor,
+                .2, .2, .76, material=trim)
+            for direction in (-1, 1):
+                box(f"{building}_seat_{i}_{direction}", "Booth seat", tx, ty+direction*.64,
+                    floor, 1.25, .5, .45, material=shade)
+        cache(building+"_stock", f"{name} stock", cx-4.8, cy+3.7, floor,
+              food_amount=2 if side>0 else 1, water_amount=3 if side>0 else 2,
+              scavenger_notes_amount=int(side<0))
+        encounter(building+"_walker", f"{name} walker", cx+1.6, cy+1.5, floor)
+    box(key+"_walk", "Nightlife sidewalk", x, y-5.9, floor, 33, 2.7, .12, material=palette["concrete"])
+
+
+def precinct_layout(box, cache, encounter, sign, key, x, y, floor, palette):
+    stone, trim, wood = (palette[name] for name in ("classical_civic", "dark_trim", "timber"))
+    front = building_shell(box, key+"_precinct", x, y, floor, 24, 17, 4.2, 3.2, stone, trim)
+    box(key+"_badge_band", "Precinct fascia", x, front-.15, floor+2.82, 17, .24, .7, material=trim)
+    sign(key+"_sign", "CROSSROADS POLICE", x, front-.3, floor+3.26)
+    box(key+"_awning", "Precinct portico", x, front-1.3, floor+2.7, 10, 2.6, .25, material=stone)
+    for side in (-1, 1):
+        box(f"{key}_column_{side}", "Portico column", x+side*4.3, front-2.2,
+            floor, .52, .52, 2.7, material=stone)
+        box(f"{key}_office_{side}", "Office divider", x+side*4.2, y-2.3,
+            floor, .2, 6, 3, material=stone)
+        box(f"{key}_rear_partition_{side}", "Records room partition", x+side*6.7, y+2.5,
+            floor, 10.6, .2, 3, material=stone)
+    box(key+"_desk", "Reception desk", x-1.6, y-2.2, floor, 4, .82, 1.05, material=wood)
+    for i in range(5):
+        box(f"{key}_archive_{i}", "Archive shelving", x-8+i*3.6, y+7.65,
+            floor, 2.35, .65, 1.82, material=trim)
+    cache(key+"_medical", "Precinct first-aid cabinet", x-8.5, y-4.5, floor, cloth_amount=5)
+    cache(key+"_records", "Precinct emergency supplies", x+5.6, y+5.7, floor,
+          water_amount=2, dressing_schematic_amount=1)
+    encounter(key+"_watch", "Precinct walker", x+1.3, y-2.5, floor)
+    encounter(key+"_records_walker", "Records room runner", x+7.0, y+5.8, floor, runner=True)
+
+
+def garage_layout(box, ramp, cache, encounter, sign, key, x, y, floor, palette):
+    slab, trim, paint = (palette[name] for name in ("concrete", "dark_trim", "traffic"))
+    upper = floor+3.15
+    # Clear an opening for the ramp along the western edge of the deck.
+    box(key+"_deck_main", "Parking deck", x+1.9, y, upper-.28, 24.2, 22, .28, material=slab)
+    box(key+"_deck_landing", "Ramp landing", x-12.1, y+7.25, upper-.28, 3.8, 7.5, .28, material=slab)
+    ramp(key+"_ramp", "Parking ramp", x-12.1, y-13.8, y+3.5, floor, upper, 3.8, slab)
+    box(key+"_front_rail", "Upper deck parapet", x+1.9, y-10.9, upper, 24.2, .22, 1.06, material=slab)
+    box(key+"_rear_rail", "Upper deck parapet", x, y+10.9, upper, 28, .22, 1.06, material=slab)
+    box(key+"_east_rail", "Upper deck parapet", x+13.9, y, upper, .22, 22, 1.06, material=slab)
+    box(key+"_west_rail", "Landing parapet", x-13.9, y+7.2, upper, .22, 7.6, 1.06, material=slab)
+    box(key+"_ramp_guard", "Ramp opening guard", x-10.1, y-3.7, upper, .22, 14.3, 1.06, material=slab)
+    for i in range(5):
+        px = x-7.8+i*4.6
+        for j, dy in enumerate((-8.9, 8.9)):
+            box(f"{key}_pier_{i}_{j}", "Parking column", px, y+dy, floor,
+                .44, .44, upper-floor-.28, material=slab)
+        for level in (0, 1):
+            box(f"{key}_stall_{i}_{level}", "Parking line", px, y+7.1, floor+3.15*level+.012,
+                .105, 4.75, .025, material=paint, collision=False)
+    box(key+"_signboard", "Parking signboard", x+3.8, y-10.98, upper+.18, 4.1, .16, .66, material=trim)
+    sign(key+"_sign", "PARKING", x+3.8, y-11.1, upper+.64)
+    cache(key+"_maintenance", "Parking maintenance case", x+10.1, y+7.2, floor,
+          timber_amount=7, cloth_amount=2)
+    cache(key+"_vehicle_supplies", "Upper deck emergency kit", x+11.0, y+7.6, upper,
+          food_amount=2, water_amount=2)
+    encounter(key+"_walker", "Parking deck walker", x+4.9, y+1.7, upper)
 
 
 def apartment_layout(box, cache, encounter, key, x, y, floor, seed):

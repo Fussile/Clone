@@ -5,8 +5,6 @@
 #include "Math/Box.h"
 
 class ASurvivalBuildChunk;
-class UMaterialInterface;
-class UStaticMesh;
 
 struct FSurvivalMaterials
 {
@@ -48,14 +46,8 @@ struct FSurvivalBuildPlacement
     FQuat Rotation = FQuat::Identity;
     int32 PieceIndex = 0;
     bool bClear = false;
-    FBox AuthoredWallBounds{ForceInit};
-    TWeakObjectPtr<UStaticMesh> AuthoredWallMesh;
-    TWeakObjectPtr<UMaterialInterface> AuthoredWallMaterial;
-    FQuat AuthoredWallMeshRotation = FQuat::Identity;
 
     const FSurvivalBuildPiece& GetPiece() const { return GetSurvivalBuildPieces()[PieceIndex]; }
-    TConstArrayView<FBox> CollisionBoxes() const;
-    bool ReservesFullCells() const { return AuthoredWallBounds.IsValid || GetPiece().HeightCells > 1; }
     FVector MeshOrigin() const { return Base + FrameOffset; }
     void AlignFrameEdge(const FVector& Point);
     FVector WorldCenter(const FBox& Box) const { return MeshOrigin() + Rotation.RotateVector(Box.GetCenter()); }
