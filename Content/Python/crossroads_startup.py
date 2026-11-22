@@ -47,6 +47,12 @@ def prepare_if_needed():
         "/Game/Art/Crossroads/Building/M_CrossroadsTimber",
     )
     required += tuple(
+        f"/Game/Art/Crossroads/World/Landmarks/{name}/SM_{name}"
+        for name in ("AircraftHangar", "CommunityPitch", "PitchEntranceSign", "RadiationSign",
+                     "RuinedAirportShop", "RuinedTerminal", "RunwayMarkings", "WeatheredBusStop",
+                     "YardTransformer")
+    )
+    required += tuple(
         f"/Game/Art/Crossroads/Inventory/T_Item_{name}"
         for name in ("Sidearm", "Food", "Water", "Bandage", "Timber", "Stone", "Cloth", "Rounds", "TimberDoor", "Rifle", "RifleRounds", "BuilderGuide", "ScavengerNotes", "DressingSchematic", "FieldDressing",
                      "RifleStock", "RifleReceiver", "RifleBarrel", "RifleOptic")

@@ -45,3 +45,9 @@ The same station layout is used at each fuel stop. Southwest Apartments has a tw
 Open the generated Crossroads region and play from its Player Start. From Southern Crossroads, collect the starter sidearm and follow the station approach. The industrial spur leads to the warehouse repair cache and runner encounter. Follow the northbound arterial to the highway and the city loop for the hospital road and dressing supplies.
 
 At the warehouse, check both entrances and the supply crates inside. From the highway, take the parking and nightlife approaches. Walk up the parking ramp, then visit the bar and diner. Use the downtown loop to reach the police precinct and check the rear records room.
+
+### Airport and community pitch
+
+The southeast airport has a 426 m runway at map scale with the uploaded threshold and centerline markings, a parallel taxiway, two turnoffs and a terminal apron. The airport road reaches the landside entrance. A walkable concourse and control room sit beside the uploaded damaged terminal wing and ruined shop. Hangars at the airport and the southern hangar site use the uploaded interior mesh, with operable shutters at the modeled opening. The existing terrain remains the base for the new local pavement grades.
+
+The northern community pitch replaces the stadium placeholder. Take the local approach from the winter crossroad to reach the uploaded field scan and entrance sign. [Model credits](M4WorldArt.txt)

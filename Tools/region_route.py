@@ -41,6 +41,22 @@ def bake_route(plan, ground_height, terrain_height):
             "start_z": site["foundation_z_m"]+.2,
         }
 
+    for site_id, road_id, offset, width in (
+        ("stadium", "winter-crossroad", 25.5, 5),
+        ("airport", "airport-road", 17.5, 8),
+    ):
+        design = plan["facilities"][site_id]
+        x, y = design["x"], design["y"]
+        entry = (x, y+offset)
+        approach = (x, entry[1]+8)
+        connection = nearest_on_road(approach, roads[road_id])
+        site = next(s for s in plan["sites"] if s["id"] == site_id)
+        roads[site_id+"_access"] = {
+            "id": site_id+"_access", "width_m": width,
+            "points_m": [entry, approach, connection],
+            "start_z": design.get("floor", site["foundation_z_m"]+.2),
+        }
+
     baked = []
     for road in roads.values():
         points = road["points_m"]

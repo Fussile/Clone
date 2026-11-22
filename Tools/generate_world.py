@@ -7,6 +7,7 @@ from pathlib import Path
 import struct
 import zlib
 
+from airfield_layout import facilities
 from region_route import bake_route
 
 LAYOUT = Path(__file__).with_name("world_layout.json")
@@ -153,6 +154,8 @@ def generate(seed):
             base += (z-base)*blend
         return base
 
+    sites = {site["id"]: site for site in plan["sites"]}
+    plan["facilities"] = facilities(sites["airport"], sites["stadium"], height)
     plan["m4_route"] = bake_route(plan, ground_height, height)
 
     # Assign static content to planned cells. IDs persist when exact coordinates change.

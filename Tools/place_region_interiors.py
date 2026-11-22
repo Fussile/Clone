@@ -242,9 +242,6 @@ def place_site(box, door, ramp, cache, encounter, sign, window, bed, furniture, 
         retail(site, use_windows=ident not in {"car-lot","dock-strip"})
     elif kind in {"clinic","hospital","civic"}:
         civic(site, medical=kind in {"clinic","hospital"}, classroom=ident in {"school","university"})
-        if ident=="stadium":
-            site.part("service_pitch", "Practice court", 0, -d*.402, .015, w*.76, d*.17, .07,
-                      "soil", collision=False)
     elif kind in {"industry","airport"}:
         industrial(site, "terminal" if kind=="airport" else "power" if ident.startswith("power-") else "works")
     elif kind=="highrise":

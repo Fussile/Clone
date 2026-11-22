@@ -14,6 +14,8 @@ def place():
         raise RuntimeError("Rebake Saved/WorldBake/world.json with Tools/generate_world.py before stamping the M4 route.")
     site_tools = runpy.run_path(str(root / "Tools" / "place_region_sites.py"))
     interiors = runpy.run_path(str(root / "Tools" / "place_region_interiors.py"))
+    landmarks = runpy.run_path(str(root / "Tools" / "place_region_landmarks.py"))
+    airfield_dimensions = runpy.run_path(str(root / "Tools" / "airfield_layout.py"))
     warehouse_doors = json.loads((root / "Tools" / "warehouse_doors.json").read_text(encoding="utf-8"))
     editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
@@ -51,13 +53,23 @@ def place():
         for name in ("HospitalBed", "DowntownWindowBay", "WarehouseDoorwayShell",
                      "WeatheredShelf", "SchoolDesk")
     )
+    landmark_collision = {
+        "AircraftHangar", "CommunityPitch", "RuinedTerminal", "RuinedAirportShop",
+        "WeatheredBusStop", "YardTransformer",
+    }
+    landmark_names = sorted(landmark_collision | {"RunwayMarkings", "PitchEntranceSign", "RadiationSign"})
+    landmark_meshes = {
+        name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Landmarks/{name}", unreal.StaticMesh)
+        for name in landmark_names
+    }
     crate_class = unreal.load_class(None, "/Script/Survival.SurvivalSupplyCrate")
     zombie_class = unreal.load_class(None, "/Script/Survival.SurvivalZombie")
     door_class = unreal.load_class(None, "/Script/Survival.SurvivalWorldDoor")
     if not crate_class or not zombie_class or not door_class:
         raise RuntimeError("Build SurvivalEditor before placing structures and loot.")
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
-    for mesh in (warehouse_mesh, shelf_mesh, desk_mesh):
+    for mesh in (warehouse_mesh, shelf_mesh, desk_mesh,
+                 *(landmark_meshes[name] for name in sorted(landmark_collision))):
         if not unreal.CrossroadsWorldBake.set_static_mesh_collision(mesh):
             raise RuntimeError(f"Could not prepare collision for {mesh.get_name()}.")
         if not assets.save_loaded_asset(mesh, only_if_is_dirty=True):
@@ -73,6 +85,7 @@ def place():
         "modern": (.18, .25, .30), "dark_trim": (.036, .036, .035),
         "traffic": (.79, .58, .18), "petrol": (.13, .28, .29),
         "glazing": (.09, .19, .24), "linen": (.47, .44, .39), "soil": (.22, .138, .072),
+        "grass": (.093, .142, .066),
     }
     style_materials = {
         style: prepare_art["make_material"](world_art, f"M_Region_{style}", (),
@@ -124,6 +137,33 @@ def place():
             if component.get_material(0) == cube.get_material(0):
                 component.set_material(0, material)
 
+    def landmark_mesh(key, label, name, x, y, z, *, scale=(1, 1, 1), collision=False,
+                      pitch=0, align_long_axis=False, opening_south=False):
+        asset = landmark_meshes[name]
+        bounds = asset.get_bounding_box()
+        swapped = bounds.max.x-bounds.min.x < bounds.max.y-bounds.min.y
+        yaw = 90 if align_long_axis and swapped else 0
+        if opening_south:
+            if swapped:
+                yaw = 90 if bounds.max.x+bounds.min.x > 0 else -90
+            else:
+                yaw = 0 if bounds.max.y+bounds.min.y > 0 else 180
+        local_scale = (scale[1], scale[0], scale[2]) if swapped and align_long_axis else scale
+
+        def configure(actor):
+            component = actor.get_component_by_class(unreal.StaticMeshComponent)
+            component.set_static_mesh(asset)
+            component.set_collision_profile_name("BlockAll" if collision else "NoCollision")
+            if name == "AircraftHangar" and concrete:
+                component.set_material(0, concrete)
+            actor.set_actor_scale3d(unreal.Vector(*local_scale))
+            rotation = unreal.Rotator(yaw=yaw)
+            if pitch:
+                rotation = unreal.MathLibrary.compose_rotators(rotation, unreal.Rotator(pitch=pitch))
+            actor.set_actor_rotation(rotation, False)
+
+        spawn(unreal.StaticMeshActor, key, label, x, y, z, configure)
+
     def remove_generated(*keys):
         for key in keys:
             actor = actor_tags.get(key)
@@ -134,6 +174,11 @@ def place():
 
     def remove_blockout(key):
         remove_generated(key + "_shell")
+
+    def migrate_landmark(key, new_key, keep=()):
+        # Only sweep the generator's reserved tags for this site.
+        remove_generated(*(tag for tag in actor_tags if tag.startswith(key+"_")
+                           and not tag.startswith(new_key+"_") and tag not in keep))
 
     def ramp(key, label, x, y0, y1, floor, upper, width, material):
         direction = 1 if y1>y0 else -1
@@ -336,9 +381,25 @@ def place():
         w, d = site["footprint_m"]
         z = site["foundation_z_m"]
         name = site["name"]
-        box(key+"_slab", name+" slab", x, y, z-.6, w, d, .8, ground=True)
+        if site["id"] != "stadium":
+            box(key+"_slab", name+" slab", x, y, z-.6, w, d, .8, ground=True)
         # Leave a walkable pad at the front, including the initial spawn.
-        if site["id"] == "city-hospital":
+        if site["id"] == "stadium":
+            new_key = key+"_community"
+            landmarks["pitch"](box, landmark_mesh, new_key, plan["facilities"]["stadium"], style_materials, concrete)
+            migrate_landmark(key, new_key)
+        elif site["id"] == "airport":
+            new_key = key+"_airfield"
+            landmarks["airfield"](box, landmark_mesh, door, ramp, sign, storefront_window, cache, encounter,
+                                  new_key, plan["facilities"]["airport"], z+.2, style_materials, asphalt, concrete,
+                                  airfield_dimensions)
+            migrate_landmark(key, new_key, (key+"_slab",))
+        elif site["id"] == "hangars":
+            new_key = key+"_operations"
+            landmarks["aircraft_hangar"](box, landmark_mesh, door, cache, new_key,
+                                          x, y, z+.215, concrete)
+            migrate_landmark(key, new_key, (key+"_slab",))
+        elif site["id"] == "city-hospital":
             place_hospital(key, x, y, z+.2)
         elif site["id"] == "warehouses":
             place_warehouse(key, x, y, z+.2)
@@ -384,6 +445,15 @@ def place():
                 site, x, y, z+.2, w, d, style_materials)
             remove_generated(key+"_shell", key+"_trim", key+"_portico_roof",
                              *(f"{key}_portico_{i}" for i in range(4)))
+        if site["id"] in {"winter-village", "hill-town", "north-lowlands"}:
+            landmark_mesh(key+"_bus_stop", "Weathered roadside bus shelter", "WeatheredBusStop",
+                          x+7.6, y-d/2-2.8, z+.05, collision=True)
+        if site["id"] in {"power-southwest", "power-northeast"}:
+            landmark_mesh(key+"_yard_transformer", "Substation transformer", "YardTransformer",
+                          x+20.0, y-d/2+4.0, z+.2, collision=True)
+            landmark_mesh(key+"_yard_warning", "Weathered radiation warning", "RadiationSign",
+                          x-3.2, y-d/2+2, z+.2)
+
         if site["id"] == "south-services" and not has_start:
             spawn(unreal.PlayerStart, key+"_start", "Start at Southern Crossroads",
                   x, y-d*.31, z+1.3,

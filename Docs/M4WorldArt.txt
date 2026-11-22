@@ -19,3 +19,48 @@ School Desk 01 by Ethan Place (Poly Haven)
 Source: https://polyhaven.com/a/SchoolDesk_01
 License: CC0
 Changes: Packed glTF as GLB with 512 px embedded textures.
+
+RUNWAY by pranav27 (https://sketchfab.com/pranav27)
+Source: https://sketchfab.com/3d-models/runway-7531233498374cf1beef65075ed2fcee
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Runway threshold and centerline geometry was isolated, flattened and rescaled.
+
+Test 3D Football Field by ust-italia (https://sketchfab.com/ust-italia)
+Source: https://sketchfab.com/3d-models/test-3d-football-field-a8b461b0dc864ca9b16e4b3a327a2da2
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: The scan was oriented upright and leveled, its perimeter relief reduced and its mesh simplified for placement.
+
+Stadium sign by FelixMatveev (https://sketchfab.com/FelixMatveev)
+Source: https://sketchfab.com/3d-models/stadium-sign-1676b1a731ca49749a2bb922d6c46538
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Centered and rescaled for the soccer site.
+
+Hangar by thetrady (https://sketchfab.com/thetrady)
+Source: https://sketchfab.com/3d-models/hangar-e6886422f7094c4592834f1c34b6cd0f
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Removed the ground display and parked door geometry, normalized dimensions, simplified the mesh and added tiling UVs.
+
+Donetsk Int'l Airport Terminal by Matthew Schroyer (https://sketchfab.com/mschroyer)
+Source: https://sketchfab.com/3d-models/donetsk-intl-airport-terminal-268bc119d57b45dabaead5ad1a7f91e5
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Normalized the scan to the airport lot, simplified the mesh and resized the embedded texture.
+
+Ruined Donetsk Airport "METRO" Store (Winter) by Blenderust (https://sketchfab.com/narighillya)
+Source: https://sketchfab.com/3d-models/ruined-donetsk-airport-metro-store-winter-06def9b6dced4b6f9fbaeb7d9e1ec57f
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Extracted the structure and sign from the base scene, rescaled and resized embedded textures.
+
+Old Russian bus stop by halkiridze (https://sketchfab.com/halkiridze)
+Source: https://sketchfab.com/3d-models/old-russian-bus-stop-074e11d7adb9420a83bc862e81579a9f
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Centered at ground level and resized the embedded textures.
+
+Transformers by rhcreations (https://sketchfab.com/rhcreations)
+Source: https://sketchfab.com/3d-models/transformers-dc8b41f6657b42209b63d88d293b26dc
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Extracted one transformer, rescaled and packed the textures.
+
+Radiation Sign Dirty Destroyed by seba0456 (https://sketchfab.com/sebaonlline)
+Source: https://sketchfab.com/3d-models/radiation-sign-dirty-destroyed-e483a3a18aa344a8808ee8656dec9e1b
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Centered at ground level and rescaled.
