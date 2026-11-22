@@ -1,6 +1,7 @@
 #include "SurvivalBuildChunk.h"
 
 #include "CollisionQueryParams.h"
+#include "Components/BoxComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/HitResult.h"
@@ -87,7 +88,7 @@ bool ASurvivalBuildChunk::AddInstances(UInstancedStaticMeshComponent& Component,
         Indices.Add(Index);
         return true;
     };
-    for (const FBox& Box : Placement.GetPiece().Boxes)
+    for (const FBox& Box : Placement.CollisionBoxes())
     {
         if (!AddBox(Box))
         {
@@ -252,7 +253,12 @@ bool ASurvivalBuildChunk::AddFinishedPiece(const FSurvivalBuildPlacement& Placem
 
 bool ASurvivalBuildChunk::AddFinishedInstances(int32 Index)
 {
-    const FSurvivalBuildPlacement& Placement = Finished[Index].Placement;
+    FSurvivalFinishedPiece& Piece = Finished[Index];
+    const FSurvivalBuildPlacement& Placement = Piece.Placement;
+    if (Placement.AuthoredWallBounds.IsValid)
+    {
+        return Piece.WallCollider.IsValid() || AddAuthoredWall(Piece);
+    }
     const bool bStone = Placement.GetPiece().bStone;
     TArray<int32> Indices;
     if (!AddInstances(bStone ? *Stone : *Timber, Placement, Indices))
@@ -264,6 +270,43 @@ bool ASurvivalBuildChunk::AddFinishedInstances(int32 Index)
     {
         Owners.Add(Instance, Index);
     }
+    return true;
+}
+
+bool ASurvivalBuildChunk::AddAuthoredWall(FSurvivalFinishedPiece& Piece)
+{
+    const FSurvivalBuildPlacement& Placement = Piece.Placement;
+    UStaticMesh* Mesh = Placement.AuthoredWallMesh.Get();
+    if (!Mesh)
+    {
+        return false;
+    }
+
+    UStaticMeshComponent* Visual = NewObject<UStaticMeshComponent>(this);
+    AddInstanceComponent(Visual);
+    Visual->SetupAttachment(GetRootComponent());
+    Visual->SetMobility(EComponentMobility::Movable);
+    Visual->SetStaticMesh(Mesh);
+    Visual->SetMaterial(0, Placement.AuthoredWallMaterial.Get());
+    Visual->SetCollisionProfileName(TEXT("NoCollision"));
+    Visual->SetCanEverAffectNavigation(false);
+    Visual->SetWorldLocationAndRotation(Placement.MeshOrigin(),
+        Placement.Rotation * Placement.AuthoredWallMeshRotation);
+    Visual->RegisterComponent();
+
+    UBoxComponent* Collider = NewObject<UBoxComponent>(this);
+    AddInstanceComponent(Collider);
+    Collider->SetupAttachment(GetRootComponent());
+    Collider->SetMobility(EComponentMobility::Movable);
+    Collider->SetBoxExtent(Placement.AuthoredWallBounds.GetExtent());
+    Collider->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+    Collider->SetGenerateOverlapEvents(false);
+    Collider->SetHiddenInGame(true);
+    Collider->SetWorldLocationAndRotation(Placement.WorldCenter(Placement.AuthoredWallBounds), Placement.Rotation);
+    Collider->RegisterComponent();
+
+    Piece.WallVisual = Visual;
+    Piece.WallCollider = Collider;
     return true;
 }
 
@@ -289,7 +332,7 @@ int32 ASurvivalBuildChunk::FindFinishedIndex(const FHitResult& Hit) const
     }
     return Finished.IndexOfByPredicate([&Hit](const FSurvivalFinishedPiece& Piece)
     {
-        return Piece.Door.Get() == Hit.GetComponent();
+        return Piece.Door.Get() == Hit.GetComponent() || Piece.WallCollider.Get() == Hit.GetComponent();
     });
 }
 
@@ -339,6 +382,15 @@ void ASurvivalBuildChunk::RemoveFinishedPieces(const TSet<int32>& StructureIds, 
             return false;
         }
         RemoveDoorLeaf(Piece);
+        for (UActorComponent* Component : {static_cast<UActorComponent*>(Piece.WallCollider.Get()),
+                                           static_cast<UActorComponent*>(Piece.WallVisual.Get())})
+        {
+            if (Component)
+            {
+                RemoveInstanceComponent(Component);
+                Component->DestroyComponent();
+            }
+        }
         if (DebrisSlots > 0)
         {
             --DebrisSlots;
@@ -364,7 +416,7 @@ void ASurvivalBuildChunk::RemoveFinishedPieces(const TSet<int32>& StructureIds, 
 void ASurvivalBuildChunk::SpawnDebris(const FSurvivalBuildPlacement& Placement)
 {
     const UInstancedStaticMeshComponent& Source = Placement.GetPiece().bStone ? *Stone : *Timber;
-    const FBox& Box = Placement.GetPiece().Boxes[0];
+    const FBox& Box = Placement.CollisionBoxes()[0];
     AStaticMeshActor* DebrisActor = GetWorld()->SpawnActor<AStaticMeshActor>(
         Placement.WorldCenter(Box), Placement.Rotation.Rotator());
     if (!DebrisActor)

@@ -1,0 +1,123 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "Crossroads warehouse slicer"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "SM_WarehouseBay_2_0",
+      "mesh": 0
+    }
+  ],
+  "meshes": [
+    {
+      "name": "SM_WarehouseBay_2_0",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2,
+            "TEXCOORD_1": 3
+          },
+          "material": 0,
+          "indices": 4
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "name": "WarehousePanelSurface",
+      "doubleSided": true
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 48,
+      "type": "VEC3",
+      "min": [
+        -0.5249999999999999,
+        0.005873430520296097,
+        0.20823451873970544
+      ],
+      "max": [
+        0.5250000000000004,
+        1.05,
+        0.5164648818969728
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 48,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 48,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5126,
+      "count": 48,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5123,
+      "count": 48,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 576,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 576,
+      "byteLength": 576,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1152,
+      "byteLength": 384,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1536,
+      "byteLength": 384,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1920,
+      "byteLength": 96,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "data:application/octet-stream;base64,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",
+      "byteLength": 2016
+    }
+  ]
+}

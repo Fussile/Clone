@@ -210,7 +210,7 @@ bool ASurvivalGameMode::HasGroundFooting(const FSurvivalBuildPlacement& Placemen
 {
     const FVector Probe(0, 0, 8);
     const FCollisionQueryParams Query(SCENE_QUERY_STAT(StructuralGround), false);
-    for (const FBox& Box : Placement.GetPiece().Boxes)
+    for (const FBox& Box : Placement.CollisionBoxes())
     {
         if (Box.Min.Z != 0.0)
         {

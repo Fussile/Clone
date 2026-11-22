@@ -151,4 +151,39 @@ bool FSurvivalEdgeSnapTest::RunTest(const FString& Parameters)
         FMath::Abs(Upper.WorldBounds().Max.Z - 2.0 * Cell) < Tolerance);
     return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSurvivalAuthoredWallTest, "Survival.Building.AuthoredWallCell",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSurvivalAuthoredWallTest::RunTest(const FString& Parameters)
+{
+    constexpr double Cell = FSurvivalBuildPlacement::GridSize;
+    constexpr double Half = Cell / 2.0;
+    FSurvivalBuildPlacement Panel;
+    Panel.PieceIndex = 6;
+    Panel.AuthoredWallBounds = FBox(FVector(-Half, 19, 0), FVector(Half, 28, Cell));
+    TestTrue(TEXT("The visible wall uses a thin collision box at the outside of the cell"),
+        Panel.WorldBounds().Min.Equals(FVector(-Half, 19, 0))
+        && Panel.WorldBounds().Max.Equals(FVector(Half, 28, Cell)));
+
+    FSurvivalBuildPlacement Floor;
+    Floor.PieceIndex = 2;
+    TestTrue(TEXT("The thin wall still reserves every part of the cell"), Panel.OverlapsReservedCells(Floor));
+    Floor.Base.Z = Cell;
+    TestFalse(TEXT("A floor can use the cell stacked above the thin wall"), Panel.OverlapsReservedCells(Floor));
+    TestEqual(TEXT("The thin wall supports the stacked floor"), Floor.SupportCostFrom(Panel), 1);
+
+    FSurvivalBuildPlacement Neighbor = Panel;
+    Neighbor.Base.X = Cell;
+    TestEqual(TEXT("Adjacent slices carry lateral support"), Panel.SupportCostFrom(Neighbor), 2);
+
+    FSurvivalBuildPlacement Replacement;
+    TestTrue(TEXT("A block snaps into the gap beside the remaining panel"),
+        Replacement.SnapTo(Neighbor, FVector(Half, 23, 50), -FVector::ForwardVector, -FVector::ForwardVector));
+    TestTrue(TEXT("The repair shares the missing slice's cell"), Replacement.Base.Equals(Panel.Base));
+    TestFalse(TEXT("The repair does not enter the remaining panel's cell"),
+        Neighbor.OverlapsReservedCells(Replacement));
+    TestEqual(TEXT("The repair can take support from the slice"), Replacement.SupportCostFrom(Neighbor), 2);
+    return true;
+}
 #endif

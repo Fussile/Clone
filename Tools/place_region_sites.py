@@ -36,7 +36,19 @@ def warehouse_parts():
     return parts
 
 
-def warehouse_structure(actor, key):
+def warehouse_structure(actor, key, import_asset, source_art, world_art):
+    source = import_asset(source_art / "SM_WarehouseExterior.glb", world_art, unreal.StaticMesh)
+    material = source.get_material(0)
+    if not material:
+        raise RuntimeError("The warehouse source mesh has no surface material.")
+    # Replace the stone cells immediately west of the open loading bay.
+    panels = {
+        (column - 4, 5, row): import_asset(
+            source_art / "WarehouseBay" / f"SM_WarehouseBay_{column}_{row}.gltf",
+            world_art + "/WarehouseBay", unreal.StaticMesh)
+        for row in range(3) for column in range(3)
+    }
+
     cell = 105
     origin = actor.get_actor_location()
     actor.set_actor_location(unreal.Vector(round(origin.x/cell)*cell, round(origin.y/cell)*cell,
@@ -46,7 +58,11 @@ def warehouse_structure(actor, key):
         part = unreal.SurvivalPrefabPart()
         part.set_editor_property("piece_index", piece)
         part.set_editor_property("offset", unreal.Vector(x*cell, y*cell, z*cell))
+        mesh = panels.get((x, y, z))
+        if mesh:
+            part.set_editor_property("wall_mesh", mesh)
         parts.append(part)
+    actor.set_editor_property("wall_material", material)
     actor.set_editor_property("prefab_id", unreal.Name(key))
     actor.set_editor_property("parts", parts)
 

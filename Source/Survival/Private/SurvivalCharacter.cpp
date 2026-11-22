@@ -1524,7 +1524,7 @@ bool ASurvivalCharacter::IsFootprintClear(const FSurvivalBuildPlacement& Placeme
             && (!bPlanning || !GetWorld()->OverlapBlockingTestByChannel(
                 Center, Placement.Rotation, ECC_GameTraceChannel1, Shape, Query));
     };
-    for (const FBox& Box : Placement.GetPiece().Boxes)
+    for (const FBox& Box : Placement.CollisionBoxes())
     {
         if (!IsClear(Box))
         {

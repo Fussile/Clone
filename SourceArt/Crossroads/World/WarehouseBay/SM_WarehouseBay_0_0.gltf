@@ -1,0 +1,123 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "Crossroads warehouse slicer"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "SM_WarehouseBay_0_0",
+      "mesh": 0
+    }
+  ],
+  "meshes": [
+    {
+      "name": "SM_WarehouseBay_0_0",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2,
+            "TEXCOORD_1": 3
+          },
+          "material": 0,
+          "indices": 4
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "name": "WarehousePanelSurface",
+      "doubleSided": true
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 39,
+      "type": "VEC3",
+      "min": [
+        -0.5250000000000004,
+        0.005873430520296097,
+        0.2082345187397685
+      ],
+      "max": [
+        0.5249999999999995,
+        1.05,
+        0.5164648818969728
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 39,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 39,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5126,
+      "count": 39,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5123,
+      "count": 39,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 468,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 468,
+      "byteLength": 468,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 936,
+      "byteLength": 312,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1248,
+      "byteLength": 312,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1560,
+      "byteLength": 78,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "data:application/octet-stream;base64,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",
+      "byteLength": 1638
+    }
+  ]
+}

@@ -246,8 +246,15 @@ def place():
         if site["id"] == "city-hospital":
             place_hospital(key, x, y, z+.2)
         elif site["id"] == "warehouses":
-            spawn(prefab_class, key+"_warehouse", "Destructible warehouse", x, y, z+.2,
-                  lambda actor: site_tools["warehouse_structure"](actor, key+"_warehouse"))
+            prefab_key = key + "_warehouse"
+
+            def configure_warehouse(actor):
+                site_tools["warehouse_structure"](actor, prefab_key, import_asset, source_art, world_art)
+
+            if prefab_key in actor_tags:
+                configure_warehouse(actor_tags[prefab_key])
+            else:
+                spawn(prefab_class, prefab_key, "Destructible warehouse", x, y, z+.2, configure_warehouse)
             cache(key+"_materials", "Warehouse repair materials", x-8, y+3.5, z+.2,
                   stone_amount=30, timber_amount=24)
             cache(key+"_supplies", "Warehouse storage crate", x+8, y+3.5, z+.2,
