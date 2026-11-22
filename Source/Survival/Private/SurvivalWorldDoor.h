@@ -21,7 +21,9 @@ public:
         UMaterialInterface* Finish, UMaterialInterface* Hardware);
 
     bool IsOpen() const { return bOpen; }
+    bool IsBroken() const { return bBroken; }
     bool TryToggle();
+    void TakeBreachDamage(int32 Amount);
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -61,4 +63,9 @@ private:
 
     UPROPERTY(ReplicatedUsing = ApplyDoorState)
     bool bOpen = false;
+
+    UPROPERTY(ReplicatedUsing = ApplyDoorState)
+    bool bBroken = false;
+
+    int32 Durability = 0;
 };

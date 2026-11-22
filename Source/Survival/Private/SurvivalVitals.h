@@ -27,12 +27,26 @@ struct FSurvivalRifle
     int32 GetPartQuality(int32 Slot) const { return Parts[Slot]; }
     int32 GetQuality() const;
     float GetDamage() const;
-    bool InstallSpare(int32 Slot);
+    // Installs a part of the given quality and returns the quality of the part it replaced.
+    int32 SwapPart(int32 Slot, int32 NewQuality);
 
 private:
     int32 Parts[PartCount] = {FactoryQuality, FactoryQuality, FactoryQuality, FactoryQuality};
 };
 static_assert(FSurvivalRifle::PartIndex(ESurvivalItem::RifleOptic) == FSurvivalRifle::PartCount - 1);
+
+// One backpack cell. Plain items stack up to SurvivalItemMaxStack. Parts carry their own quality and never stack.
+struct FSurvivalPackCell
+{
+    ESurvivalItem Item = ESurvivalItem::None;
+    int32 Count = 0;
+    int32 Quality = 0;
+
+    bool IsEmpty() const { return Item == ESurvivalItem::None || Count <= 0; }
+};
+
+int32 SurvivalItemMaxStack(ESurvivalItem Item);
+inline bool SurvivalItemHasQuality(ESurvivalItem Item) { return FSurvivalRifle::PartIndex(Item) != INDEX_NONE; }
 
 struct FSurvivalIngredient
 {

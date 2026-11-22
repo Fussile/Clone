@@ -52,12 +52,7 @@ const FName ViewmodelGripBone(TEXT("PBody_058"));
 
 ASurvivalCharacter::ASurvivalCharacter()
 {
-    static_assert(static_cast<int32>(ESurvivalItem::None) <= PackSize);
-    for (int32 Slot = 0; Slot < PackSize; ++Slot)
-    {
-        PackOrder[Slot] = Slot < static_cast<int32>(ESurvivalItem::None)
-            ? static_cast<ESurvivalItem>(Slot) : ESurvivalItem::None;
-    }
+    Pack.SetNum(PackSize);
     PrimaryActorTick.bCanEverTick = true;
     bReplicates = true;
     SetReplicateMovement(true);
@@ -165,6 +160,7 @@ void ASurvivalCharacter::Tick(float DeltaSeconds)
         UpdateSidearmAnimation();
     }
     UpdateWeaponAim(DeltaSeconds);
+    SyncPack();
 }
 
 void ASurvivalCharacter::UpdateSurvivorAnimation()
@@ -1247,6 +1243,7 @@ void ASurvivalCharacter::SetInventoryOpen(bool bOpen)
     if (bOpen)
     {
         bBuildMode = false;
+        SyncPack();
     }
     if (APlayerController* Player = Cast<APlayerController>(GetController()))
     {
@@ -1260,9 +1257,15 @@ void ASurvivalCharacter::SetInventoryOpen(bool bOpen)
 
 int32 ASurvivalCharacter::GetItemCount(ESurvivalItem Item) const
 {
-    if (const int32 Slot = FSurvivalRifle::PartIndex(Item); Slot != INDEX_NONE)
+    if (FSurvivalRifle::PartIndex(Item) != INDEX_NONE)
     {
-        return Items.RifleParts[Slot];
+        // Parts exist only as pack cells, because each carries its own quality.
+        int32 Count = 0;
+        for (const FSurvivalPackCell& Cell : Pack)
+        {
+            Count += !Cell.IsEmpty() && Cell.Item == Item ? Cell.Count : 0;
+        }
+        return Count;
     }
     switch (Item)
     {
@@ -1302,11 +1305,6 @@ bool ASurvivalCharacter::CanUseItem(ESurvivalItem Item) const
     {
         return false;
     }
-    if (const int32 Slot = FSurvivalRifle::PartIndex(Item); Slot != INDEX_NONE)
-    {
-        return bInventoryOpen && bHasRifle && !IsRifleReloading()
-            && RifleAssembly.GetPartQuality(Slot) < FSurvivalRifle::SpareQuality(Slot);
-    }
     switch (Item)
     {
     case ESurvivalItem::Food: return Vitals.Hunger < FSurvivalVitals::Max;
@@ -1324,14 +1322,6 @@ void ASurvivalCharacter::UseItem(ESurvivalItem Item)
 {
     if (!CanUseItem(Item))
     {
-        return;
-    }
-    if (const int32 Slot = FSurvivalRifle::PartIndex(Item); Slot != INDEX_NONE)
-    {
-        if (RifleAssembly.InstallSpare(Slot))
-        {
-            --Items.RifleParts[Slot];
-        }
         return;
     }
     switch (Item)
@@ -1373,15 +1363,28 @@ void ASurvivalCharacter::UseItem(ESurvivalItem Item)
     }
 }
 
+void ASurvivalCharacter::SetSelectedPackSlot(int32 Slot)
+{
+    if (Pack.IsValidIndex(Slot) && !Pack[Slot].IsEmpty())
+    {
+        SelectedPackSlot = Slot;
+        SelectedInventoryItem = Pack[Slot].Item;
+    }
+}
+
 bool ASurvivalCharacter::MoveMenuItem(bool bFromBelt, int32 From, bool bToBelt, int32 To)
 {
-    if (!bInventoryOpen || HealthPoints <= 0 || From < 0 || From >= (bFromBelt ? HotbarSize : PackSize)
-        || To < 0 || To >= (bToBelt ? HotbarSize : PackSize))
+    if (!bInventoryOpen || HealthPoints <= 0 || From < 0 || From >= (bFromBelt ? HotbarSize : Pack.Num())
+        || To < 0 || To >= (bToBelt ? HotbarSize : Pack.Num()))
     {
         return false;
     }
-    const ESurvivalItem Item = bFromBelt ? Hotbar[From] : PackOrder[From];
-    if (Item == ESurvivalItem::None || (!bFromBelt && GetItemCount(Item) <= 0))
+    if (!bFromBelt && !bToBelt)
+    {
+        return MovePackStack(From, To, false);
+    }
+    const ESurvivalItem Item = bFromBelt ? Hotbar[From] : GetPackItem(From);
+    if (Item == ESurvivalItem::None || SurvivalItemHasQuality(Item) || (!bFromBelt && GetItemCount(Item) <= 0))
     {
         return false;
     }
@@ -1391,28 +1394,210 @@ bool ASurvivalCharacter::MoveMenuItem(bool bFromBelt, int32 From, bool bToBelt, 
     }
     else if (bToBelt)
     {
-        SelectedInventoryItem = Item;
+        SetSelectedPackSlot(From);
         ChooseHotbarSlot(To);
         return true;
     }
     else
     {
-        for (int32 Index = 0; Index < PackSize; ++Index)
-        {
-            if (PackOrder[Index] == Item)
-            {
-                Swap(PackOrder[Index], PackOrder[To]);
-                break;
-            }
-        }
-        if (bFromBelt)
-        {
-            Hotbar[From] = ESurvivalItem::None;
-        }
+        Hotbar[From] = ESurvivalItem::None;
     }
     SelectedInventoryItem = Item;
     UpdateSidearmView();
     return true;
+}
+
+bool ASurvivalCharacter::MovePackStack(int32 From, int32 To, bool bHalf)
+{
+    if (!bInventoryOpen || HealthPoints <= 0 || From == To || !Pack.IsValidIndex(From) || !Pack.IsValidIndex(To)
+        || Pack[From].IsEmpty())
+    {
+        return false;
+    }
+    FSurvivalPackCell& Source = Pack[From];
+    FSurvivalPackCell& Target = Pack[To];
+    const int32 Limit = SurvivalItemMaxStack(Source.Item);
+    int32 Moved = bHalf ? (Source.Count + 1) / 2 : Source.Count;
+    if (Target.IsEmpty())
+    {
+        Target = Source;
+        Target.Count = Moved;
+    }
+    else if (Target.Item == Source.Item && Limit > 1)
+    {
+        Moved = FMath::Min(Moved, Limit - Target.Count);
+        if (Moved <= 0)
+        {
+            return false;
+        }
+        Target.Count += Moved;
+    }
+    else if (!bHalf)
+    {
+        Swap(Source, Target);
+        SetSelectedPackSlot(To);
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+    Source.Count -= Moved;
+    if (Source.Count <= 0)
+    {
+        Source = FSurvivalPackCell();
+    }
+    SetSelectedPackSlot(To);
+    return true;
+}
+
+bool ASurvivalCharacter::CanModifyRifle() const
+{
+    return bInventoryOpen && HealthPoints > 0 && bHasRifle && !IsRifleReloading();
+}
+
+bool ASurvivalCharacter::SwapRiflePart(int32 PackSlot)
+{
+    if (!CanModifyRifle() || !Pack.IsValidIndex(PackSlot) || Pack[PackSlot].IsEmpty())
+    {
+        return false;
+    }
+    FSurvivalPackCell& Cell = Pack[PackSlot];
+    const int32 Slot = FSurvivalRifle::PartIndex(Cell.Item);
+    if (Slot == INDEX_NONE)
+    {
+        return false;
+    }
+    // The removed part takes the cell the new part came from.
+    Cell.Quality = RifleAssembly.SwapPart(Slot, Cell.Quality);
+    SetSelectedPackSlot(PackSlot);
+    return true;
+}
+
+int32 ASurvivalCharacter::FindFreePackCell()
+{
+    for (int32 Index = 0; Index < Pack.Num(); ++Index)
+    {
+        if (Pack[Index].IsEmpty())
+        {
+            return Index;
+        }
+    }
+    if (Pack.Num() + PackRowWidth <= MaxPackCells)
+    {
+        const int32 First = Pack.Num();
+        Pack.AddDefaulted(PackRowWidth);
+        return First;
+    }
+    return INDEX_NONE;
+}
+
+void ASurvivalCharacter::AddToPack(ESurvivalItem Item, int32 Amount, int32 Quality)
+{
+    const int32 Limit = SurvivalItemMaxStack(Item);
+    for (FSurvivalPackCell& Cell : Pack)
+    {
+        if (Amount > 0 && !Cell.IsEmpty() && Cell.Item == Item && Cell.Count < Limit)
+        {
+            const int32 Added = FMath::Min(Limit - Cell.Count, Amount);
+            Cell.Count += Added;
+            Amount -= Added;
+        }
+    }
+    while (Amount > 0)
+    {
+        const int32 Index = FindFreePackCell();
+        if (Index == INDEX_NONE)
+        {
+            return;
+        }
+        const int32 Added = FMath::Min(Limit, Amount);
+        FSurvivalPackCell& Cell = Pack[Index];
+        Cell.Item = Item;
+        Cell.Count = Added;
+        Cell.Quality = Quality;
+        Amount -= Added;
+    }
+}
+
+void ASurvivalCharacter::RemoveFromPack(ESurvivalItem Item, int32 Amount)
+{
+    for (int32 Index = Pack.Num() - 1; Index >= 0 && Amount > 0; --Index)
+    {
+        FSurvivalPackCell& Cell = Pack[Index];
+        if (Cell.IsEmpty() || Cell.Item != Item)
+        {
+            continue;
+        }
+        const int32 Removed = FMath::Min(Cell.Count, Amount);
+        Cell.Count -= Removed;
+        Amount -= Removed;
+        if (Cell.Count <= 0)
+        {
+            Cell = FSurvivalPackCell();
+        }
+    }
+}
+
+// Carried totals stay the source of truth for plain items, because building, crafting and ammo all spend them directly.
+// The pack only decides where those totals sit: new items top up partial stacks first, spending empties the last stack.
+void ASurvivalCharacter::SyncPack()
+{
+    for (int32 Slot = 0; Slot < FSurvivalRifle::PartCount; ++Slot)
+    {
+        const ESurvivalItem Part = static_cast<ESurvivalItem>(static_cast<int32>(ESurvivalItem::RifleStock) + Slot);
+        while (Items.RifleParts[Slot] > 0)
+        {
+            const int32 Index = FindFreePackCell();
+            if (Index == INDEX_NONE)
+            {
+                break;
+            }
+            Pack[Index].Item = Part;
+            Pack[Index].Count = 1;
+            Pack[Index].Quality = FSurvivalRifle::SpareQuality(Slot);
+            --Items.RifleParts[Slot];
+        }
+    }
+    for (int32 Index = 0; Index < static_cast<int32>(ESurvivalItem::None); ++Index)
+    {
+        const ESurvivalItem Item = static_cast<ESurvivalItem>(Index);
+        if (SurvivalItemHasQuality(Item))
+        {
+            continue;
+        }
+        int32 InPack = 0;
+        for (const FSurvivalPackCell& Cell : Pack)
+        {
+            InPack += !Cell.IsEmpty() && Cell.Item == Item ? Cell.Count : 0;
+        }
+        const int32 Total = GetItemCount(Item);
+        if (InPack < Total)
+        {
+            AddToPack(Item, Total - InPack, 0);
+        }
+        else if (InPack > Total)
+        {
+            RemoveFromPack(Item, InPack - Total);
+        }
+    }
+    while (Pack.Num() > PackSize)
+    {
+        bool bEmptyRow = true;
+        for (int32 Index = Pack.Num() - PackRowWidth; Index < Pack.Num(); ++Index)
+        {
+            bEmptyRow = bEmptyRow && Pack[Index].IsEmpty();
+        }
+        if (!bEmptyRow)
+        {
+            break;
+        }
+        Pack.SetNum(Pack.Num() - PackRowWidth);
+    }
+    if (!Pack.IsValidIndex(SelectedPackSlot) || Pack[SelectedPackSlot].IsEmpty())
+    {
+        SelectedPackSlot = INDEX_NONE;
+    }
 }
 
 void ASurvivalCharacter::ChooseHotbarSlot(int32 Slot)
@@ -1423,7 +1608,8 @@ void ASurvivalCharacter::ChooseHotbarSlot(int32 Slot)
     }
     if (bInventoryOpen)
     {
-        if (SelectedInventoryItem != ESurvivalItem::None && GetItemCount(SelectedInventoryItem) <= 0)
+        if (SelectedInventoryItem != ESurvivalItem::None
+            && (GetItemCount(SelectedInventoryItem) <= 0 || SurvivalItemHasQuality(SelectedInventoryItem)))
         {
             return;
         }

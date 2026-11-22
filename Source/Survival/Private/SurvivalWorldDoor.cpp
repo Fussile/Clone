@@ -72,6 +72,10 @@ void ASurvivalWorldDoor::OnConstruction(const FTransform& Transform)
 void ASurvivalWorldDoor::BeginPlay()
 {
     Super::BeginPlay();
+    if (HasAuthority())
+    {
+        Durability = bRollUp ? 126 : 72;
+    }
     ApplySize();
 }
 
@@ -79,6 +83,7 @@ void ASurvivalWorldDoor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(ASurvivalWorldDoor, bOpen);
+    DOREPLIFETIME(ASurvivalWorldDoor, bBroken);
 }
 
 FTransform ASurvivalWorldDoor::LeafPose(double Fraction) const
@@ -107,6 +112,15 @@ void ASurvivalWorldDoor::ApplySize()
 
 void ASurvivalWorldDoor::ApplyDoorState()
 {
+    if (bBroken)
+    {
+        Leaf->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        Leaf->SetVisibility(false);
+        Handle->SetVisibility(false);
+        JambTarget->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        return;
+    }
+
     const FTransform Pose = LeafPose(bOpen ? 1.0 : 0.0);
     Leaf->SetRelativeTransform(Pose);
     Handle->SetVisibility(!bRollUp || !bOpen);
@@ -118,7 +132,7 @@ void ASurvivalWorldDoor::ApplyDoorState()
 
 bool ASurvivalWorldDoor::TryToggle()
 {
-    if (!HasAuthority() || !Leaf->GetStaticMesh())
+    if (!HasAuthority() || bBroken || !Leaf->GetStaticMesh())
     {
         return false;
     }
@@ -140,4 +154,21 @@ bool ASurvivalWorldDoor::TryToggle()
     ApplyDoorState();
     ForceNetUpdate();
     return true;
+}
+
+
+void ASurvivalWorldDoor::TakeBreachDamage(int32 Amount)
+{
+    if (!HasAuthority() || bBroken || Amount <= 0)
+    {
+        return;
+    }
+
+    Durability = FMath::Max(0, Durability - Amount);
+    if (Durability == 0)
+    {
+        bBroken = true;
+        ApplyDoorState();
+        ForceNetUpdate();
+    }
 }

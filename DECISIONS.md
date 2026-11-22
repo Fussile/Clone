@@ -21,6 +21,8 @@ Source: developer's November 20, 2026 project brief and chat clarification. Prop
 | D015 | Confirmed / developer | Build and iterate on the first playable slice in single-player. Integrate multiplayer later |
 | D016 | Proposed / prototype | Use the shared construction kit for ordinary buildings. Author unique landmarks as custom visual sections with destructible connections in the same structural system |
 | D017 | Confirmed / developer | Treat Crossroads as a survival sandbox. Keep the existing defense waves as a manually triggered playtest |
+| D018 | Confirmed / developer | The backpack holds stacks, as in the reference game. Stack limits per item are provisional and live in `SurvivalItemMaxStack`. Parts carry their own quality and never stack |
+| D019 | Confirmed / developer | Weapons are modified in a dedicated parts panel opened from the weapon, by swapping parts in and out. Click-to-install is removed. A rifle always keeps all four parts, so swapping replaces and does not empty a slot |
 
 ## Open decisions
 

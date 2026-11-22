@@ -42,6 +42,7 @@ private:
     FString Category;
     int32 SelectedRecipe = INDEX_NONE;
     int32 Quantity = 1;
+    bool bModifying = false;
     enum class EPage { Pack, Crafting, Skills };
     EPage Page = EPage::Pack;
     int32 TrainingTree = 0;

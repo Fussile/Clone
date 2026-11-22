@@ -56,14 +56,37 @@ float FSurvivalRifle::GetDamage() const
     return 70.0f + (GetQuality() - FactoryQuality) * 0.5f;
 }
 
-bool FSurvivalRifle::InstallSpare(int32 Slot)
+int32 FSurvivalRifle::SwapPart(int32 Slot, int32 NewQuality)
 {
-    if (Slot < 0 || Slot >= PartCount || Parts[Slot] >= SpareQuality(Slot))
+    if (Slot < 0 || Slot >= PartCount)
     {
-        return false;
+        return NewQuality;
     }
-    Parts[Slot] = SpareQuality(Slot);
-    return true;
+    const int32 Replaced = Parts[Slot];
+    Parts[Slot] = FMath::Max(1, NewQuality);
+    return Replaced;
+}
+
+// Provisional stack limits. Tune freely: the backpack lays stacks out from these.
+int32 SurvivalItemMaxStack(ESurvivalItem Item)
+{
+    switch (Item)
+    {
+    case ESurvivalItem::Food:
+    case ESurvivalItem::Water: return 20;
+    case ESurvivalItem::Bandage:
+    case ESurvivalItem::FieldDressing: return 10;
+    case ESurvivalItem::Timber:
+    case ESurvivalItem::Stone: return 500;
+    case ESurvivalItem::Cloth: return 100;
+    case ESurvivalItem::Rounds:
+    case ESurvivalItem::RifleRounds: return 200;
+    case ESurvivalItem::TimberDoor:
+    case ESurvivalItem::BuilderGuide:
+    case ESurvivalItem::ScavengerNotes:
+    case ESurvivalItem::DressingSchematic: return 5;
+    default: return 1;
+    }
 }
 
 TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes()

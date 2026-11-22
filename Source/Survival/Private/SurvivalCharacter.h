@@ -42,10 +42,22 @@ public:
     bool CanUseItem(ESurvivalItem Item) const;
     static ESurvivalItem TrainingBook(ETraining Entry);
     ESurvivalItem GetSelectedInventoryItem() const { return SelectedInventoryItem; }
-    void SetSelectedInventoryItem(ESurvivalItem Item) { SelectedInventoryItem = Item; }
+    void SetSelectedInventoryItem(ESurvivalItem Item) { SelectedInventoryItem = Item; SelectedPackSlot = INDEX_NONE; }
+    int32 GetSelectedPackSlot() const { return SelectedPackSlot; }
+    void SetSelectedPackSlot(int32 Slot);
     static constexpr int32 PackSize = 24;
-    ESurvivalItem GetPackItem(int32 Slot) const { return PackOrder[Slot]; }
+    static constexpr int32 PackRowWidth = 6;
+    static constexpr int32 MaxPackCells = 96;
+    int32 GetPackSlotCount() const { return Pack.Num(); }
+    FSurvivalPackCell GetPackCell(int32 Slot) const { return Pack.IsValidIndex(Slot) ? Pack[Slot] : FSurvivalPackCell(); }
+    ESurvivalItem GetPackItem(int32 Slot) const
+    {
+        return Pack.IsValidIndex(Slot) && !Pack[Slot].IsEmpty() ? Pack[Slot].Item : ESurvivalItem::None;
+    }
     bool MoveMenuItem(bool bFromBelt, int32 From, bool bToBelt, int32 To);
+    bool MovePackStack(int32 From, int32 To, bool bHalf);
+    bool CanModifyRifle() const;
+    bool SwapRiflePart(int32 PackSlot);
     void ChooseHotbarSlot(int32 Slot);
     void UseItem(ESurvivalItem Item);
     bool CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const;
@@ -118,6 +130,10 @@ private:
     void ServerToggleWorldDoor(ASurvivalWorldDoor* Door, FVector_NetQuantize10 ImpactPoint);
     void ChangeItemCount(ESurvivalItem Item, int32 Delta);
     void SetInventoryOpen(bool bOpen);
+    void SyncPack();
+    int32 FindFreePackCell();
+    void AddToPack(ESurvivalItem Item, int32 Amount, int32 Quality);
+    void RemoveFromPack(ESurvivalItem Item, int32 Amount);
     void HotbarOne() { ChooseHotbarSlot(0); }
     void HotbarTwo() { ChooseHotbarSlot(1); }
     void HotbarThree() { ChooseHotbarSlot(2); }
@@ -197,7 +213,8 @@ private:
     FSurvivalItems Items;
     FSurvivalVitals Vitals;
     bool bInventoryOpen = false;
-    ESurvivalItem PackOrder[PackSize];
+    TArray<FSurvivalPackCell> Pack;
+    int32 SelectedPackSlot = INDEX_NONE;
     int32 ActiveHotbarSlot = 0;
     ESurvivalItem SelectedInventoryItem = ESurvivalItem::Food;
     ESurvivalItem Hotbar[HotbarSize] = {

@@ -11,12 +11,14 @@
 #include "EngineUtils.h"
 #include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
+#include "SurvivalWorldDoor.h"
 
 namespace
 {
 constexpr double AttackReach = 115.0;
 constexpr double AttackInterval = 1.35;
 constexpr double StrikeInSourceClip = 0.84;
+constexpr int32 StructureDamage = 18;
 }
 
 ASurvivalZombie::ASurvivalZombie()
@@ -91,7 +93,11 @@ void ASurvivalZombie::ApplyAttack()
     }
     if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
     {
-        Chunk->DamageFinished(Hit, 18);
+        Chunk->DamageFinished(Hit, StructureDamage);
+    }
+    else if (ASurvivalWorldDoor* Door = Cast<ASurvivalWorldDoor>(Hit.GetActor()))
+    {
+        Door->TakeBreachDamage(StructureDamage);
     }
     else if (ASurvivalCharacter* Target = Cast<ASurvivalCharacter>(Hit.GetActor()))
     {
@@ -202,9 +208,11 @@ void ASurvivalZombie::Tick(float DeltaSeconds)
     FHitResult Obstruction;
     const FVector Direction = (Destination - GetActorLocation()).GetSafeNormal2D();
     const bool bBlocked = ProbePath(GetActorLocation() + Direction * AttackReach, Obstruction);
-    ASurvivalBuildChunk* Chunk = bBlocked ? Cast<ASurvivalBuildChunk>(Obstruction.GetActor()) : nullptr;
+    AActor* Blocker = bBlocked ? Obstruction.GetActor() : nullptr;
+    const ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Blocker);
+    const ASurvivalWorldDoor* Door = Cast<ASurvivalWorldDoor>(Blocker);
     if (bTracking && ((Chunk && Chunk->FindFinished(Obstruction))
-        || (bBlocked && Cast<ASurvivalCharacter>(Obstruction.GetActor()))))
+        || (Door && !Door->IsBroken()) || Cast<ASurvivalCharacter>(Blocker)))
     {
         GetCharacterMovement()->StopMovementImmediately();
         if (Now >= NextAttackTime)
