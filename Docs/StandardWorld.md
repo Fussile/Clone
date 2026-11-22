@@ -22,17 +22,23 @@ Keep authoritative loot, destruction and construction changes keyed by stable si
 
 ## Southern route and downtown stops
 
-The gas stations share a forecourt kit with pump islands and protective bollards. The Warehouse District uses the original textured warehouse asset as one static building with an open loading bay and side doorway. The loading yard has marked lanes, pallets and cargo stacks. Inside are two supply caches. The warehouse walls are fixed scenery with mesh collision. The player construction system still uses its own structural rules. [Model credits](M4WorldArt.txt)
+The gas stations share a forecourt kit with pump islands and protective bollards. The Warehouse District uses the original textured shell with twelve operable openings, including the modeled loading shutters and the staff entrance. The loading yard has marked lanes, pallets and cargo stacks. Inside are two supply caches. The warehouse walls are fixed scenery with mesh collision. The player construction system still uses its own structural rules. [Model credits](M4WorldArt.txt)
 
 The northwest downtown access off the city loop leads to Crossroads Police, with a reception area, records room, medical supplies and two encounters. The highway frontage approaches reach two other stops. Freight Bar and Crossroads Diner have separate entrances, dining areas, local loot and walkers. The parking garage has a driveable ramp to the open upper deck and supply cases on both levels.
 
 General Hospital has an accessible triage wing, four treatment rooms, textured beds, furnishings and dressing supplies. Its approach joins the hospital arterial. The downtown venues use James Ray Cock’s CC0 Modular Urban Apartments Facade for window detailing. [Facade credits](DowntownFacadeAttribution.txt)
 
+## Regional buildings and doors
+
+Every site with a building footprint now has an enterable layout. Cabins and farmhouses use split bedrooms and farm storage. Shops have stockrooms and counters. Clinics have treatment rooms, civic buildings have separate wings, and factory and utility sites have service rooms. Office and apartment blocks have usable upper floors and connected stairwell ramps. Three landmarks in the manifest describe terrain and do not receive buildings.
+
+Aim at a door leaf or its hinge-side jamb and press **E**. Building entrances, interior rooms and utility shutters use the same interaction. A door stays put if a player or enemy is in its path. World doors belong to the fixed environment and their open state is shared by connected players. Player-built doors still use the construction system.
+
 ## Architectural direction
 
 The region manifest assigns architecture per site. Low-income housing, row villages, farms and manufacturing use late-Soviet forms. Downtown uses modern commercial architecture. Wealthier estates use light stucco and dark metal trim. Middle-income neighborhoods favor brick and hardwood in an early-2000s Eastern European style. Civic buildings use classical porticoes, with marble and fictional regional heraldry for a later detail pass. The generated colors and trim are blockout cues for those styles.
 
-The same station layout is used at each fuel stop. Southwest Apartments has an adjacent panel-housing exterior and a walkable two-story test building. The layouts share a stair landing and vary room entrances, debris, loot positions and walker locations. Placement uses the world seed, site ID and floor index so rebaking the same site is reproducible. [Model credits](M4WorldArt.txt)
+The same station layout is used at each fuel stop. Southwest Apartments has a two-story residential building and a separate walkable apartment block. The layouts share a stair landing and vary room entrances, debris, loot positions and walker locations. Placement uses the world seed, site ID and floor index so rebaking the same site is reproducible. [Model credits](M4WorldArt.txt)
 
 ## M4 editor playtest
 

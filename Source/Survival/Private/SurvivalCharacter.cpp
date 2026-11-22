@@ -28,6 +28,7 @@
 #include "SurvivalRound.h"
 #include "SurvivalSidearm.h"
 #include "SurvivalSupplyCrate.h"
+#include "SurvivalWorldDoor.h"
 #include "SurvivalZombie.h"
 
 namespace
@@ -382,6 +383,47 @@ bool ASurvivalCharacter::HasReachTo(const FVector& Point, double Reach) const
         FCollisionQueryParams(SCENE_QUERY_STAT(CrossroadsReach), false, this));
 }
 
+ASurvivalWorldDoor* ASurvivalCharacter::FindWorldDoor(FVector* ImpactPoint) const
+{
+    FHitResult Hit;
+    if (!FindWorldAimHit(InteractReach, Hit) || !HasReachTo(Hit.ImpactPoint, InteractReach))
+    {
+        return nullptr;
+    }
+    if (ImpactPoint)
+    {
+        *ImpactPoint = Hit.ImpactPoint;
+    }
+    return Cast<ASurvivalWorldDoor>(Hit.GetActor());
+}
+
+void ASurvivalCharacter::ServerToggleWorldDoor_Implementation(ASurvivalWorldDoor* Door,
+    FVector_NetQuantize10 ImpactPoint)
+{
+    if (HealthPoints <= 0 || bInventoryOpen || !IsValid(Door) || ImpactPoint.ContainsNaN())
+    {
+        return;
+    }
+    const FVector Eyes = FirstPersonCamera->GetComponentLocation();
+    const FVector ToDoor = ImpactPoint - Eyes;
+    FHitResult Hit;
+    // Recheck reach and occlusion using the authority's position. Remote cameras are client-driven.
+    if (ToDoor.SizeSquared() > FMath::Square(InteractReach + 1.0)
+        || !GetWorld()->LineTraceSingleByChannel(Hit, Eyes, ImpactPoint + 3.0 * ToDoor.GetSafeNormal(),
+            ECC_Visibility, FCollisionQueryParams(SCENE_QUERY_STAT(WorldDoorReach), false, this))
+        || Hit.GetActor() != Door)
+    {
+        return;
+    }
+    if (!Door->TryToggle())
+    {
+        if (APlayerController* Player = Cast<APlayerController>(GetController()))
+        {
+            Player->ClientMessage(TEXT("Doorway is blocked."));
+        }
+    }
+}
+
 ASurvivalSupplyCrate* ASurvivalCharacter::FindSupplyCrate() const
 {
     FHitResult Hit;
@@ -429,6 +471,12 @@ void ASurvivalCharacter::Interact()
 {
     if (HealthPoints <= 0 || bInventoryOpen)
     {
+        return;
+    }
+    FVector DoorPoint;
+    if (ASurvivalWorldDoor* Door = FindWorldDoor(&DoorPoint))
+    {
+        ServerToggleWorldDoor(Door, FVector_NetQuantize10(DoorPoint));
         return;
     }
     const FSurvivalPlanTarget Target = FindPlan();

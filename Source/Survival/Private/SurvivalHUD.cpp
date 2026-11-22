@@ -13,6 +13,7 @@
 #include "SurvivalGameMode.h"
 #include "SurvivalInventoryMenu.h"
 #include "SurvivalSupplyCrate.h"
+#include "SurvivalWorldDoor.h"
 
 namespace
 {
@@ -355,7 +356,12 @@ void ASurvivalHUD::DrawHUD()
     }
 
     const FSurvivalPlanTarget Target = Character->FindPlan();
-    if (const FSurvivalBuildPlacement* Plan = Target.GetPlan())
+    if (const ASurvivalWorldDoor* Door = Character->FindWorldDoor())
+    {
+        DrawText(Door->IsOpen() ? TEXT("[E] Close door") : TEXT("[E] Open door"),
+            Cyan, CenterX + 14.0f, CenterY + 12.0f);
+    }
+    else if (const FSurvivalBuildPlacement* Plan = Target.GetPlan())
     {
         const FSurvivalMaterials Missing = Plan->GetPiece().Cost.MissingFrom(Inventory);
         FString Prompt = TEXT("[E] Finish   [X] Remove plan");

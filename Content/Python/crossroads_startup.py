@@ -30,8 +30,9 @@ def prepare_if_needed():
     required = (
         "/Game/Maps/L_SouthernCrossroads",
         "/Game/Maps/L_CrossroadsRelief",
-        "/Game/Art/Crossroads/World/SM_PanelHousingExterior",
-        "/Game/Art/Crossroads/World/SM_WarehouseWalkable",
+        "/Game/Art/Crossroads/World/SM_WarehouseDoorwayShell",
+        "/Game/Art/Crossroads/World/SM_WeatheredShelf",
+        "/Game/Art/Crossroads/World/SM_SchoolDesk",
         "/Game/Art/Crossroads/Player/SK_Survivor",
         "/Game/Art/Crossroads/SniperSurface/SK_SniperViewmodel",
         "/Game/Art/Crossroads/SniperSurface/SM_CrossroadsSniper",

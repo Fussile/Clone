@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GameFramework/Character.h"
+#include "Engine/NetSerialization.h"
 #include "Misc/Optional.h"
 #include "SurvivalBuilding.h"
 #include "SurvivalVitals.h"
@@ -10,6 +11,7 @@
 class ASurvivalSupplyCrate;
 class ASurvivalSidearm;
 class ASurvivalZombie;
+class ASurvivalWorldDoor;
 struct FSurvivalFinishedPiece;
 class UAnimSequence;
 class UCameraComponent;
@@ -28,6 +30,7 @@ public:
     ASurvivalCharacter();
 
     ASurvivalSupplyCrate* FindSupplyCrate() const;
+    ASurvivalWorldDoor* FindWorldDoor(FVector* ImpactPoint = nullptr) const;
     FSurvivalPlanTarget FindPlan() const;
     FSurvivalMaterials GetPlannedCost() const;
     const FSurvivalMaterials& GetInventory() const { return Inventory; }
@@ -110,6 +113,9 @@ private:
     void SetStance(EStance NewStance);
     void UpdateMovementPresentation();
     void Interact();
+
+    UFUNCTION(Server, Reliable)
+    void ServerToggleWorldDoor(ASurvivalWorldDoor* Door, FVector_NetQuantize10 ImpactPoint);
     void ChangeItemCount(ESurvivalItem Item, int32 Delta);
     void SetInventoryOpen(bool bOpen);
     void HotbarOne() { ChooseHotbarSlot(0); }

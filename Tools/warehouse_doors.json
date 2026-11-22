@@ -1,0 +1,14 @@
+[
+  {"id":"south_1","label":"Loading shutter","x":-10.322,"y":-3.16,"width":3.45,"height":3.19,"yaw":0,"roll_up":true},
+  {"id":"south_2","label":"Loading shutter","x":-3.441,"y":-3.16,"width":3.45,"height":3.19,"yaw":0,"roll_up":true},
+  {"id":"south_central","label":"Central loading shutter","x":0,"y":-3.16,"width":3.1,"height":3.15,"yaw":0,"roll_up":true},
+  {"id":"south_3","label":"Loading shutter","x":3.441,"y":-3.16,"width":3.45,"height":3.19,"yaw":0,"roll_up":true},
+  {"id":"south_4","label":"Loading shutter","x":10.322,"y":-3.16,"width":3.45,"height":3.19,"yaw":0,"roll_up":true},
+  {"id":"north_1","label":"Loading shutter","x":-10.322,"y":3.15,"width":3.45,"height":3.19,"yaw":180,"roll_up":true},
+  {"id":"north_2","label":"Loading shutter","x":-3.441,"y":3.15,"width":3.45,"height":3.19,"yaw":180,"roll_up":true},
+  {"id":"north_3","label":"Loading shutter","x":3.441,"y":3.15,"width":3.45,"height":3.19,"yaw":180,"roll_up":true},
+  {"id":"north_4","label":"Loading shutter","x":8.605,"y":3.15,"width":3.45,"height":3.19,"yaw":180,"roll_up":true},
+  {"id":"east_loading","label":"Service shutter","x":13.86,"y":-0.01,"width":3.02,"height":3.2,"yaw":-90,"roll_up":true},
+  {"id":"east_walk","label":"Staff door","x":13.86,"y":-2.11,"width":1.05,"height":2.1,"yaw":-90},
+  {"id":"west_loading","label":"Service shutter","x":-13.86,"y":-0.01,"width":2.65,"height":3.16,"yaw":90,"roll_up":true}
+]

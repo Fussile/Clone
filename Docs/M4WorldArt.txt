@@ -2,10 +2,20 @@ Warehouse by VertexForge (https://sketchfab.com/prankscare99)
 Source: https://sketchfab.com/3d-models/warehouse-02097a13aec040068629eacc75dffc5e
 License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 Changes: Rescaled and centered at ground level, resized the embedded texture,
-and cut a loading opening and side doorway in the single static mesh.
+and cut twelve doorways in the single static mesh to fit operable leaves.
 
 Soviet Panel Building by input_render.png
 Source: https://sketchfab.com/3d-models/soviet-panel-building-54501c691e25441ca2894f3c15227a1b
 License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 Changes: Joined building and balconies with separate material slots, rescaled
 the exterior, and placed the origin at ground level.
+
+Shelf 01 by Gabriel Radić (Poly Haven)
+Source: https://polyhaven.com/a/Shelf_01
+License: CC0
+Changes: Packed glTF as GLB with 512 px embedded textures.
+
+School Desk 01 by Ethan Place (Poly Haven)
+Source: https://polyhaven.com/a/SchoolDesk_01
+License: CC0
+Changes: Packed glTF as GLB with 512 px embedded textures.

@@ -4,7 +4,7 @@ import random
 import unreal
 
 
-def station_layout(box, key, x, y, floor):
+def station_layout(box, door, key, x, y, floor):
     box(key+"_rear", "Station rear wall", x, y+4, floor, 12, .3, 3.15)
     for sign, side in ((-1, "west"), (1, "east")):
         box(f"{key}_{side}", f"Station {side} wall", x+sign*5.85, y, floor, .3, 8, 3.15)
@@ -14,6 +14,8 @@ def station_layout(box, key, x, y, floor):
     box(key+"_roof", "Station roof", x, y, floor+3.15, 12, 8.3, .3)
     box(key+"_canopy", "Station canopy", x, y-6, floor+3.15, 12, 4, .3)
     box(key+"_counter", "Station counter", x-2.8, y+2.8, floor, 3.8, .75, 1.05)
+    double_door(door, key+"_entry", "Shop doors", x, y-4.16, floor, 3, 2.35, "petrol")
+    box(key+"_entry_header", "Storefront header", x, y-4, floor+2.35, 3, .3, .8)
 
 
 def warehouse_yard(box, key, x, y, floor, palette):
@@ -48,7 +50,13 @@ def service_forecourt(box, key, x, y, floor, palette):
                 .14, .14, .85, material=palette["traffic"])
 
 
-def building_shell(box, key, x, y, floor, width, depth, height, doorway, wall, roof):
+def double_door(door, key, label, x, y, floor, width, height, finish):
+    for side in (-1, 1):
+        door(f"{key}_{side}", label, x+side*width/4, y, floor, width/2, height,
+             reverse=side>0, finish=finish)
+
+
+def building_shell(box, key, x, y, floor, width, depth, height, doorway, wall, roof, *, clear_height=2.35):
     t = .24
     front = y-depth/2
     for sign in (-1, 1):
@@ -57,18 +65,20 @@ def building_shell(box, key, x, y, floor, width, depth, height, doorway, wall, r
         box(f"{key}_front_{sign}", "Entrance jamb", x+sign*(width+doorway)/4,
             front+t/2, floor, (width-doorway)/2, t, height, material=wall)
     box(key+"_back", "Rear wall", x, y+(depth-t)/2, floor, width-2*t, t, height, material=wall)
-    box(key+"_lintel", "Entrance lintel", x, front+t/2, floor+2.35, doorway, t,
-        height-2.35, material=wall)
+    box(key+"_lintel", "Entrance lintel", x, front+t/2, floor+clear_height, doorway, t,
+        height-clear_height, material=wall)
     box(key+"_roof", "Roof", x, y, floor+height, width+.45, depth+.45, .25, material=roof)
     return front
 
 
-def nightlife_layout(box, cache, encounter, sign, facade, key, x, y, floor, palette):
+def nightlife_layout(box, door, cache, encounter, sign, facade, key, x, y, floor, palette):
     trim, brick, wood = (palette[name] for name in ("dark_trim", "brick_hardwood", "timber"))
     for side, name, shade in ((-1, "Freight Bar", brick), (1, "Crossroads Diner", palette["petrol"])):
         building = f"{key}_venue_{side}"
         cx, cy = x+side*7.8, y+1.7
         front = building_shell(box, building, cx, cy, floor, 13.6, 12, 3.5, 2.2, shade, trim)
+        double_door(door, building+"_entry", "Venue entrance", cx, front-.04, floor, 2.2, 2.35,
+                    "timber" if side<0 else "petrol")
         box(building+"_fascia", "Storefront fascia", cx, front-.13, floor+2.65,
             12.4, .22, .58, material=trim)
         sign(building+"_sign", name, cx, front-.26, floor+3.04)
@@ -94,11 +104,13 @@ def nightlife_layout(box, cache, encounter, sign, facade, key, x, y, floor, pale
     box(key+"_walk", "Nightlife sidewalk", x, y-5.9, floor, 33, 2.7, .12, material=palette["concrete"])
 
 
-def precinct_layout(box, cache, encounter, sign, key, x, y, floor, palette):
+def precinct_layout(box, door, cache, encounter, sign, key, x, y, floor, palette, name):
     stone, trim, wood = (palette[name] for name in ("classical_civic", "dark_trim", "timber"))
     front = building_shell(box, key+"_precinct", x, y, floor, 24, 17, 4.2, 3.2, stone, trim)
+    double_door(door, key+"_entry", "Precinct entrance", x, front-.04, floor, 3.2, 2.35, "petrol")
+    double_door(door, key+"_records_entry", "Records room doors", x, y+2.5, floor, 2.8, 2.3, "petrol")
     box(key+"_badge_band", "Precinct fascia", x, front-.15, floor+2.82, 17, .24, .7, material=trim)
-    sign(key+"_sign", "CROSSROADS POLICE", x, front-.3, floor+3.26)
+    sign(key+"_sign", name.upper(), x, front-.3, floor+3.26)
     box(key+"_awning", "Precinct portico", x, front-1.3, floor+2.7, 10, 2.6, .25, material=stone)
     for side in (-1, 1):
         box(f"{key}_column_{side}", "Portico column", x+side*4.3, front-2.2,
@@ -118,7 +130,7 @@ def precinct_layout(box, cache, encounter, sign, key, x, y, floor, palette):
     encounter(key+"_records_walker", "Records room runner", x+7.0, y+5.8, floor, runner=True)
 
 
-def garage_layout(box, ramp, cache, encounter, sign, key, x, y, floor, palette):
+def garage_layout(box, door, ramp, cache, encounter, sign, key, x, y, floor, palette):
     slab, trim, paint = (palette[name] for name in ("concrete", "dark_trim", "traffic"))
     upper = floor+3.15
     # Clear an opening for the ramp along the western edge of the deck.
@@ -140,6 +152,9 @@ def garage_layout(box, ramp, cache, encounter, sign, key, x, y, floor, palette):
                 .105, 4.75, .025, material=paint, collision=False)
     box(key+"_signboard", "Parking signboard", x+3.8, y-10.98, upper+.18, 4.1, .16, .66, material=trim)
     sign(key+"_sign", "PARKING", x+3.8, y-11.1, upper+.64)
+    front = building_shell(box, key+"_equipment_room", x+10.4, y+7.6, floor,
+                           3.7, 3.1, 2.6, 1.2, slab, trim)
+    door(key+"_equipment_entry", "Maintenance door", x+10.4, front-.04, floor, 1.2, 2.35, finish="petrol")
     cache(key+"_maintenance", "Parking maintenance case", x+10.1, y+7.2, floor,
           timber_amount=7, cloth_amount=2)
     cache(key+"_vehicle_supplies", "Upper deck emergency kit", x+11.0, y+7.6, upper,
@@ -147,7 +162,7 @@ def garage_layout(box, ramp, cache, encounter, sign, key, x, y, floor, palette):
     encounter(key+"_walker", "Parking deck walker", x+4.9, y+1.7, upper)
 
 
-def apartment_layout(box, cache, encounter, key, x, y, floor, seed):
+def apartment_layout(box, door, cache, encounter, key, x, y, floor, seed):
     # A protected shared stair outside the east wall leaves the same entry on both levels.
     # Doors to the left and right face the central corridor.
     height = 3.15
@@ -165,9 +180,14 @@ def apartment_layout(box, cache, encounter, key, x, y, floor, seed):
             panel(f"{side} front wall", dx, -4.4, 5, .2)
         # Continuous east wall with a gap at the southern end for the stair landing.
         panel("east wall", 5.9, .65, .2, 7.7)
+        door(story+"_landing_entry", "Landing door", x+5.9, y-3.85, base, 1.3, 2.2, yaw=90)
+        if level == 0:
+            double_door(door, story+"_front_entry", "Apartment entrance", x, y-4.48, base, 2, 2.3, "petrol")
         # Two layouts share the landing and partitions but reverse their room entrances.
         for dx, side in ((-1, "west"), (1, "east")):
             door_y = 1.25 if level else -1.25
+            door(f"{story}_{side}_entry", f"{side.title()} unit door", x+dx, y+door_y, base,
+                 1.3, 2.2, yaw=90 if dx<0 else -90)
             for index, (a, b) in enumerate(((-2.8, door_y-.65), (door_y+.65, 4.3))):
                 panel(f"{side} room wall {index}", dx, (a+b)/2, .2, b-a)
         box(story+"_clutter", "Apartment fallen cabinet", x-4, y+rng.uniform(-2, 3),
