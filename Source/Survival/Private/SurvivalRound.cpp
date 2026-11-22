@@ -6,6 +6,8 @@
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
+#include "SurvivalSupplyCrate.h"
+#include "Kismet/GameplayStatics.h"
 #include "SurvivalZombie.h"
 
 ASurvivalRound::ASurvivalRound()
@@ -86,6 +88,12 @@ void ASurvivalRound::HandleImpact(const FHitResult& Hit)
         Zombie->HitByShot(Shooter, FMath::RoundToInt(Damage));
         bDamaged = true;
         bHitZombie = true;
+    }
+
+    else if (ASurvivalSupplyCrate* Object = Cast<ASurvivalSupplyCrate>(Hit.GetActor()))
+    {
+        bDamaged = UGameplayStatics::ApplyDamage(Object, bRifleRound ? RifleBaseDamage : 32.0f,
+            GetInstigatorController(), this, nullptr) > 0.0f;
     }
 
     if (bDamaged && Shooter)

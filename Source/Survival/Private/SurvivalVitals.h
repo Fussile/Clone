@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Containers/ArrayView.h"
 #include "SurvivalProgression.h"
+#include "SurvivalVitals.generated.h"
 
 enum class ESurvivalItem : uint8
 {
@@ -65,22 +66,38 @@ struct FSurvivalRecipe
 
 TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes();
 
+USTRUCT()
 struct FSurvivalItems
 {
+    GENERATED_BODY()
+
+    UPROPERTY()
     int32 Food = 0;
+    UPROPERTY()
     int32 Water = 0;
+    UPROPERTY()
     int32 Cloth = 0;
+    UPROPERTY()
     int32 Bandages = 0;
+    UPROPERTY()
     int32 Rounds = 0;
 
+    UPROPERTY()
     int32 TimberDoors = 0;
+    UPROPERTY()
     int32 RifleRounds = 0;
+    UPROPERTY()
     int32 BuilderGuides = 0;
+    UPROPERTY()
     int32 ScavengerNotes = 0;
+    UPROPERTY()
     int32 DressingSchematics = 0;
+    UPROPERTY()
     int32 FieldDressings = 0;
-    int32 RifleParts[FSurvivalRifle::PartCount]{};
+    UPROPERTY()
+    int32 RifleParts[4]{};
 
+    static_assert(FSurvivalRifle::PartCount == 4);
     void Add(const FSurvivalItems& Other);
 };
 

@@ -6,9 +6,9 @@
 #include "SurvivalBuilding.h"
 #include "SurvivalVitals.h"
 #include "SurvivalProgression.h"
+#include "SurvivalSupplyCrate.h"
 #include "SurvivalCharacter.generated.h"
 
-class ASurvivalSupplyCrate;
 class ASurvivalSidearm;
 class ASurvivalZombie;
 class ASurvivalWorldDoor;
@@ -29,7 +29,7 @@ class ASurvivalCharacter : public ACharacter
 public:
     ASurvivalCharacter();
 
-    ASurvivalSupplyCrate* FindSupplyCrate() const;
+    ASurvivalSupplyCrate* FindSupplyCrate(FVector* ImpactPoint = nullptr) const;
     ASurvivalWorldDoor* FindWorldDoor(FVector* ImpactPoint = nullptr) const;
     FSurvivalPlanTarget FindPlan() const;
     FSurvivalMaterials GetPlannedCost() const;
@@ -128,6 +128,12 @@ private:
 
     UFUNCTION(Server, Reliable)
     void ServerToggleWorldDoor(ASurvivalWorldDoor* Door, FVector_NetQuantize10 ImpactPoint);
+    UFUNCTION(Server, Reliable)
+    void ServerScavenge(ASurvivalSupplyCrate* Crate, FVector_NetQuantize10 ImpactPoint);
+
+    UFUNCTION(Client, Reliable)
+    void ClientReceiveLoot(const FSurvivalLoot& Loot);
+
     void ChangeItemCount(ESurvivalItem Item, int32 Delta);
     void SetInventoryOpen(bool bOpen);
     void SyncPack();

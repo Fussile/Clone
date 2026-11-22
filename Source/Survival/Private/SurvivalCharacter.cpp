@@ -420,14 +420,69 @@ void ASurvivalCharacter::ServerToggleWorldDoor_Implementation(ASurvivalWorldDoor
     }
 }
 
-ASurvivalSupplyCrate* ASurvivalCharacter::FindSupplyCrate() const
+ASurvivalSupplyCrate* ASurvivalCharacter::FindSupplyCrate(FVector* ImpactPoint) const
 {
     FHitResult Hit;
     if (FindWorldAimHit(InteractReach, Hit) && HasReachTo(Hit.ImpactPoint, InteractReach))
     {
+        if (ImpactPoint)
+        {
+            *ImpactPoint = Hit.ImpactPoint;
+        }
         return Cast<ASurvivalSupplyCrate>(Hit.GetActor());
     }
     return nullptr;
+}
+
+void ASurvivalCharacter::ServerScavenge_Implementation(ASurvivalSupplyCrate* Crate,
+    FVector_NetQuantize10 ImpactPoint)
+{
+    if (HealthPoints <= 0 || !IsValid(Crate) || ImpactPoint.ContainsNaN())
+    {
+        return;
+    }
+
+    const FVector Eyes = FirstPersonCamera->GetComponentLocation();
+    const FVector ToCrate = ImpactPoint - Eyes;
+    FHitResult Hit;
+    if (ToCrate.SizeSquared() > FMath::Square(InteractReach + 1.0)
+        || !GetWorld()->LineTraceSingleByChannel(Hit, Eyes, ImpactPoint + 3.0 * ToCrate.GetSafeNormal(),
+            ECC_Visibility, FCollisionQueryParams(SCENE_QUERY_STAT(ScavengeReach), false, this))
+        || Hit.GetActor() != Crate)
+    {
+        return;
+    }
+
+    const FSurvivalLoot Loot = Crate->TakeLoot();
+    if (!Loot.IsEmpty())
+    {
+        ClientReceiveLoot(Loot);
+    }
+}
+
+void ASurvivalCharacter::ClientReceiveLoot_Implementation(const FSurvivalLoot& Loot)
+{
+    FSurvivalMaterials Materials = Loot.Materials;
+    constexpr int32 AppraisalBonus[] = {0, 1, 2, 4};
+    const int32 ScavengingBonus = (Progression.Rank(ETraining::Scavenging) - 1) / 25
+        + AppraisalBonus[Progression.Rank(ETraining::LootAppraisal)];
+    Materials.Timber += FMath::Min(ScavengingBonus, Materials.Timber);
+    Materials.Stone += FMath::Min(ScavengingBonus, Materials.Stone);
+    Inventory.Add(Materials);
+    Progression.AwardPractice(ETraining::Scavenging, 35);
+    Progression.AwardXP(8);
+    Items.Add(Loot.Items);
+    if (Loot.bRifle && !bHasRifle)
+    {
+        bHasRifle = true;
+        RifleAmmo = 1;
+        LoadRifleViewmodel();
+        UpdateRifleView();
+    }
+    if (Loot.bSidearm && !bHasSidearm)
+    {
+        EquipSidearm();
+    }
 }
 
 bool ASurvivalCharacter::FindPlanAimHit(double Reach, FHitResult& Hit) const
@@ -469,10 +524,10 @@ void ASurvivalCharacter::Interact()
     {
         return;
     }
-    FVector DoorPoint;
-    if (ASurvivalWorldDoor* Door = FindWorldDoor(&DoorPoint))
+    FVector InteractionPoint;
+    if (ASurvivalWorldDoor* Door = FindWorldDoor(&InteractionPoint))
     {
-        ServerToggleWorldDoor(Door, FVector_NetQuantize10(DoorPoint));
+        ServerToggleWorldDoor(Door, FVector_NetQuantize10(InteractionPoint));
         return;
     }
     const FSurvivalPlanTarget Target = FindPlan();
@@ -488,34 +543,9 @@ void ASurvivalCharacter::Interact()
             }
         }
     }
-    else if (ASurvivalSupplyCrate* Crate = FindSupplyCrate())
+    else if (ASurvivalSupplyCrate* Crate = FindSupplyCrate(&InteractionPoint))
     {
-        const bool bFirstSearch = Crate->HasSupplies() || Crate->HasSidearm();
-        FSurvivalLoot Loot = Crate->TakeLoot();
-        constexpr int32 AppraisalBonus[] = {0, 1, 2, 4};
-        const int32 ScavengingBonus = (Progression.Rank(ETraining::Scavenging) - 1) / 25
-            + AppraisalBonus[Progression.Rank(ETraining::LootAppraisal)];
-        Loot.Materials.Timber += FMath::Min(ScavengingBonus, Loot.Materials.Timber);
-        Loot.Materials.Stone += FMath::Min(ScavengingBonus, Loot.Materials.Stone);
-        Inventory.Add(Loot.Materials);
-        if (bFirstSearch)
-        {
-            // The playtest has only a handful of caches, so each discovery is meaningful practice.
-            Progression.AwardPractice(ETraining::Scavenging, 140);
-            Progression.AwardXP(16);
-        }
-        Items.Add(Loot.Items);
-        if (Loot.bRifle && !bHasRifle)
-        {
-            bHasRifle = true;
-            RifleAmmo = 1;
-            LoadRifleViewmodel();
-            UpdateRifleView();
-        }
-        if (Loot.bSidearm && !bHasSidearm)
-        {
-            EquipSidearm();
-        }
+        ServerScavenge(Crate, FVector_NetQuantize10(InteractionPoint));
     }
     else
     {

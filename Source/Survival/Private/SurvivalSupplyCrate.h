@@ -7,14 +7,43 @@
 
 class UStaticMeshComponent;
 
-struct FSurvivalLoot
+UENUM()
+enum class ESurvivalLootProfile : uint8
 {
-    FSurvivalMaterials Materials;
-    FSurvivalItems Items;
-    bool bSidearm = false;
-    bool bRifle = false;
+    Authored,
+    General,
+    Food,
+    Building,
+    Medical,
+    Security,
+    Office
 };
 
+USTRUCT()
+struct FSurvivalLoot
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FSurvivalMaterials Materials;
+
+    UPROPERTY()
+    FSurvivalItems Items;
+
+    UPROPERTY()
+    bool bSidearm = false;
+
+    UPROPERTY()
+    bool bRifle = false;
+
+    bool IsEmpty() const;
+};
+
+struct FSurvivalScavengeState
+{
+    float Health = 0.0f;
+    bool bSearched = false;
+};
 UCLASS()
 class ASurvivalSupplyCrate : public AActor
 {
@@ -24,18 +53,19 @@ public:
     ASurvivalSupplyCrate();
 
     FSurvivalLoot TakeLoot();
-    bool HasSidearm() const { return !bSearched && bContainsSidearm; }
-    bool HasRifle() const { return !bSearched && bContainsRifle; }
-    bool HasSupplies() const
-    {
-        return !bSearched && (TimberAmount > 0 || StoneAmount > 0 || FoodAmount > 0
-            || WaterAmount > 0 || ClothAmount > 0 || bContainsRifle || BuilderGuideAmount > 0
-            || ScavengerNotesAmount > 0 || DressingSchematicAmount > 0
-            || (RiflePartSlot >= 0 && RiflePartSlot < FSurvivalRifle::PartCount));
-    }
+    virtual float TakeDamage(float Damage, const FDamageEvent& Event, AController* InstigatorController,
+        AActor* DamageCauser) override;
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+    bool HasSidearm() const { return bLootAvailable && bSidearmAvailable; }
+    bool HasRifle() const { return bLootAvailable && bRifleAvailable; }
+    bool HasSupplies() const { return bLootAvailable; }
+
+    FName GetLootId() const;
+    void SetLootCycle(int32 Seed, const FSurvivalScavengeState* Previous);
 
 protected:
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
 private:
     UPROPERTY(VisibleAnywhere, Category = "Scavenging")
@@ -74,5 +104,33 @@ private:
     UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "-1", ClampMax = "3"))
     int32 RiflePartSlot = -1;
 
-    bool bSearched = false;
+    UPROPERTY(EditAnywhere, Category = "Scavenging")
+    ESurvivalLootProfile LootProfile = ESurvivalLootProfile::Authored;
+
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0", ClampMax = "100"))
+    int32 SpawnChancePercent = 100;
+
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "1"))
+    float MaxHealth = 60.0f;
+
+    UPROPERTY(ReplicatedUsing = OnRep_WorldPresence)
+    bool bWorldPresent = true;
+
+    UPROPERTY(Replicated)
+    bool bLootAvailable = false;
+
+    UPROPERTY(Replicated)
+    bool bSidearmAvailable = false;
+
+    UPROPERTY(Replicated)
+    bool bRifleAvailable = false;
+
+    UFUNCTION()
+    void OnRep_WorldPresence();
+
+    FSurvivalLoot RollLoot(FRandomStream& Random) const;
+    void RememberState();
+
+    FSurvivalLoot Contents;
+    FSurvivalScavengeState State;
 };

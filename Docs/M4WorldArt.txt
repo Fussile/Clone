@@ -64,3 +64,13 @@ Radiation Sign Dirty Destroyed by seba0456 (https://sketchfab.com/sebaonlline)
 Source: https://sketchfab.com/3d-models/radiation-sign-dirty-destroyed-e483a3a18aa344a8808ee8656dec9e1b
 License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 Changes: Centered at ground level and rescaled.
+
+Crate box by KloWorks (https://sketchfab.com/kloworks)
+Source: https://sketchfab.com/3d-models/crate-box-e1a6856037c54d0d9019aedf61315569
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Imported from the content branch and fit to the regional loot slots.
+
+Gas Station low - USSR fuel pump by Milionna (https://sketchfab.com/milionna)
+Source: https://sketchfab.com/3d-models/gas-station-low-ussr-29c6e42636834359afd50f76dfe5196e
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Imported the fuel pump from the content branch and fit it to the forecourt.

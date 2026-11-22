@@ -1,6 +1,7 @@
 """In Unreal Editor, place the baked Crossroads region around an imported Landscape."""
 import json
 import math
+import random
 import runpy
 from pathlib import Path
 
@@ -55,20 +56,24 @@ def place():
     )
     landmark_collision = {
         "AircraftHangar", "CommunityPitch", "RuinedTerminal", "RuinedAirportShop",
-        "WeatheredBusStop", "YardTransformer",
+        "WeatheredBusStop", "YardTransformer", "PitchEntranceSign", "RadiationSign",
     }
-    landmark_names = sorted(landmark_collision | {"RunwayMarkings", "PitchEntranceSign", "RadiationSign"})
+    landmark_names = sorted(landmark_collision | {"RunwayMarkings"})
     landmark_meshes = {
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Landmarks/{name}", unreal.StaticMesh)
         for name in landmark_names
     }
+    crate_mesh, pump_mesh = (
+        import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Props/{name}", unreal.StaticMesh)
+        for name in ("ScavengeCrate", "FuelPump")
+    )
     crate_class = unreal.load_class(None, "/Script/Survival.SurvivalSupplyCrate")
     zombie_class = unreal.load_class(None, "/Script/Survival.SurvivalZombie")
     door_class = unreal.load_class(None, "/Script/Survival.SurvivalWorldDoor")
     if not crate_class or not zombie_class or not door_class:
         raise RuntimeError("Build SurvivalEditor before placing structures and loot.")
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
-    for mesh in (warehouse_mesh, shelf_mesh, desk_mesh,
+    for mesh in (warehouse_mesh, shelf_mesh, desk_mesh, bed_mesh, crate_mesh, pump_mesh,
                  *(landmark_meshes[name] for name in sorted(landmark_collision))):
         if not unreal.CrossroadsWorldBake.set_static_mesh_collision(mesh):
             raise RuntimeError(f"Could not prepare collision for {mesh.get_name()}.")
@@ -77,6 +82,8 @@ def place():
     surface_path = "/Game/Art/Crossroads/Surfaces"
     asphalt = unreal.load_asset(f"{surface_path}/M_Asphalt021")
     concrete = unreal.load_asset(f"{surface_path}/M_Concrete034")
+    if not asphalt or not concrete:
+        raise RuntimeError("Prepare the Crossroads surface materials before placing the region.")
 
     # Simple blockout colors keep the styles legible while detailed modules are sourced.
     colors = {
@@ -95,13 +102,17 @@ def place():
 
     style_materials["timber"] = unreal.load_asset("/Game/Art/Crossroads/Building/M_CrossroadsTimber")
     style_materials["concrete"] = concrete
+    style_materials["asphalt"] = asphalt
 
-    def spawn(kind, key, label, x, y, z, configure, tags=(), always_loaded=False, relocate=False):
+    def spawn(kind, key, label, x, y, z, configure, tags=(), always_loaded=False, relocate=False,
+              reconfigure=False):
         pos = unreal.Vector(west + x*100, north + (depth-y)*100, z_zero + z*100)
         if key in actor_tags:
             actor = actor_tags[key]
             if relocate:
                 actor.set_actor_location(pos, False, False)
+            if reconfigure:
+                configure(actor)
             return actor
         actor = actors.spawn_actor_from_class(kind, pos)
         if not actor:
@@ -118,6 +129,66 @@ def place():
         actor_tags[key] = actor
         return actor
 
+    def prop_kind(key, label, health, profile, x, y, z, configure):
+        old = actor_tags.get(key)
+        if old and isinstance(old, unreal.StaticMeshActor):
+            remove_generated(key)
+
+        def setup(actor):
+            configure(actor)
+            actor.set_editor_property("max_health", health)
+            actor.set_editor_property("loot_profile", getattr(unreal.SurvivalLootProfile, profile))
+
+        return spawn(crate_class, key, label, x, y, z, setup, relocate=True, reconfigure=True)
+
+    def fitted_mesh(actor, asset, dimensions):
+        component = actor.get_component_by_class(unreal.StaticMeshComponent)
+        component.set_static_mesh(asset)
+        component.set_collision_profile_name("BlockAll")
+        bounds = asset.get_bounding_box()
+        extent = bounds.max - bounds.min
+        pad = [maximum * 100 / span for maximum, span in zip(
+            dimensions, (extent.x, extent.y, extent.z), strict=True)]
+        center = (bounds.min + bounds.max) * .5
+        actor.set_actor_scale3d(unreal.Vector(*pad))
+        pos = actor.get_actor_location()
+        actor.set_actor_location(pos - unreal.Vector(center.x*pad[0], center.y*pad[1], center.z*pad[2]),
+                                 False, False)
+        return component
+
+    prop_profiles = {
+        "Station counter": (95, "GENERAL"),
+        "Fuel dispenser": (125, "BUILDING"),
+        "Weathered cargo crate": (60, "BUILDING"),
+        "Warehouse shelving": (100, "BUILDING"),
+        "Shipping pallet": (50, "BUILDING"),
+        "Service counter": (95, "FOOD"),
+        "Booth seat": (70, "GENERAL"),
+        "Reception desk": (90, "OFFICE"),
+        "Archive shelving": (80, "OFFICE"),
+        "Apartment fallen cabinet": (60, "GENERAL"),
+        "Waiting area bench": (65, "GENERAL"),
+        "Treatment room cabinet": (75, "MEDICAL"),
+        "Triage desk": (80, "MEDICAL"),
+        "Bedroom dresser": (65, "GENERAL"),
+        "Nightstand": (45, "GENERAL"),
+        "Kitchen table": (60, "FOOD"),
+        "Checkout counter": (90, "GENERAL"),
+        "Wall cabinets": (80, "OFFICE"),
+        "Work tables": (75, "OFFICE"),
+        "Reception station": (90, "OFFICE"),
+        "Industrial storage": (100, "BUILDING"),
+        "Crated cargo": (60, "BUILDING"),
+        "Generator bank": (150, "BUILDING"),
+        "Maintenance workbench": (80, "BUILDING"),
+        "Shelved work station": (80, "OFFICE"),
+        "Sideline bench": (55, "GENERAL"),
+        "Check-in counter": (95, "OFFICE"),
+        "Concourse seating": (70, "GENERAL"),
+    }
+
+    station_surfaces = set()
+
     def box(key, label, x, y, z, w, d, h, ground=False, material=None, hidden=False,
             collision=True, rotation=None):
         def configure(actor):
@@ -130,11 +201,25 @@ def place():
                 actor.set_actor_rotation(unreal.Rotator(pitch=pitch, yaw=yaw), False)
             if hidden:
                 actor.set_actor_hidden_in_game(True)
+
+        if label in prop_profiles and collision and not ground and not hidden:
+            health, profile = prop_profiles[label]
+            asset = {"Weathered cargo crate": crate_mesh, "Crated cargo": crate_mesh,
+                     "Fuel dispenser": pump_mesh}.get(label)
+            if asset:
+                def configure_mesh(actor):
+                    fitted_mesh(actor, asset, (w, d, h))
+                prop_kind(key, label, health, profile, x, y, z+h/2, configure_mesh)
+            else:
+                actor = prop_kind(key, label, health, profile, x, y, z+h/2, configure)
+                if material:
+                    actor.get_component_by_class(unreal.StaticMeshComponent).set_material(0, material)
+            return
         actor = spawn(unreal.StaticMeshActor, key, label, x, y, z + h/2, configure,
                       ("StructuralGround",) if ground else ())
         if material:
             component = actor.get_component_by_class(unreal.StaticMeshComponent)
-            if component.get_material(0) == cube.get_material(0):
+            if component.get_material(0) == cube.get_material(0) or key in station_surfaces:
                 component.set_material(0, material)
 
     def landmark_mesh(key, label, name, x, y, z, *, scale=(1, 1, 1), collision=False,
@@ -153,7 +238,7 @@ def place():
         def configure(actor):
             component = actor.get_component_by_class(unreal.StaticMeshComponent)
             component.set_static_mesh(asset)
-            component.set_collision_profile_name("BlockAll" if collision else "NoCollision")
+            component.set_collision_profile_name("BlockAll" if collision or name in {"PitchEntranceSign", "RadiationSign"} else "NoCollision")
             if name == "AircraftHangar" and concrete:
                 component.set_material(0, concrete)
             actor.set_actor_scale3d(unreal.Vector(*local_scale))
@@ -162,7 +247,10 @@ def place():
                 rotation = unreal.MathLibrary.compose_rotators(rotation, unreal.Rotator(pitch=pitch))
             actor.set_actor_rotation(rotation, False)
 
-        spawn(unreal.StaticMeshActor, key, label, x, y, z, configure)
+        if name in {"WeatheredBusStop", "YardTransformer", "PitchEntranceSign", "RadiationSign"}:
+            prop_kind(key, label, 120, "BUILDING", x, y, z, configure)
+        else:
+            spawn(unreal.StaticMeshActor, key, label, x, y, z, configure)
 
     def remove_generated(*keys):
         for key in keys:
@@ -210,8 +298,8 @@ def place():
         def configure(actor):
             component = actor.get_component_by_class(unreal.StaticMeshComponent)
             component.set_static_mesh(bed_mesh)
-            component.set_collision_profile_name("NoCollision")
-        spawn(unreal.StaticMeshActor, key, label, x, y, floor, configure)
+            component.set_collision_profile_name("BlockAll")
+        prop_kind(key, label, 85, "MEDICAL", x, y, floor, configure)
 
     def furniture(key, label, kind, x, y, floor):
         mesh = {"shelf": shelf_mesh, "desk": desk_mesh}[kind]
@@ -221,13 +309,43 @@ def place():
             component.set_static_mesh(mesh)
             component.set_collision_profile_name("BlockAll")
 
-        spawn(unreal.StaticMeshActor, key, label, x, y, floor, configure)
+        prop_kind(key, label, 75, "FOOD" if kind == "shelf" else "OFFICE", x, y, floor, configure)
 
-    def cache(key, label, x, y, floor, *, relocate=False, **loot):
+    def cache(key, label, x, y, floor, *, profile=None, chance=100, **loot):
+        if profile is None:
+            if key.startswith("CrossroadsRegion_south-services_"):
+                profile = "AUTHORED"
+            elif loot.get("contains_sidearm") or loot.get("contains_rifle") or "rifle_part_slot" in loot:
+                profile = "SECURITY"
+            elif loot.get("food_amount") or loot.get("water_amount") and not loot.get("cloth_amount"):
+                profile = "FOOD"
+            elif loot.get("timber_amount") or loot.get("stone_amount"):
+                profile = "BUILDING"
+            elif loot.get("cloth_amount") or loot.get("dressing_schematic_amount"):
+                profile = "MEDICAL"
+            else:
+                profile = "GENERAL"
+
         def configure(actor):
             for prop, amount in {"timber_amount": 0, "stone_amount": 0, **loot}.items():
                 actor.set_editor_property(prop, amount)
-        spawn(crate_class, key, label, x, y, floor+.41, configure, relocate=relocate)
+            actor.set_editor_property("loot_profile", getattr(unreal.SurvivalLootProfile, profile))
+            actor.set_editor_property("spawn_chance_percent", chance)
+            if not (loot.get("contains_sidearm") or loot.get("contains_rifle")):
+                fitted_mesh(actor, crate_mesh, (.82, .61, .58))
+
+        # Rebase both existing and new actors before centering the imported mesh.
+        spawn(crate_class, key, label, x, y, floor+.30, configure, relocate=True, reconfigure=True)
+
+    def scatter_caches(key, x, y, floor, positions, weights, chance):
+        profiles = ("FOOD", "BUILDING", "MEDICAL", "SECURITY", "OFFICE", "GENERAL")
+        labels = ("Provisions crate", "Materials crate", "Medical supplies", "Security supplies",
+                  "Records and supplies", "Mixed supplies")
+        randomizer = random.Random(f"{plan['seed']}:{key}")
+        types = randomizer.choices(range(len(profiles)), weights=weights, k=len(positions))
+        for index, ((dx, dy), kind) in enumerate(zip(positions, types, strict=True)):
+            cache(f"{key}_loot_{index}", labels[kind], x+dx, y+dy, floor,
+                  profile=profiles[kind], chance=chance)
 
     def encounter(key, label, x, y, floor, runner=False, relocate=False):
         def configure(actor):
@@ -356,9 +474,9 @@ def place():
             material=style_materials["dark_trim"])
         sign(key+"_sign", "LOADING 04", x, y-3.61, floor+3.69)
         cache(key+"_materials", "Warehouse repair materials", x-8, y+1.5, floor,
-              relocate=True, stone_amount=30, timber_amount=24)
+              stone_amount=30, timber_amount=24)
         cache(key+"_supplies", "Warehouse storage crate", x+8, y+1.5, floor,
-              relocate=True, cloth_amount=3, water_amount=2)
+              cloth_amount=3, water_amount=2)
         encounter(key+"_runner", "Loading yard runner", x-9.4, y-7.2, floor, runner=True, relocate=True)
         encounter(key+"_walker", "Warehouse walker", x+4, y+.75, floor, relocate=True)
 
@@ -421,11 +539,19 @@ def place():
             site_tools["apartment_layout"](box, door, cache, encounter, key, x, y-7, z+.2, plan["seed"])
             interiors["place_site"](box, door, ramp, cache, encounter, sign, storefront_window,
                 treatment_bed, furniture, site_tools["building_shell"], site_tools["double_door"], key+"_east_block",
-                site, x, y+10, z+.2, 34, 12, style_materials)
+                site, x, y+10, z+.2, 34, 12, style_materials, scatter_caches)
             remove_generated(key+"_exterior", key+"_closed")
             remove_blockout(key)
         elif site["kind"] == "services":
-            site_tools["station_layout"](box, door, key, x, y+.5, z+.2)
+            def station_box(key, label, *args, **kwargs):
+                station_surfaces.add(key)
+                box(key, label, *args, **kwargs)
+
+            station_box(key+"_floor_finish", "Station shop floor", x, y+.5, z+.199,
+                        12, 8.3, .021, ground=True, material=concrete)
+            site_tools["station_layout"](station_box, door, key, x, y+.5, z+.22, style_materials)
+            remove_generated(*(tag for tag in actor_tags if tag.startswith(key+"_pump_")
+                               and tag.endswith("_face")))
             site_tools["service_forecourt"](box, key, x, y+.5, z+.2, style_materials)
             cache(key+"_provisions", "Station provisions", x+3, y+3, z+.2, food_amount=2, water_amount=3)
             if site["id"] == "south-services":
@@ -438,13 +564,36 @@ def place():
                     tag = f"CrossroadsDefenseSpawn{index}"
                     spawn(unreal.TargetPoint, tag, tag, x+offset, y-d*.43, z+1.32,
                           lambda actor: None, always_loaded=True)
+            scatter_caches(key+"_shop", x, y+.5, z+.22, ((-4.6,-2.4), (4.8,-2.4)),
+                           (72, 8, 7, 2, 3, 8), 90)
             remove_blockout(key)
         else:
             interiors["place_site"](box, door, ramp, cache, encounter, sign, storefront_window,
                 treatment_bed, furniture, site_tools["building_shell"], site_tools["double_door"], key,
-                site, x, y, z+.2, w, d, style_materials)
+                site, x, y, z+.2, w, d, style_materials, scatter_caches)
             remove_generated(key+"_shell", key+"_trim", key+"_portico_roof",
                              *(f"{key}_portico_{i}" for i in range(4)))
+        if site["id"] == "city-towers":
+            annex_x = x+19.5
+            box(key+"_annex_floor", "Tower annex foundation", annex_x, y, z-.05,
+                6.5, 20, .25, ground=True, material=concrete)
+            front = site_tools["building_shell"](box, key+"_annex", annex_x, y, z+.2, 6.5, 20,
+                                                3.8, 1.65, concrete, asphalt)
+            door(key+"_annex_entry", "Corner shop door", annex_x, front-.045, z+.2, 1.65, 2.35)
+            scatter_caches(key+"_annex", annex_x, y, z+.2,
+                           ((-2.1,-5.5), (2.1,-3), (-2.1,2.3), (2,6.1), (-2,7.7)),
+                           (51, 9, 9, 4, 10, 17), 95)
+        if site["id"] in {"city-hospital", "city-police", "city-hall", "city-parking", "city-nightlife"}:
+            city_cache_layouts = {
+                "city-hospital": (((-7.6,-1.5), (7.65,-1.5), (-6.65,5.5), (6,2.4)), (5, 4, 78, 3, 6, 4)),
+                "city-police": (((-9.6,-2.6), (9.6,-2.6), (-7.6,6.5), (8.1,6.4)), (7, 7, 12, 60, 8, 6)),
+                "city-hall": (((-9,-3.5), (8,1.6), (-10,6.5), (9.6,5.4)), (10, 10, 8, 5, 52, 15)),
+                "city-parking": (((-7.5,9.4), (2.2,9.4), (8,9.4), (12.1,8.9)), (10, 51, 9, 8, 7, 15)),
+                "city-nightlife": (((-12.8,2.1), (-10.8,-1.4), (2.9,4.4), (4.7,-1.4)), (68, 5, 9, 3, 6, 9)),
+            }
+            positions, weights = city_cache_layouts[site["id"]]
+            scatter_caches(key+"_district", x, y, z+.2, positions, weights, 95)
+
         if site["id"] in {"winter-village", "hill-town", "north-lowlands"}:
             landmark_mesh(key+"_bus_stop", "Weathered roadside bus shelter", "WeatheredBusStop",
                           x+7.6, y-d/2-2.8, z+.05, collision=True)

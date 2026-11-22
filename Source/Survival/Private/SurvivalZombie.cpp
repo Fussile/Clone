@@ -12,6 +12,8 @@
 #include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
 #include "SurvivalWorldDoor.h"
+#include "SurvivalSupplyCrate.h"
+#include "Engine/DamageEvents.h"
 
 namespace
 {
@@ -98,6 +100,10 @@ void ASurvivalZombie::ApplyAttack()
     else if (ASurvivalWorldDoor* Door = Cast<ASurvivalWorldDoor>(Hit.GetActor()))
     {
         Door->TakeBreachDamage(StructureDamage);
+    }
+    else if (ASurvivalSupplyCrate* Prop = Cast<ASurvivalSupplyCrate>(Hit.GetActor()))
+    {
+        Prop->TakeDamage(StructureDamage, FDamageEvent{}, GetController(), this);
     }
     else if (ASurvivalCharacter* Target = Cast<ASurvivalCharacter>(Hit.GetActor()))
     {
@@ -212,7 +218,8 @@ void ASurvivalZombie::Tick(float DeltaSeconds)
     const ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Blocker);
     const ASurvivalWorldDoor* Door = Cast<ASurvivalWorldDoor>(Blocker);
     if (bTracking && ((Chunk && Chunk->FindFinished(Obstruction))
-        || (Door && !Door->IsBroken()) || Cast<ASurvivalCharacter>(Blocker)))
+        || (Door && !Door->IsBroken()) || Cast<ASurvivalSupplyCrate>(Blocker)
+        || Cast<ASurvivalCharacter>(Blocker)))
     {
         GetCharacterMovement()->StopMovementImmediately();
         if (Now >= NextAttackTime)

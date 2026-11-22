@@ -20,6 +20,8 @@ Open **I**, then **Skills**. The catalog uses rank caps and knowledge requiremen
 
 **Caps Lock** toggles a 100 m/s standing movement speed in editor and Development builds. The HUD shows when test speed is enabled.
 
+Loot is weighted by the type of container. Farms have more provisions, and downtown has more containers per building and on each office floor. Press **E** to scavenge containers and props. Props have individual hit points. Destroying one forfeits its contents until the next refresh. A shared server timer refreshes loot every three in-game days of active world time by default. Leaving and returning to a World Partition cell keeps its searched and destroyed state until the timer rolls over. Starting a fresh session resets the loot clock. Set `LootRefreshDays` in `Config/DefaultGame.ini` to tune the interval.
+
 ## Build a playtest ZIP
 
 On Windows with Unreal Engine 5.8 and its supported C++ toolchain installed, run this from the repository root in PowerShell. Use your own UE 5.8 installation path.

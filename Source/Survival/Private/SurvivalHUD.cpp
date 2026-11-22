@@ -385,7 +385,7 @@ void ASurvivalHUD::DrawHUD()
     {
         const TCHAR* Prompt = Crate->HasRifle() ? TEXT("[E] Take rifle, ammunition and guide") :
             Crate->HasSidearm() ? TEXT("[E] Take sidearm and ammo") :
-            (Crate->HasSupplies() ? TEXT("[E] Scavenge supplies") : TEXT("Crate empty"));
+            (Crate->HasSupplies() ? TEXT("[E] Scavenge supplies") : TEXT("Already searched"));
         DrawText(Prompt,
             FLinearColor::White, CenterX + 14.0f, CenterY + 12.0f);
     }

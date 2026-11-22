@@ -3,12 +3,13 @@
 #include "GameFramework/GameModeBase.h"
 #include "SurvivalBuilding.h"
 #include "SurvivalStructure.h"
+#include "SurvivalSupplyCrate.h"
 #include "SurvivalGameMode.generated.h"
 
 class ADirectionalLight;
 class ASurvivalBuildChunk;
 
-UCLASS()
+UCLASS(Config = Game)
 class ASurvivalGameMode : public AGameModeBase
 {
     GENERATED_BODY()
@@ -28,6 +29,9 @@ public:
     int32 GetWorldMinutes() const;
     double GetAmbientTemperature(const FVector& Position) const;
     bool SetTimeOfDay(double Hour);
+    void RegisterScavengeObject(ASurvivalSupplyCrate& Object);
+    void UnregisterScavengeObject(ASurvivalSupplyCrate& Object);
+    void RememberScavengeObject(FName Id, const FSurvivalScavengeState& State);
 
 protected:
     virtual void BeginPlay() override;
@@ -52,6 +56,16 @@ private:
     TMap<FIntPoint, TObjectPtr<ASurvivalBuildChunk>> BuildChunks;
 
     void UpdateDaylight();
+    void UpdateScavengeCycle();
+    void RefreshScavengeObject(ASurvivalSupplyCrate& Object) const;
+
+    UPROPERTY(EditDefaultsOnly, Config, Category = "Scavenging", meta = (ClampMin = "1"))
+    int32 LootRefreshDays = 3;
+
+    TSet<TWeakObjectPtr<ASurvivalSupplyCrate>> ScavengeObjects;
+    TMap<FName, FSurvivalScavengeState> ScavengeState;
+    int32 LootCycle = 0;
+    int32 LootSeed = 0;
 
     TOptional<FVector> ClimateBoundaries;
 

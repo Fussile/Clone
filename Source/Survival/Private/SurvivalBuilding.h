@@ -3,12 +3,22 @@
 #include "CoreMinimal.h"
 #include "Containers/ArrayView.h"
 #include "Math/Box.h"
+#include "SurvivalBuilding.generated.h"
 
 class ASurvivalBuildChunk;
 
+USTRUCT()
 struct FSurvivalMaterials
 {
+    GENERATED_BODY()
+
+    FSurvivalMaterials() = default;
+    FSurvivalMaterials(int32 InTimber, int32 InStone) : Timber(InTimber), Stone(InStone) {}
+
+    UPROPERTY()
     int32 Timber = 0;
+
+    UPROPERTY()
     int32 Stone = 0;
 
     bool IsEmpty() const { return Timber == 0 && Stone == 0; }

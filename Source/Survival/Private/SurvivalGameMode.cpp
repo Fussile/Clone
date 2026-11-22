@@ -91,6 +91,7 @@ void ASurvivalGameMode::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds);
     ElapsedSurvivalSeconds += DeltaSeconds;
     UpdateDaylight();
+    UpdateScavengeCycle();
 
     constexpr int32 FirstHordeMinute = 22 * 60;
     const double Now = GetWorld()->GetTimeSeconds();
@@ -103,6 +104,59 @@ void ASurvivalGameMode::Tick(float DeltaSeconds)
         if (ASurvivalCharacter* Player = Cast<ASurvivalCharacter>(UGameplayStatics::GetPlayerPawn(this, 0)))
         {
             bFirstHordeStarted = Player->TryStartFirstHorde();
+        }
+    }
+}
+
+void ASurvivalGameMode::RegisterScavengeObject(ASurvivalSupplyCrate& Object)
+{
+    if (LootSeed == 0)
+    {
+        LootSeed = FMath::RandRange(1, MAX_int32 - 1);
+    }
+    ScavengeObjects.Add(TWeakObjectPtr<ASurvivalSupplyCrate>(&Object));
+    RefreshScavengeObject(Object);
+}
+
+void ASurvivalGameMode::UnregisterScavengeObject(ASurvivalSupplyCrate& Object)
+{
+    ScavengeObjects.Remove(TWeakObjectPtr<ASurvivalSupplyCrate>(&Object));
+}
+
+void ASurvivalGameMode::RememberScavengeObject(FName Id, const FSurvivalScavengeState& State)
+{
+    ScavengeState.Add(Id, State);
+}
+
+void ASurvivalGameMode::RefreshScavengeObject(ASurvivalSupplyCrate& Object) const
+{
+    const FName Id = Object.GetLootId();
+    const uint32 Seed = HashCombineFast(GetTypeHash(Id), HashCombineFast(LootSeed, LootCycle));
+    Object.SetLootCycle(static_cast<int32>(Seed), ScavengeState.Find(Id));
+}
+
+void ASurvivalGameMode::UpdateScavengeCycle()
+{
+    // This clock advances with world play time and is independent of developer time-of-day changes.
+    const double Period = static_cast<double>(FMath::Max(1, LootRefreshDays))
+        * FMath::Max(60.0f, DayLengthSeconds);
+    const int32 CurrentCycle = FMath::FloorToInt32(GetWorld()->GetTimeSeconds() / Period);
+    if (CurrentCycle == LootCycle)
+    {
+        return;
+    }
+
+    LootCycle = CurrentCycle;
+    ScavengeState.Reset();
+    for (auto It = ScavengeObjects.CreateIterator(); It; ++It)
+    {
+        if (ASurvivalSupplyCrate* Object = It->Get())
+        {
+            RefreshScavengeObject(*Object);
+        }
+        else
+        {
+            It.RemoveCurrent();
         }
     }
 }

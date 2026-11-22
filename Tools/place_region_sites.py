@@ -4,18 +4,20 @@ import random
 import unreal
 
 
-def station_layout(box, door, key, x, y, floor):
-    box(key+"_rear", "Station rear wall", x, y+4, floor, 12, .3, 3.15)
+def station_layout(box, door, key, x, y, floor, palette):
+    wall, roof, trim, counter = (palette[name] for name in ("concrete", "asphalt", "petrol", "timber"))
+    box(key+"_rear", "Station rear wall", x, y+4, floor, 12, .3, 3.15, material=wall)
     for sign, side in ((-1, "west"), (1, "east")):
-        box(f"{key}_{side}", f"Station {side} wall", x+sign*5.85, y, floor, .3, 8, 3.15)
+        box(f"{key}_{side}", f"Station {side} wall", x+sign*5.85, y, floor, .3, 8, 3.15, material=wall)
         box(f"{key}_{side}_front", f"Station {side} storefront", x+sign*3.75, y-4,
-            floor, 4.5, .3, 3.15)
-        box(f"{key}_{side}_leg", "Canopy column", x+sign*4.5, y-7, floor, .3, .3, 3.15)
-    box(key+"_roof", "Station roof", x, y, floor+3.15, 12, 8.3, .3)
-    box(key+"_canopy", "Station canopy", x, y-6, floor+3.15, 12, 4, .3)
-    box(key+"_counter", "Station counter", x-2.8, y+2.8, floor, 3.8, .75, 1.05)
+            floor, 4.5, .3, 3.15, material=wall)
+        box(f"{key}_{side}_leg", "Canopy column", x+sign*4.5, y-7, floor, .3, .3, 3.15, material=wall)
+    box(key+"_roof", "Station roof", x, y, floor+3.15, 12, 8.3, .3, material=roof)
+    box(key+"_canopy", "Station canopy", x, y-6, floor+3.15, 12, 4, .3, material=roof)
+    box(key+"_counter", "Station counter", x-2.8, y+2.8, floor, 3.8, .75, 1.05, material=counter)
     double_door(door, key+"_entry", "Shop doors", x, y-4.16, floor, 3, 2.35, "petrol")
-    box(key+"_entry_header", "Storefront header", x, y-4, floor+2.35, 3, .3, .8)
+    box(key+"_entry_header", "Storefront header", x, y-4, floor+2.35, 3, .3, .8, material=trim)
+    box(key+"_fascia", "Station fascia", x, y-8, floor+2.9, 12, .24, .58, material=trim)
 
 
 def warehouse_yard(box, key, x, y, floor, palette):
@@ -43,8 +45,6 @@ def service_forecourt(box, key, x, y, floor, palette):
         bay = f"{key}_pump_{dx}"
         box(bay+"_island", "Fuel island", x+dx, y-6.5, floor, 1.4, 2.7, .16, material=palette["concrete"])
         box(bay+"_body", "Fuel dispenser", x+dx, y-6.5, floor+.16, .68, .6, 1.4, material=palette["petrol"])
-        box(bay+"_face", "Fuel dispenser panel", x+dx, y-6.82, floor+.89,
-            .47, .05, .33, material=palette["dark_trim"], collision=False)
         for dy in (-1.05, 1.05):
             box(f"{bay}_guard_{dy}", "Pump guard", x+dx, y-6.5+dy, floor+.16,
                 .14, .14, .85, material=palette["traffic"])

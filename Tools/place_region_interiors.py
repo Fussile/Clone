@@ -15,6 +15,7 @@ class Site:
     furniture: object
     shell: object
     pair: object
+    scatter: object
     palette: dict
     key: str
     name: str
@@ -98,6 +99,11 @@ def homes(site, ranch=False):
         dx = site.width*.415
         site.building("_tool_shed", 3.15, 4.3, 2.75, 1.4, dx=dx, dy=site.depth*.24)
         site.storage("tools", "Farm tools and timber", dx, site.depth*.24+.93, timber_amount=10)
+        shed_x, shed_y = -site.width*.408, site.depth*.235
+        site.building("_produce_shed", 4.3, 5.8, 2.85, 1.6, dx=shed_x, dy=shed_y)
+        site.scatter(site.key+"_produce_shed", site.x+shed_x, site.y+shed_y, site.z,
+                     ((-1.4,-.8), (1.4,-.3), (1.35,1.5), (-1.4,1.75)),
+                     (79, 10, 2, 1, 1, 7), 92)
         for row in range(3):
             site.part(f"field_{row}", "Fallow planting bed", site.width*.414, -site.depth*.26+row*.74,
                       0, 2.4, .43, .15, "soil", collision=False)
@@ -225,15 +231,19 @@ def offices(site, count):
         site.partition(f"suite_{i}", d*.12, (-w/2+.12,w/2-shaft-.3), -w*.24, 1.5,
                        2.9, z, label="Office suite door", finish="petrol")
         site.part(f"desk_{i}", "Shelved work station", -w*.28, d*.33, z, 3.3, 1.1, 1.15, "timber")
-        if i in (0,count-1):
+        if site.key.endswith("city-towers"):
+            site.scatter(f"{site.key}_floor_{i}", site.x, site.y, site.z+z,
+                         ((-w*.40,-d*.31), (-w*.10,-d*.24), (-w*.14,d*.36), (w*.13,d*.30)),
+                         (17, 9, 9, 4, 47, 14), 96)
+        elif i in (0, count-1):
             site.storage(f"case_{i}", "Floor supply locker", -w*.13, d*.33, z, water_amount=2, cloth_amount=2)
     site.walker("lobby_walker", -w*.28, -d*.15)
     site.walker("upper_walker", -w*.3, -d*.16, (count-1)*storey)
 
 
 def place_site(box, door, ramp, cache, encounter, sign, window, bed, furniture, shell, pair,
-               key, descriptor, x, y, z, w, d, palette):
-    site = Site(box, door, ramp, cache, encounter, sign, window, bed, furniture, shell, pair, palette,
+               key, descriptor, x, y, z, w, d, palette, scatter):
+    site = Site(box, door, ramp, cache, encounter, sign, window, bed, furniture, shell, pair, scatter, palette,
                 key, descriptor["name"], x, y, z, w, d, descriptor["architecture"])
     kind, ident = descriptor["kind"], descriptor["id"]
     if kind in {"village", "suburbs", "ranch"}:

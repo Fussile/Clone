@@ -33,6 +33,8 @@ def prepare_if_needed():
         "/Game/Art/Crossroads/World/SM_WarehouseDoorwayShell",
         "/Game/Art/Crossroads/World/SM_WeatheredShelf",
         "/Game/Art/Crossroads/World/SM_SchoolDesk",
+        "/Game/Art/Crossroads/World/Props/ScavengeCrate/SM_ScavengeCrate",
+        "/Game/Art/Crossroads/World/Props/FuelPump/SM_FuelPump",
         "/Game/Art/Crossroads/Player/SK_Survivor",
         "/Game/Art/Crossroads/SniperSurface/SK_SniperViewmodel",
         "/Game/Art/Crossroads/SniperSurface/SM_CrossroadsSniper",
