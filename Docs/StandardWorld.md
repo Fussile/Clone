@@ -6,7 +6,9 @@ The city center reserves plots for a general hospital, police headquarters, civi
 
 ## Open the region
 
-Build the UE 5.8 editor target and open `Survival.uproject`. On the first launch, Crossroads prepares its assets, bakes the terrain from `Tools/world_layout.json`, creates the World Partition map at `/Game/Maps/L_Crossroads`, and saves the roads, buildings, and external actors. Press Play once the editor logs that the region was stamped. The Windows packaging script runs the same preparation before cooking. The older `L_SouthernCrossroads` map is available in the editor for the original defense test.
+Build the UE 5.8 editor target and open `Survival.uproject`. On the first launch, Crossroads prepares its assets, bakes the terrain from `Tools/world_layout.json`, creates the World Partition map at `/Game/Maps/L_CrossroadsRelief`, and saves the roads, buildings, and external actors. Press Play once the editor logs that the region was stamped. The Windows packaging script runs the same preparation before cooking. The previous `L_Crossroads` bake can still be opened in the editor. The relief revision uses a new map asset so existing map edits are preserved.
+
+The lowlands sit in a broad basin. The northern plain gains elevation toward a steep escarpment, with individual hills at the green markers from the map sketch. Most of the south stays nearly level, with cuts at the Great Fissure and in front of the military depot.
 
 The revised road sketch is the basis for the regional highways and arterials. Downtown has an inner loop with west and east highway connections. Two elevated branches end at missing spans and one remains open. Short approaches connect the station, warehouse and General Hospital. Add local streets and alleys when the actual blocks and building entrances are laid out.
 
@@ -22,7 +24,7 @@ Keep authoritative loot, destruction and construction changes keyed by stable si
 
 Use kit walls, floors and stairs where the current grid fits. Give major landmarks their own art and divide each into purpose-built sections, such as a storefront panel, concrete bay or stair core. A section should own its render mesh, collision and health. A broken section must remove its blocking collision and expose attachment points for replacement pieces. Put the structural component in the support graph wherever its neighbors can depend on it. Bridge decks, terrain, and the first skyline blockouts can start as static geometry. The existing utility canopy is the test case for player-kit pieces, projectile damage and collapse.
 
-The warehouse loading bay uses finished player-grid pieces above the tagged slab. Its stone columns support a two-row timber roof. The stone infill behind the canopy is a separate target. The imported warehouse exterior supplies scenery behind the test bay. An authored prefab ID prevents cell re-entry from reseeding the bay during the same session.
+The warehouse has an open loading bay, a side doorway, interior supplies, and a runner outside. Its stone walls, columns and timber roof use the player-grid damage and support rules. Debris and exposed openings come from the same collapse system as player-built structures. An authored prefab ID prevents cell re-entry from restoring destroyed sections during the same session.
 
 ## First hospital wing and downtown art
 
@@ -42,4 +44,4 @@ The same station layout is used at each fuel stop. Southwest Apartments has an a
 
 Open the generated Crossroads region and play from its Player Start. From Southern Crossroads, collect the starter sidearm and follow the station approach. The industrial spur leads to the warehouse repair cache and runner encounter. Follow the northbound arterial to the highway and the city loop for the hospital road and dressing supplies.
 
-At the warehouse, damage the two-block infill and place a repair in the gap. Remove an end pillar and check that only the unsupported end of the roof drops. Return after streaming out the warehouse cell and confirm the bay layout is still in its damaged state. Runtime building chunks currently hold changes for the session. Cross-session saves and restoration of looted containers or defeated enemies on stream-in are pending.
+At the warehouse, enter from the south and find the supplies inside. Damage a wall section and rebuild in the opening. Remove neighboring load-bearing walls and columns to check that unsupported roof panels fall while supported panels remain. Return after streaming out the warehouse cell and check that the damage persists. Runtime building chunks currently hold changes for the session. Cross-session saves and restoration of looted containers or defeated enemies on stream-in are pending.

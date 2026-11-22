@@ -96,7 +96,8 @@ void ASurvivalGameMode::Tick(float DeltaSeconds)
     const double Now = GetWorld()->GetTimeSeconds();
     if (!bFirstHordeStarted && Now >= NextHordeAttempt && GetWorldMinutes() >= FirstHordeMinute
         && (GetWorld()->GetMapName().EndsWith(TEXT("L_SouthernCrossroads"))
-            || GetWorld()->GetMapName().EndsWith(TEXT("L_Crossroads"))))
+            || GetWorld()->GetMapName().EndsWith(TEXT("L_Crossroads"))
+            || GetWorld()->GetMapName().EndsWith(TEXT("L_CrossroadsRelief"))))
     {
         NextHordeAttempt = Now + 2.0;
         if (ASurvivalCharacter* Player = Cast<ASurvivalCharacter>(UGameplayStatics::GetPlayerPawn(this, 0)))

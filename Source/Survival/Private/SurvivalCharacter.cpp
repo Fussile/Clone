@@ -37,6 +37,7 @@ constexpr double BuildReach = 500.0;
 constexpr double SupportTolerance = 8.0;
 constexpr float WalkSpeed = 600.0f;
 constexpr float SprintSpeed = 800.0f;
+constexpr float DevWalkSpeed = 10000.0f;
 constexpr float CrouchSpeed = 280.0f;
 constexpr float ProneSpeed = 120.0f;
 constexpr float CrouchHalfHeight = 56.0f;
@@ -204,6 +205,9 @@ void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
     PlayerInputComponent->BindAction(TEXT("Jump"), IE_Released, this, &ACharacter::StopJumping);
     PlayerInputComponent->BindAction(TEXT("Sprint"), IE_Pressed, this, &ASurvivalCharacter::StartSprint);
     PlayerInputComponent->BindAction(TEXT("Sprint"), IE_Released, this, &ASurvivalCharacter::StopSprint);
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+    PlayerInputComponent->BindAction(TEXT("ToggleDevSpeed"), IE_Pressed, this, &ASurvivalCharacter::ToggleDevSpeed);
+#endif
     PlayerInputComponent->BindAction(TEXT("Crouch"), IE_Pressed, this, &ASurvivalCharacter::ToggleCrouch);
     PlayerInputComponent->BindAction(TEXT("Prone"), IE_Pressed, this, &ASurvivalCharacter::ToggleProne);
     PlayerInputComponent->BindAction(TEXT("Interact"), IE_Pressed, this, &ASurvivalCharacter::Interact);
@@ -254,6 +258,30 @@ void ASurvivalCharacter::StartSprint()
 void ASurvivalCharacter::StopSprint()
 {
     bSprintHeld = false;
+}
+
+void ASurvivalCharacter::ToggleDevSpeed()
+{
+    if (HealthPoints <= 0 || bInventoryOpen)
+    {
+        return;
+    }
+
+    UCharacterMovementComponent* Movement = GetCharacterMovement();
+    if (!bDevSpeedActive)
+    {
+        NormalAcceleration = Movement->MaxAcceleration;
+        Movement->MaxAcceleration = DevWalkSpeed * 2.0f;
+    }
+    else
+    {
+        Movement->MaxAcceleration = NormalAcceleration;
+        const FVector Horizontal = FVector(Movement->Velocity.X, Movement->Velocity.Y, 0.0)
+            .GetClampedToMaxSize(WalkSpeed);
+        Movement->Velocity.X = Horizontal.X;
+        Movement->Velocity.Y = Horizontal.Y;
+    }
+    bDevSpeedActive = !bDevSpeedActive;
 }
 
 void ASurvivalCharacter::ToggleCrouch()
@@ -890,10 +918,10 @@ void ASurvivalCharacter::LoadRifleViewmodel()
     RifleViewmodel->SetRelativeRotation(Alignment);
     RifleViewmodel->SetRelativeScale3D(FVector(Scale));
     // Keep the breech behind the camera and frame the grip and forward section.
-    RifleHip = FVector(-11, 3, -24) - Alignment.RotateVector(Rear * Scale);
+    RifleHip = FVector(-4, 3, -24) - Alignment.RotateVector(Rear * Scale);
     // The magnified view is screen-centered independently of the rifle mesh.
     // Draw the rifle into the shoulder with a small lift so the stock stays below the lens.
-    RifleAim = RifleHip + FVector(-15, -3, 4);
+    RifleAim = RifleHip + FVector(-22, -3, 4);
     RifleViewmodel->SetRelativeLocation(RifleHip);
 
     const auto LoadClip = [](const TCHAR* Name)
@@ -1052,7 +1080,8 @@ bool ASurvivalCharacter::SpawnAttackers(int32 Count, TArray<TWeakObjectPtr<ASurv
         FVector(3920.0, 1240.0, 112.0)
     };
     static_assert(UE_ARRAY_COUNT(SpawnPoints) == DefenseWaveCount);
-    if (GetWorld()->GetMapName().EndsWith(TEXT("L_Crossroads")))
+    const FString MapName = GetWorld()->GetMapName();
+    if (MapName.EndsWith(TEXT("L_Crossroads")) || MapName.EndsWith(TEXT("L_CrossroadsRelief")))
     {
         int32 Found = 0;
         for (TActorIterator<ATargetPoint> Marker(GetWorld()); Marker; ++Marker)
@@ -1142,7 +1171,8 @@ void ASurvivalCharacter::UpdateVitals(float DeltaSeconds)
         Progression.AwardPractice(ETraining::Recovery, Practices * 10);
         Progression.AwardXP(Practices * 10);
     }
-    GetCharacterMovement()->MaxWalkSpeed = bSprintAllowed && Vitals.CanSprint() ? SprintSpeed : WalkSpeed;
+    const float NormalSpeed = bSprintAllowed && Vitals.CanSprint() ? SprintSpeed : WalkSpeed;
+    GetCharacterMovement()->MaxWalkSpeed = bDevSpeedActive ? DevWalkSpeed : NormalSpeed;
     if (Damage > 0)
     {
         TakeSurvivalDamage(Damage);

@@ -17,12 +17,23 @@ def station_layout(box, key, x, y, floor):
 
 
 def warehouse_parts():
-    # Coordinates are build cells, ordered from the slab up. Place the infill one
-    # row behind the roof so it can be removed without taking a roof support.
-    columns = [(8, x, 0, 0) for x in (-3, 3)]
-    infill = [(6, 0, -2, layer) for layer in (0, 1)]
-    roof = [(2, x, y, 2) for x in (-3, 3, -2, 2, -1, 1, 0) for y in (0, -1)]
-    return columns + infill + roof
+    # Cell coordinates in Unreal space. Positive Y faces the southern approach.
+    # Ground, side walls, and jambs go in first. Span the openings before roofing.
+    stone, pillar, roof = 6, 8, 2
+    side_x, side_y, wall_height = 11, 5, 4
+    walls = [(x, y) for x in range(-side_x, side_x+1) for y in range(-side_y, side_y+1)
+             if abs(x) == side_x or abs(y) == side_y]
+    openings = {(x, side_y) for x in range(-1, 2)} | {(side_x, -2)}
+    parts = [(stone, x, y, z) for z in range(wall_height) for x, y in walls
+             if (x, y) not in openings]
+    parts.extend(((stone, side_x, -2, 2), (stone, side_x, -2, 3)))
+    parts.extend((stone, x, side_y, 3) for x in (-1, 0, 1))
+    for x, y in ((-5, 0), (0, -1), (5, 0)):
+        parts.extend((pillar, x, y, layer) for layer in (0, 2))
+    # Work inward from both supported end walls, so every panel has a load path on spawn.
+    rows = (-5, 5, -4, 4, -3, 3, -2, 2, -1, 0, 1)
+    parts.extend((roof, x, y, wall_height) for y in rows for x in range(-side_x, side_x+1))
+    return parts
 
 
 def warehouse_structure(actor, key):

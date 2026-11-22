@@ -50,6 +50,30 @@
 <ellipse cx="760.4" cy="257.0" rx="38.4" ry="69.0" fill="#76b2cf"/>
 <text x="760.4" y="261.0" text-anchor="middle" fill="#112b38" font-family="sans-serif" font-size="12">L7</text>
 <polyline points="13.8,726.8 90.2,814.2 235.8,834.4 428.6,853.8 577.0,852.8 686.8,841.8 843.4,833.6 972.6,784.8" fill="none" stroke="#e09a81" stroke-width="5"/>
+<polyline points="756.0,735.0 786.0,729.2 817.0,723.6 850.0,717.4" fill="none" stroke="#e09a81" stroke-width="3"/>
+<path d="M284.0,179.8 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M291.2,151.2 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M308.8,126.4 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M408.8,208.2 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M417.0,188.0 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M434.0,164.2 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M444.0,138.4 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M695.0,202.8 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M695.6,256.0 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M702.2,287.4 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M713.2,311.2 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M733.4,329.6 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M751.0,349.0 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M773.0,365.4 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M719.2,148.4 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M731.8,165.0 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M840.6,195.4 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M857.6,162.2 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M871.4,176.0 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M812.6,270.8 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M825.2,253.4 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M895.6,275.4 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
+<path d="M900.0,249.6 q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>
 <polyline points="11.0,467.6 291.2,463.8 445.6,463.8 559.8,463.8 668.6,463.8 972.6,463.8" fill="none" stroke="#f5d280" stroke-width="4.333333333333333"/>
 <polyline points="115.4,143.8 114.2,171.4 131.4,200.0 149.4,227.6 165.4,231.2 196.8,250.6 223.6,266.2 249.4,285.4 289.6,293.8 308.2,344.4 325.8,360.8 360.4,375.6 422.6,385.8 464.2,376.6 499.0,377.4 513.2,382.0" fill="none" stroke="#c4c3ad" stroke-width="2"/>
 <polyline points="130.8,225.8 140.6,216.6" fill="none" stroke="#c4c3ad" stroke-width="2"/>
@@ -191,5 +215,5 @@
 <circle cx="809.4" cy="765.4" r="3.2" fill="#e2a773" stroke="#1b2524"/>
 <g fill="#e1e8dc" font-family="sans-serif" font-size="14">
 <text x="925" y="39">N ↑</text><text x="0" y="907">20 km²  ·  5 km east–west  ·  4 km north–south</text>
-<text x="0" y="936">Gold highway  ·  Grey proposed roads  ·  Squares mark candidate bridges  ·  Salmon marks the Great Fissure</text>
+<text x="0" y="936">Gold highway  ·  Grey proposed roads  ·  Squares mark candidate bridges  ·  Salmon marks fissures</text>
 <text x="0" y="959">Lime marks the city loop and site approaches. Orange marks the elevated decks.</text></g></svg>

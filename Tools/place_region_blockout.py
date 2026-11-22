@@ -6,7 +6,7 @@ from pathlib import Path
 
 import unreal
 
-LEVEL = "/Game/Maps/L_Crossroads"
+LEVEL = "/Game/Maps/L_CrossroadsRelief"
 MASS_HEIGHT = {
     "hospital": 22, "highrise": 58, "garage": 14, "civic": 17, "police": 11,
     "industry": 10, "airport": 12, "shops": 5, "clinic": 5, "services": 5,
@@ -17,7 +17,7 @@ MASS_HEIGHT = {
 def place():
     root = Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()))
     plan = json.loads((root / "Saved" / "WorldBake" / "world.json").read_text(encoding="utf-8"))
-    if plan.get("version", 0) != 5:
+    if plan.get("version", 0) != 6:
         raise RuntimeError("Rebake Saved/WorldBake/world.json with Tools/generate_world.py before stamping the M4 route.")
     site_tools = runpy.run_path(str(root / "Tools" / "place_region_sites.py"))
     editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
@@ -51,9 +51,9 @@ def place():
     import_asset = prepare_art["import_asset"]
     world_art = "/Game/Art/Crossroads/World"
     source_art = root / "SourceArt" / "Crossroads" / "World"
-    bed_mesh, bay_mesh, warehouse_mesh, housing_mesh = (
+    bed_mesh, bay_mesh, housing_mesh = (
         import_asset(source_art / f"SM_{name}.glb", world_art, unreal.StaticMesh)
-        for name in ("HospitalBed", "DowntownWindowBay", "WarehouseExterior", "PanelHousingExterior")
+        for name in ("HospitalBed", "DowntownWindowBay", "PanelHousingExterior")
     )
     crate_class = unreal.load_class(None, "/Script/Survival.SurvivalSupplyCrate")
     prefab_class = unreal.load_class(None, "/Script/Survival.SurvivalStructurePrefab")
@@ -246,15 +246,14 @@ def place():
         if site["id"] == "city-hospital":
             place_hospital(key, x, y, z+.2)
         elif site["id"] == "warehouses":
-            # The exterior is separate from the working bay so damage clears the bay's actual opening.
-            exterior(key+"_exterior", "Warehouse exterior", warehouse_mesh, x, y+8, z+.2)
-            box(key+"_closed", "Warehouse background collision", x, y+8, z+.2, 26, 5.8, 4.2, hidden=True)
-            spawn(prefab_class, key+"_loading_bay", "Destructible warehouse loading bay", x, y-6, z+.2,
-                  lambda actor: site_tools["warehouse_structure"](actor, key+"_loading_bay"))
-            cache(key+"_materials", "Loading bay repair materials", x+5.6, y-8, z+.2,
+            spawn(prefab_class, key+"_warehouse", "Destructible warehouse", x, y, z+.2,
+                  lambda actor: site_tools["warehouse_structure"](actor, key+"_warehouse"))
+            cache(key+"_materials", "Warehouse repair materials", x-8, y+3.5, z+.2,
                   stone_amount=30, timber_amount=24)
-            encounter(key+"_runner", "Loading yard runner", x-9, y-6, z+.2, runner=True)
-            encounter(key+"_walker", "Warehouse walker", x+10, y+2, z+.2)
+            cache(key+"_supplies", "Warehouse storage crate", x+8, y+3.5, z+.2,
+                  cloth_amount=3, water_amount=2)
+            encounter(key+"_runner", "Loading yard runner", x-8, y-8, z+.2, runner=True)
+            encounter(key+"_walker", "Warehouse walker", x+4, y+2.5, z+.2)
             remove_blockout(key)
         elif site["id"] == "southwest-apartments":
             exterior(key+"_exterior", "Panel apartment exterior", housing_mesh, x, y+11, z+.2)

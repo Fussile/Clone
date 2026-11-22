@@ -29,8 +29,7 @@ def prepare_if_needed():
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     required = (
         "/Game/Maps/L_SouthernCrossroads",
-        "/Game/Maps/L_Crossroads",
-        "/Game/Art/Crossroads/World/SM_WarehouseExterior",
+        "/Game/Maps/L_CrossroadsRelief",
         "/Game/Art/Crossroads/World/SM_PanelHousingExterior",
         "/Game/Art/Crossroads/Player/SK_Survivor",
         "/Game/Art/Crossroads/SniperSurface/SK_SniperViewmodel",

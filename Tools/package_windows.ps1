@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [string]$EngineRoot
+    [string]$EngineRoot,
+    [ValidateSet("Development", "Shipping")]
+    [string]$Configuration = "Shipping"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,12 +45,12 @@ try {
     $prepare = Join-Path $PSScriptRoot 'prepare_crossroads.py'
     & $editor $project "-ExecutePythonScript=$prepare" "-abslog=$editorLog" -unattended -nosplash -nullrhi
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $marker) -or
-        (Get-Content -LiteralPath $marker -Raw).Trim() -ne '/Game/Maps/L_Crossroads' -or
-        -not (Test-Path -LiteralPath (Join-Path $projectRoot 'Content\Maps\L_Crossroads.umap') -PathType Leaf)) {
+        (Get-Content -LiteralPath $marker -Raw).Trim() -ne '/Game/Maps/L_CrossroadsRelief' -or
+        -not (Test-Path -LiteralPath (Join-Path $projectRoot 'Content\Maps\L_CrossroadsRelief.umap') -PathType Leaf)) {
         throw "Crossroads preparation failed. Check $editorLog."
     }
 
-    & $uat BuildCookRun "-project=$project" -targetplatform=Win64 -clientconfig=Shipping `
+    & $uat BuildCookRun "-project=$project" -targetplatform=Win64 "-clientconfig=$Configuration" `
         -build -cook -stage -pak -package -archive -unattended -utf8output `
         "-applocaldirectory=$appLocal" "-archivedirectory=$stage"
     if ($LASTEXITCODE -ne 0) {

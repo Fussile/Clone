@@ -278,6 +278,12 @@ void ASurvivalHUD::DrawHUD()
         }
     }
 
+    if (Character->IsDevSpeedActive())
+    {
+        DrawRect(Panel, Right - 196.0f, 65.0f, 196.0f, 25.0f);
+        DrawText(TEXT("Dev speed 100 m/s [Caps Lock]"), Cyan, Right - 186.0f, 70.0f);
+    }
+
     const int32 Alive = Character->GetLivingAttackers();
     FString DefenseStatus;
     const int32 NightAlive = Character->GetLivingNightHorde();

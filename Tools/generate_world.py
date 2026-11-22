@@ -48,22 +48,49 @@ def generate(seed):
     plan = json.loads(LAYOUT.read_text(encoding="utf-8"))
     width, depth = plan["size_m"]
     river_segments = [(a, b, river["width_m"]) for river in plan["rivers"] for a, b in segments(river["points_m"])]
-    fissure_segments = list(segments(plan["fissure_m"]))
+    fissures = [(34, 44, list(segments(plan["fissure_m"]))),
+                (24, 28, list(segments(plan["depot_fissure_m"])))]
+    hill_specs = [(hill["xy_m"], hill["radius_m"], hill["rise_m"]) for hill in plan["hills"]]
+    basin_x, basin_y = plan["lowland"]["xy_m"]
+    basin_rx, basin_ry = plan["lowland"]["radii_m"]
     for line in [*plan["rivers"], *plan["roads"]]:
         assert all(0 <= x <= width and 0 <= y <= depth for x, y in line["points_m"]), line["id"]
 
-    def ground_height(x, y):
-        # Broad hills keep the city/delta low. The seed only varies relief.
-        hills = 8 + 8 * math.sin((x + seed % 731) / 420) * math.cos(y / 480)
-        edge = max(0, 1-min(x, width-x)/440, 1-(depth-y)/480)
-        return hills + (125 + 35*math.cos(x/180 - y/260)) * edge**2
+    def smoothstep(t):
+        t = max(0.0, min(1.0, t))
+        return t*t*(3-2*t)
 
-    lake_shapes = [(lake["xy_m"], lake["radii_m"]) for lake in plan["lakes"]]
+    def ground_height(x, y):
+        north = smoothstep((y-1900)/1850)
+        ripple = math.sin((x + seed % 731)/420) * math.cos(y/480)
+        base = 7 + ripple*(1.8 + 4*north) + 109*north
+        # The basin has a broad, wet floor and opens toward the western watershed.
+        basin_distance = ((x-basin_x)/basin_rx)**2 + ((y-basin_y)/basin_ry)**2
+        basin = 1-smoothstep((basin_distance-.16)/.84)
+        base = base*(1-basin) + (2.5+.7*ripple)*basin
+        for (hx, hy), radius, rise in hill_specs:
+            dx, dy = abs(x-hx), abs(y-hy)
+            if dx < radius and dy < radius:
+                hill = max(0.0, 1-(dx*dx+dy*dy)/(radius*radius))
+                base += rise*hill*hill
+        # Limit the steepest rock faces to the final strip near the mountain boundary.
+        escarpment = max(0, 1-min(x,width-x)/280, 1-(depth-y)/205)
+        return base + (111 + 12*math.cos(x/180-y/260))*escarpment**2
+
+    # Draw the north's lakes at their own basin levels and let the rivers follow the grade.
+    lake_shapes = [(lake["xy_m"], lake["radii_m"],
+                    max(0, ground_height(*lake["xy_m"])-4))
+                   for lake in plan["lakes"]]
+
+    def nearest_lake(x, y):
+        return min(((math.hypot((x-cx)/rx, (y-cy)/ry)-1)*min(rx,ry), level)
+                    for (cx,cy),(rx,ry),level in lake_shapes)
+
+    def river_distance(x, y):
+        return min(segment_distance(x,y,a,b)-w/2 for a,b,w in river_segments)
+
     def water_distance(x, y):
-        lake_edge = min((math.hypot((x-cx)/rx, (y-cy)/ry)-1) * min(rx, ry)
-                        for (cx, cy), (rx, ry) in lake_shapes)
-        river_edge = min(segment_distance(x, y, a, b) - w/2 for a, b, w in river_segments)
-        return min(lake_edge, river_edge)
+        return min(nearest_lake(x,y)[0], river_distance(x,y))
 
     plots = []
     road_segments = [(a, b, road["width_m"]) for road in plan["roads"] for a, b in segments(road["points_m"])]
@@ -78,7 +105,8 @@ def generate(seed):
             return (clearance < min(px, width-px, py, depth-py)
                     and water_distance(px, py) > clearance + 12
                     and all(segment_distance(px, py, a, b) > clearance + rw/2 for a, b, rw in road_segments)
-                    and all(segment_distance(px, py, a, b) > clearance + 34 for a, b in fissure_segments)
+                    and all(segment_distance(px, py, a, b) > clearance + span
+                            for span, _, fault in fissures for a, b in fault)
                     and all(math.hypot(px-sx, py-sy) > clearance + sr for sx, sy, sr, _ in plots))
 
         for radius in range(0, 301, 10):
@@ -104,19 +132,21 @@ def generate(seed):
             for index, point in enumerate(sorted(hits), 1):
                 bridges.append({"id": f'{road["id"]}-{river["id"]}-{index}', "xy_m": point,
                                 "road": road["id"], "river": river["id"]})
-    plan.update(version=5, seed=seed, bridge_candidates=bridges, stream_cell_m=256, stream_radius_m=768,
+    plan.update(version=6, seed=seed, bridge_candidates=bridges, stream_cell_m=256, stream_radius_m=768,
                 climate_celsius_offset={"north_edge": -15, "city": 0, "south_edge": 14},
                 terrain={"resolution": RESOLUTION, "xyz_scale_cm": [width*100/(RESOLUTION-1),
                                                                   depth*100/(RESOLUTION-1), 100]})
 
     def height(x, y):
         base = ground_height(x, y)
-        channel = water_distance(x, y)
-        # Reference water level is 0 m. Keep beds below it, blending to land at the banks.
-        bank = max(0., min(1., (channel + 4)/16))
-        base = -4*(1-bank) + base*bank
-        gap = min(segment_distance(x, y, a, b) for a,b in fissure_segments)
-        base -= 44 * max(0., 1-gap/34)**2
+        river = river_distance(x,y)
+        base -= 6.0*(1-smoothstep((river+3)/14))
+        shore, lake_level = nearest_lake(x,y)
+        bank = smoothstep((shore+3)/20)
+        base = (lake_level-3)*(1-bank) + base*bank
+        for span, drop, fault in fissures:
+            gap = min(segment_distance(x,y,a,b) for a,b in fault)
+            base -= drop*max(0.0, 1-gap/span)**2
         for px, py, clearance, z in plots:
             distance = math.hypot(x-px, y-py)
             blend = max(0., min(1., (clearance+28-distance)/22))
@@ -204,7 +234,12 @@ def write_map(path, plan):
         rx, ry = lake["radii_m"]
         lines.append(f'<ellipse cx="{x}" cy="{y}" rx="{rx/5}" ry="{ry/5}" fill="#76b2cf"/>')
         lines.append(f'<text x="{x}" y="{y+4}" text-anchor="middle" fill="#112b38" font-family="sans-serif" font-size="12">{lake["id"]}</text>')
-    lines.append(f'<polyline points="{points(plan["fissure_m"])}" fill="none" stroke="#e09a81" stroke-width="5"/>')
+    for fault in ("fissure_m", "depot_fissure_m"):
+        stroke = 5 if fault == "fissure_m" else 3
+        lines.append(f'<polyline points="{points(plan[fault])}" fill="none" stroke="#e09a81" stroke-width="{stroke}"/>')
+    for hill in plan["hills"]:
+        x,y = svg_xy(hill["xy_m"])
+        lines.append(f'<path d="M{x-5:.1f},{y:.1f} q5,-9 10,0" fill="none" stroke="#a6c87e" stroke-width="1.6"/>')
     for road in plan["roads"]:
         color = "#f5d280" if road["id"] == "east-west-highway" else "#c4c3ad"
         lines.append(f'<polyline points="{points(road["points_m"])}" fill="none" stroke="{color}" stroke-width="{max(2, road["width_m"]/6)}"/>')
@@ -231,7 +266,7 @@ def write_map(path, plan):
             lines.append(f'<text x="{x+6}" y="{y-5}" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">{label}</text>')
     lines += ['<g fill="#e1e8dc" font-family="sans-serif" font-size="14">',
               '<text x="925" y="39">N ↑</text><text x="0" y="907">20 km²  ·  5 km east–west  ·  4 km north–south</text>',
-              '<text x="0" y="936">Gold highway  ·  Grey proposed roads  ·  Squares mark candidate bridges  ·  Salmon marks the Great Fissure</text>',
+              '<text x="0" y="936">Gold highway  ·  Grey proposed roads  ·  Squares mark candidate bridges  ·  Salmon marks fissures</text>',
               '<text x="0" y="959">Lime marks the city loop and site approaches. Orange marks the elevated decks.</text></g></svg>']
     path.write_text("\n".join(lines)+"\n", encoding="utf-8")
 

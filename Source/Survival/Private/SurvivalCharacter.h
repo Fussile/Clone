@@ -49,6 +49,7 @@ public:
     void CraftRecipe(int32 RecipeIndex, int32 Quantity);
     void ToggleInventory();
     bool IsInventoryOpen() const { return bInventoryOpen; }
+    bool IsDevSpeedActive() const { return bDevSpeedActive; }
     bool IsBuilding() const { return bBuildMode; }
     int32 GetSelectedPiece() const { return GetPlayerBuildPieces()[SelectedPiece]; }
     TOptional<FSurvivalBuildPlacement> FindPlacement() const;
@@ -103,6 +104,7 @@ private:
     void StartJump();
     void StartSprint();
     void StopSprint();
+    void ToggleDevSpeed();
     void ToggleCrouch();
     void ToggleProne();
     void SetStance(EStance NewStance);
@@ -150,6 +152,8 @@ private:
 
     EStance Stance = EStance::Standing;
     bool bSprintHeld = false;
+    bool bDevSpeedActive = false;
+    float NormalAcceleration = 0.0f;
     double BodyMeshBottom = 0.0;
     FSurvivalMaterials Inventory;
     int32 SelectedPiece = 0;

@@ -18,6 +18,8 @@ The dark locker at the back of the shop holds a bolt-action rifle, rifle ammunit
 
 Open **I**, then **Skills**. The catalog uses rank caps and knowledge requirements from the archived [Alpha 16.4 progression data](https://github.com/tassoneroberto/7dtd-assets/blob/main/alpha16.4/Config/progression.xml). Physical, coordination, and basic crafting skills improve through practice. Each character level awards six points to spend in the knowledge trees. Use Practice for action skills. Read the builder’s guide, scavenger’s field notes, or field dressing schematic from the Backpack or skill detail pane to learn one rank directly. Field Dressings can also be unlocked by spending points in the Survival tree. Planned systems show their requirements in the appropriate tree.
 
+**Caps Lock** toggles a 100 m/s standing movement speed in editor and Development builds. The HUD shows when test speed is enabled.
+
 ## Build a playtest ZIP
 
 On Windows with Unreal Engine 5.8 and its supported C++ toolchain installed, run this from the repository root in PowerShell. Use your own UE 5.8 installation path.
@@ -25,6 +27,8 @@ On Windows with Unreal Engine 5.8 and its supported C++ toolchain installed, run
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\Tools\package_windows.ps1 -EngineRoot 'C:\Program Files\Epic Games\UE_5.8'
 ```
+
+Pass `-Configuration Development` to the packaging script to enable the test speed in a standalone build.
 
 The script builds the editor target, imports the starter art, bakes and saves the region if needed, and cooks a standalone Windows build that opens the region. It writes `Dist/Survival-Windows-x64.zip` with app-local prerequisites. Before publishing, extract the ZIP on a Windows PC without Unreal Editor and run the [region playtest](Docs/StandardWorld.md#m4-editor-playtest). Attach the verified ZIP to a GitHub Release for the commit you built.
 

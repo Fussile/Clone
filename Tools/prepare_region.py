@@ -8,7 +8,7 @@ import sys
 
 import unreal
 
-LEVEL = "/Game/Maps/L_Crossroads"
+LEVEL = "/Game/Maps/L_CrossroadsRelief"
 
 
 def prepare_region(tools, ground_material):
