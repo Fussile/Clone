@@ -19,6 +19,8 @@ STREETS = (
     ((2743, 1830), (2770, 2051)),
     ((2040, 1945), (2416, 1945), (2909, 1936)),
     ((1993, 1996), (2414, 1996), (2922, 1996)),
+    ((2160, 2215), (2099, 2194), (2024, 2232)),
+    ((2787, 2239), (2841, 2261), (2874, 2273)),
 )
 
 
@@ -108,7 +110,7 @@ def bake_city(routes, height, available, seed):
                     core = math.hypot((px-2451)/340, (py-2069)/220) < 1
                     levels = 3 if face == "CornerShop" else rng.choice(
                         (13, 17, 21, 25) if core and face == "OfficeFacade" else (5, 9, 13))
-                    buildings.append(dict(id=ident, x=px, y=py, z=max(samples)+.08,
+                    buildings.append(dict(id=ident, x=px, y=py, z=max(samples)+.08, road_z=z, setback=3.2,
                                           base=min(samples)-.35, w=width, d=depth,
                                           yaw=yaw,
                                           facade=face, levels=levels))
@@ -148,7 +150,7 @@ def bake_traffic(routes, sites, blockers, seed):
     return parked
 
 
-def stamp_city(lots, blockers, box, mesh, facade, prop, door, cache, palette):
+def stamp_city(lots, blockers, box, facade, prop, door, cache, palette):
     for lot in lots:
         key = "CrossroadsInfill_"+lot["id"]
         x, y, z, w, d, yaw = (lot[k] for k in ("x", "y", "z", "w", "d", "yaw"))
@@ -158,12 +160,24 @@ def stamp_city(lots, blockers, box, mesh, facade, prop, door, cache, palette):
         def point(u, v):
             return x+c*u+s*v, y-s*u+c*v
 
-        def slab(suffix, label, u, v, floor, width, depth, height, finish):
+        def slab(suffix, label, u, v, floor, width, depth, height, finish, pitch=0, heading=yaw):
             box(key+suffix, label, *point(u,v), floor, width, depth, height,
-                material=palette[finish], rotation=(0, yaw))
+                material=palette[finish], rotation=(pitch, heading))
 
         slab("_base", "City block foundation", 0, 0, lot["base"], w, d, z-lot["base"], "concrete")
-        slab("_walk", "Street sidewalk", 0, -d/2-1.15, z-.20, w+.4, 2.3, .20, "concrete")
+        rise = z-lot["road_z"]
+        if rise > .17:
+            run = lot["setback"]
+            pitch = math.atan2(rise,run)
+            slab("_entry_ramp", "Lobby approach", 0, -d/2-run/2,
+                 z-rise/2-.15, math.hypot(run,rise), 2.3, .15, "concrete",
+                 math.degrees(pitch), yaw-90)
+            walkway_width = (w+.4-2.3)/2
+            for side in (-1, 1):
+                slab(f"_walk_{side}", "Entry sidewalk", side*(walkway_width+2.3)/2, -d/2-1.15,
+                     z-.20, walkway_width, 2.3, .20, "concrete")
+        else:
+            slab("_walk", "Street sidewalk", 0, -d/2-1.15, z-.20, w+.4, 2.3, .20, "concrete")
         style = lot["facade"]
         if style == "CornerShop":
             style = "StoneFacade"
@@ -178,15 +192,13 @@ def stamp_city(lots, blockers, box, mesh, facade, prop, door, cache, palette):
             u = side*(w+1.75)/4
             slab(f"_front_{side}", "Retail display backing", u, -d/2+.22,
                  z, (w-1.75)/2, .42, 3.24, wall)
-            mesh(f"{key}_storefront_{side}", "Street-level storefront", "Storefront",
-                 *point(u, -d/2-.29), z, ((w-2.05)/2, .68, 3.2), yaw=yaw, collision=False)
         door(key+"_foyer_door", "Lobby door", *point(0,-d/2), z, 1.75, 2.35, yaw=yaw)
         slab("_lintel", "Lobby door lintel", 0, -d/2+.22, z+2.35, 1.75, .42, .89, wall)
         slab("_foyer_back", "Foyer rear wall", 0, -d/2+lobby_depth, z, w, .32, 3.24, wall)
         slab("_structure", "Upper office block", 0, 0, z+3.24, w, d, height-3.24, wall)
         slab("_rear_base", "Rear service block", 0, lobby_depth/2, z, w, d-lobby_depth, 3.24, wall)
         slab("_parapet", "Office roof cap", 0, 0, z+height, w+.36, d+.36, .34, "dark_trim")
-        facade(key+"_panels", style, x, y, z+3.24, w, d, height-3.24, yaw)
+        facade(key+"_panels", style, x, y, z, w, d, height, yaw, 3.24, 1.75)
         cache(key+"_lobby_cache", "Lobby scavenging cache", *point(-w*.28, -d/2+3.5), z,
               profile="OFFICE", chance=82)
 

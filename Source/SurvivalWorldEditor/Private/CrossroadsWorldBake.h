@@ -3,6 +3,7 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "CrossroadsWorldBake.generated.h"
 
+class UMaterial;
 class UMaterialInterface;
 class UStaticMesh;
 
@@ -17,4 +18,11 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
     static bool SetStaticMeshCollision(UStaticMesh* Mesh);
+
+    UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
+    static void DisableMaterialEmission(UMaterial* Material);
+
+    UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
+    static UStaticMesh* CreateRoadMesh(const FString& PackagePath, const TArray<FVector>& Positions,
+        const TArray<FVector2D>& UVs, const TArray<int32>& Indices, UMaterialInterface* Material);
 };

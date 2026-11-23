@@ -16,9 +16,11 @@ def place():
     site_tools = runpy.run_path(str(root / "Tools" / "place_region_sites.py"))
     interiors = runpy.run_path(str(root / "Tools" / "place_region_interiors.py"))
     communications = runpy.run_path(str(root / "Tools" / "communications_layout.py"))
+    pavement = runpy.run_path(str(root / "Tools" / "city_pavement.py"))
     downtown = runpy.run_path(str(root / "Tools" / "downtown_layout.py"))
     utility = runpy.run_path(str(root / "Tools" / "utility_layout.py"))
     landmarks = runpy.run_path(str(root / "Tools" / "place_region_landmarks.py"))
+    local_art = runpy.run_path(str(root / "Tools" / "local_world_art.py"))
     airfield_dimensions = runpy.run_path(str(root / "Tools" / "airfield_layout.py"))
     warehouse_doors = json.loads((root / "Tools" / "warehouse_doors.json").read_text(encoding="utf-8"))
     editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
@@ -169,6 +171,11 @@ def place():
     style_materials["concrete"] = concrete
     style_materials["asphalt"] = asphalt
 
+    regenerated = ("CrossroadsPavement_", "CrossroadsStreetBarrier_", "CrossroadsWreck_")
+    city_route_tags = tuple(f'CrossroadsRoute_{r["id"]}_' for r in plan["m4_route"]
+                            if pavement["is_city_route"](r))
+    previous_roads = {key for key in actor_tags if key.startswith(regenerated + city_route_tags)}
+    touched_roads = set()
     previous_infill = {key for key in actor_tags if key.startswith("CrossroadsInfill_")}
     touched_infill = set()
     # Geometry and dependent doors, furnishings and loot share the same rebake.
@@ -178,6 +185,9 @@ def place():
               reconfigure=False):
         if key.startswith("CrossroadsInfill_"):
             touched_infill.add(key)
+            relocate = reconfigure = True
+        elif key.startswith(regenerated + city_route_tags):
+            touched_roads.add(key)
             relocate = reconfigure = True
         elif resized_site and key.startswith(resized_site + "_"):
             relocate = reconfigure = True
@@ -274,12 +284,11 @@ def place():
         raise RuntimeError("Rebuild SurvivalEditor to load the instanced downtown facades.")
 
     city_panels = []
-    if (root/"Content"/"CitySampleBuildings").is_dir():
-        registry = unreal.AssetRegistryHelpers.get_asset_registry()
-        registry.scan_paths_synchronous(["/Game/CitySampleBuildings"], True)
-        candidates = sorted((str(a.package_name), a) for a in
-            registry.get_assets_by_path("/Game/CitySampleBuildings", recursive=True)
-            if str(a.asset_name).upper().startswith("SM_BLDG_") and "_WALL_" in str(a.asset_name).upper())
+    city_entries = local_art["pack_meshes"](root, "CitySampleBuildings")
+    if city_entries:
+        candidates = [(str(a.package_name), a) for a in city_entries
+                      if str(a.asset_name).upper().startswith("SM_BLDG_")
+                      and "_WALL_" in str(a.asset_name).upper()]
         families = set()
         for path, entry in candidates:
             family = path.rsplit("/", 1)[0]
@@ -297,11 +306,31 @@ def place():
                 if len(city_panels) == 16:
                     break
         unreal.log(f"Crossroads selected {len(city_panels)} City Sample wall modules.")
-    def facade(key, style, x, y, z, width, depth, height, yaw):
+    unpowered = local_art["dark_materials"](assets)
+    panel_materials = {}
+    factory = local_art["factory_props"](local_art["pack_meshes"](root, "OvergrownFactoryENV"))
+    unreal.log("Crossroads Overgrown Factory meshes: " +
+               (", ".join(f"{role}={mesh.get_name()}" for role, mesh in factory.items()) or "none"))
+
+    def facade(key, style, x, y, z, width, depth, height, yaw, ground_height, entrance_width):
         def configure(actor):
             actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
             panel = random.Random(key).choice(city_panels) if city_panels else district_meshes[style]
-            actor.fit_panels(panel, width*100, depth*100, height*100)
+            name = panel.get_path_name()
+            if name not in panel_materials:
+                fallback = style_materials["classical_civic" if style == "StoneFacade" else "modern"]
+                materials = []
+                for slot in panel.get_editor_property("static_materials"):
+                    material = slot.get_editor_property("material_interface")
+                    try:
+                        dark = unpowered(material)
+                    except (RuntimeError, TypeError) as error:
+                        unreal.log_warning(f"Crossroads cannot prepare a dark variant: {error}")
+                        dark = None
+                    materials.append(dark or fallback)
+                panel_materials[name] = materials
+            actor.fit_panels(panel, width*100, depth*100, height*100,
+                             ground_height*100, entrance_width*100, panel_materials[name])
         spawn(facade_class, key, "City facade panels", x, y, z, configure)
 
     def cable(key, a, b):
@@ -587,6 +616,27 @@ def place():
         spawn(zombie_class, key, label, x, y, floor+1.03, configure, relocate=relocate)
 
     def place_route(route):
+        continuous = pavement["is_city_route"](route)
+        if continuous:
+            for index, (origin, edges, lengths, breaks) in enumerate(pavement["pavement_chunks"](route)):
+                name, positions, uvs, indices = pavement["mesh_data"](origin, edges, lengths, breaks)
+                package = f"{world_art}/Pavement/{name}"
+                deck = assets.load_asset(package) if assets.does_asset_exist(package) else None
+                if deck is None:
+                    deck = unreal.CrossroadsWorldBake.create_road_mesh(
+                        package, [unreal.Vector(*p) for p in positions],
+                        [unreal.Vector2D(*uv) for uv in uvs], indices, asphalt)
+                    if not deck or not assets.save_loaded_asset(deck):
+                        raise RuntimeError(f"Could not create {package}")
+
+                def paved(actor):
+                    component = actor.get_component_by_class(unreal.StaticMeshComponent)
+                    component.set_static_mesh(deck)
+                    component.set_collision_profile_name("BlockAll")
+                    component.set_material(0, asphalt)
+
+                spawn(unreal.StaticMeshActor, f'CrossroadsPavement_{route["id"]}_{index}', "Continuous roadway",
+                      *origin, paved, ("StructuralGround",), relocate=True, reconfigure=True)
         width = route["width_m"]
         road_surface = gravel if route.get("surface") == "gravel" else asphalt
         for index, segment in enumerate(route["segments"]):
@@ -612,19 +662,30 @@ def place():
                 actor.set_actor_scale3d(unreal.Vector(*scale))
                 actor.set_actor_rotation(unreal.Rotator(pitch=pitch, yaw=yaw), False)
 
-            spawn(unreal.StaticMeshActor, key, "Bridge deck" if bridge else "Scavenging route",
-                  x, y, z-thickness/2, lambda actor: road_actor(actor, (length+.5, width, thickness), material),
-                  ("StructuralGround",), relocate=route["id"].endswith("_access"),
-                  reconfigure=route["id"].endswith("_access"))
+            if not continuous:
+                spawn(unreal.StaticMeshActor, key, "Bridge deck" if bridge else "Scavenging route",
+                      x, y, z-thickness/2, lambda actor: road_actor(actor, (length+.5, width, thickness), material),
+                      ("StructuralGround",), relocate=route["id"].endswith("_access"),
+                      reconfigure=route["id"].endswith("_access"))
             if "pier_base_z_m" in segment:
                 base = segment["pier_base_z_m"]
                 box(key+"_pier", "Bridge pier", x, y, base, 1.2, 2.4, z-thickness-base, material=concrete)
-            if bridge:
+            if continuous and (segment.get("broken_start") or segment.get("broken_end")):
+                px, py, pz = segment["start"] if segment.get("broken_start") else segment["end"]
+                direction = -1 if segment.get("broken_start") else 1
+                for tooth in range(6):
+                    offset = width*((tooth+1)/7-.5)
+                    box(f"{key}_rebar_{tooth}", "Exposed viaduct reinforcement",
+                        px+dy/horizontal*offset+dx/horizontal*direction*.8,
+                        py+dx/horizontal*offset-dy/horizontal*direction*.8, pz-.36,
+                        1.65+(tooth%3)*.36, .04, .04, material=style_materials["dark_trim"],
+                        rotation=(-6*direction,yaw), collision=False)
+            if bridge and (not continuous or segment.get("parapet")):
                 for side in (-1, 1):
                     offset = side*(width/2-.12)
                     spawn(unreal.StaticMeshActor, f"{key}_rail_{side}", "Bridge parapet",
                           x-dy/horizontal*offset, y-dx/horizontal*offset, z+.45,
-                          lambda actor: road_actor(actor, (length+.5, .24, .90), concrete))
+                          lambda actor: road_actor(actor, (length if continuous else length+.5, .24, .90), concrete))
 
     def place_hospital(key, x, y, floor):
         def wall(label, dx, dy, w, d):
@@ -714,6 +775,40 @@ def place():
               cloth_amount=3, water_amount=2)
         encounter(key+"_runner", "Loading yard runner", x-9.4, y-7.2, floor, runner=True, relocate=True)
         encounter(key+"_walker", "Warehouse walker", x+4, y+.75, floor, relocate=True)
+
+    def dress_industrial(key, x, y, floor, width, depth, warehouse=False):
+        desired = set()
+        if "wall" in factory and not warehouse:
+            skin = factory["wall"]
+            bounds = skin.get_bounding_box()
+            span = max(bounds.max.x-bounds.min.x, bounds.max.y-bounds.min.y)/100
+            count = max(1, round(width/span))
+            bay = width/count
+            for i in range(count):
+                def wall(actor):
+                    component = fitted_mesh(actor, skin, (bay, .28, 8.4), align_long_axis=True)
+                    component.set_collision_profile_name("NoCollision")
+                tag = f"{key}_fab_rear_{i}"
+                desired.add(tag)
+                spawn(unreal.StaticMeshActor, tag, "Factory rear wall cladding",
+                      x-width/2+(i+.5)*bay, y+depth/2+.14, floor+4.2, wall,
+                      relocate=True, reconfigure=True)
+
+        for kind, dx, dy, dimensions, health in (
+            ("rack", -6, .45, (1.8, .90, 1.95), 110),
+            ("forklift", 7, -1.5 if warehouse else -depth*.38, (2.60, 1.26, 2.20), 235),
+            ("drum", -5, -1.9, (.60, .60, .85), 75),
+            ("pallet", 6, 2.7, (1.21, .96, .15), 50),
+        ):
+            if kind not in factory:
+                continue
+            def configure(actor):
+                fitted_mesh(actor, factory[kind], dimensions, align_long_axis=True)
+            tag = f"{key}_fab_{kind}"
+            desired.add(tag)
+            prop_kind(tag, f"Industrial {kind}", health, "BUILDING",
+                      x+dx, y+dy, floor+dimensions[2]/2, configure)
+        remove_generated(*(tag for tag in actor_tags if tag.startswith(key+"_fab_") and tag not in desired))
 
     has_start = any(isinstance(actor, unreal.PlayerStart) for actor in existing)
     for landscape in landscapes:
@@ -826,6 +921,8 @@ def place():
                 site, x, y, z+.2, w, d, style_materials, scatter_caches)
             remove_generated(key+"_shell", key+"_trim", key+"_portico_roof",
                              *(f"{key}_portico_{i}" for i in range(4)))
+        if site["kind"] == "industry" and site["id"] != "hangars":
+            dress_industrial(key, x, y, z+.2, w*.90, d*.86, warehouse=site["id"] == "warehouses")
         if site["id"] == "city-towers":
             annex_x = x+19.5
             box(key+"_annex_floor", "Tower annex foundation", annex_x, y, z-.05,
@@ -885,11 +982,12 @@ def place():
         for index,(start,end) in enumerate(zip(transmission["poles"][a]["phases"],
                                              transmission["poles"][b]["phases"], strict=True)):
             cable(f"CrossroadsCable_{a}_{b}_{index}",start,end)
-    downtown["stamp_city"](plan["city_lots"],plan["city_barriers"],box,district_mesh,facade,
+    downtown["stamp_city"](plan["city_lots"],plan["city_barriers"],box,facade,
                            communications_art,door,cache,style_materials)
     remove_generated(*(previous_infill - touched_infill))
     for car in plan["wrecks"]:
         wreck("CrossroadsWreck_"+car["id"],car["x"],car["y"],car["z"],car["yaw"],car["model"])
+    remove_generated(*(previous_roads - touched_roads))
     for checkpoint in plan["checkpoints"]:
         communications["stamp_checkpoint"](checkpoint, communications_art)
 

@@ -163,9 +163,16 @@ def generate(seed):
 
     sites = {site["id"]: site for site in plan["sites"]}
     plan["facilities"] = facilities(sites["airport"], sites["stadium"], height)
+    # Keep the established POI pads and landscape. Widen the loop after plot placement.
+    for road in plan["roads"]:
+        if road["id"] == "downtown-loop":
+            road["width_m"] = 13
+        if road["id"] == "downtown-overpass-east":
+            road["viaduct"]["lift_m"] = 7.4
     local_streets = streets()
     plan["roads"].extend(local_streets)
-    road_segments.extend((a, b, road["width_m"]) for road in local_streets
+    road_segments.extend((a, b, road["width_m"]) for road in plan["roads"]
+                         if road["id"] == "downtown-loop" or road in local_streets
                          for a, b in segments(road["points_m"]))
     plan["m4_route"] = bake_route(plan, ground_height, height)
     # The new pads follow today's terrain so an existing editor map needs no landscape replacement.

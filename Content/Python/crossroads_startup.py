@@ -43,10 +43,11 @@ def prepare_if_needed():
         with path.open("rb") as source:
             for chunk in iter(lambda: source.read(1024 * 1024), b""):
                 digest.update(chunk)
-    sample = project / "Content" / "CitySampleBuildings"
-    for path in sorted(sample.rglob("*.uasset")):
-        digest.update(path.relative_to(sample).as_posix().encode("utf-8"))
-        digest.update(str(path.stat().st_size).encode())
+    for pack in ("CitySampleBuildings", "OvergrownFactoryENV"):
+        for path in sorted((project / "Content" / pack).rglob("*.uasset")):
+            digest.update(path.relative_to(project).as_posix().encode("utf-8"))
+            stat = path.stat()
+            digest.update(f"{stat.st_size}:{stat.st_mtime_ns}".encode())
     revision = digest.hexdigest()
 
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
