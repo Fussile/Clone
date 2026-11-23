@@ -1,6 +1,6 @@
 # Crossroads building playtest
 
-For editor play, run `Tools/prepare_crossroads.py` and open Southern Crossroads. The Windows playtest runs preparation as part of packaging.
+For the original Southern Crossroads test level, follow the [blockout guide](CrossroadsBlockout.md). The Windows playtest runs preparation as part of packaging.
 
 1. Before looting, press **B** and aim at a clear spot on the forecourt within 5 m. Scroll through the building shapes and their costs. Select **Timber block**, and left-click to place a cyan blueprint. Walk through it and check that inventory stays at zero and **Still needed** rises to three timber.
 2. Aim at the blueprint within 2.6 m. Press **E** with zero timber and check that it remains a ghost. Place another blueprint a few meters away, then aim at it and press **X**. Check that the ghost disappears and the totals drop by its recipe cost.

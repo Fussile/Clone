@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import re
 import runpy
+import traceback
 
 import unreal
 
@@ -54,13 +55,18 @@ def import_asset(source, directory, asset_type, options=None, *, replace_existin
 def make_material(directory, name, textures, tint=None, world_repeat_cm=None):
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     path = f"{directory}/{name}"
-    if assets.does_asset_exist(path):
-        return assets.load_asset(path)
-    tools = unreal.AssetToolsHelpers.get_asset_tools()
-    material = tools.create_asset(name, directory, unreal.Material, unreal.MaterialFactoryNew())
-    if material is None:
-        raise RuntimeError(f"Could not create {path}.")
     editing = unreal.MaterialEditingLibrary
+    if assets.does_asset_exist(path):
+        material = assets.load_asset(path)
+        # A failed projection can leave a saved asset with a partial graph.
+        if world_repeat_cm is None or assets.get_metadata_tag(material, "CrossroadsProjection") == "1":
+            return material
+        editing.delete_all_material_expressions(material)
+    else:
+        tools = unreal.AssetToolsHelpers.get_asset_tools()
+        material = tools.create_asset(name, directory, unreal.Material, unreal.MaterialFactoryNew())
+        if material is None:
+            raise RuntimeError(f"Could not create {path}.")
     uv = None
     if world_repeat_cm is not None:
         # Pick a projection on each flat face so a 40 m wall and a 1 m jamb
@@ -68,7 +74,12 @@ def make_material(directory, name, textures, tint=None, world_repeat_cm=None):
         pos = editing.create_material_expression(material, unreal.MaterialExpressionWorldPosition, -900, 0)
         uv = editing.create_material_expression(material, unreal.MaterialExpressionCustom, -620, 0)
         normal = editing.create_material_expression(material, unreal.MaterialExpressionPixelNormalWS, -900, 160)
-        uv.set_editor_property("inputs", [unreal.CustomInput(input_name="P"), unreal.CustomInput(input_name="N")])
+        inputs = []
+        for pin_name in ("P", "N"):
+            pin = unreal.CustomInput()
+            pin.set_editor_property("input_name", unreal.Name(pin_name))
+            inputs.append(pin)
+        uv.set_editor_property("inputs", inputs)
         uv.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT2)
         uv.set_editor_property("code", (
             "float3 n = abs(N); "
@@ -108,6 +119,8 @@ def make_material(directory, name, textures, tint=None, world_repeat_cm=None):
         if not editing.connect_material_property(expression, output, prop):
             raise RuntimeError(f"Could not connect {texture.get_name()} to {path}.")
     editing.recompile_material(material)
+    if world_repeat_cm is not None:
+        assets.set_metadata_tag(material, "CrossroadsProjection", "1")
     if not assets.save_loaded_asset(material):
         raise RuntimeError(f"Could not save {path}.")
     return material
@@ -269,9 +282,8 @@ def apply_blockout_surfaces():
                 break
 
 
-def prepare():
-    unreal.log("Crossroads: building the fallback playtest map.")
-    # Save the playable map before importing art. A failed import must leave a world to play.
+def prepare_legacy_map():
+    """Build the original standalone defense test map on explicit request."""
     runpy.run_path(str(TOOLS / "build_crossroads.py"), run_name="__main__")
     runpy.run_path(str(TOOLS / "place_crossroads_supplies.py"), run_name="__main__")
     runpy.run_path(str(TOOLS / "place_crossroads_pois.py"), run_name="__main__")
@@ -284,40 +296,69 @@ def prepare():
     apply_blockout_surfaces()
     if not levels.save_current_level():
         raise RuntimeError(f"Could not save the surfaces in {LEVEL}.")
-    import_building()
-    unreal.log("Crossroads: baking the region and saving its external actors.")
-    prepare_region = runpy.run_path(str(TOOLS / "prepare_region.py"))["prepare_region"]
-    map_path = prepare_region(TOOLS, unreal.load_asset(f"{SURFACES}/M_Ground036"))
 
-    unreal.log("Crossroads: importing character, weapon, and interface assets.")
-    import_inventory_icons()
+
+def import_sidearm():
     generated = TOOLS.parent / "Saved" / "GeneratedArt"
     sidearm = SOURCE / "Weapons" / "SM_CrossroadsSidearm.glb"
-    import_skeletal_pack(ZOMBIE,
-        ("SK_StationZombie", "StationZombieIdle", "StationZombieWalk", "StationZombieAttack"),
-        SOURCE / "Enemy" / "zombie_rigged__animated.glb", generated / "StationZombie.glb", "prepare_zombie_glb")
     import_skeletal_pack(VIEWMODEL,
         ("SK_SidearmViewmodel", "ViewmodelIdle", "ViewmodelWalk", "ViewmodelFire", "ViewmodelReload", "ViewmodelReloadEmpty"),
         SOURCE / "Weapons" / "fps_pistol_animations.glb", generated / "AlignedSidearm.glb", "prepare_sidearm_glb",
         sidearm, SOURCE / "Weapons" / "SM_Magazine.glb")
-    if sidearm.is_file():
-        import_asset(sidearm, BUILDING, unreal.StaticMesh)
+    import_asset(sidearm, BUILDING, unreal.StaticMesh)
     shot = SOURCE / "Audio" / "SW_SidearmShot.wav"
     if shot.is_file():
         import_asset(shot, WEAPON_AUDIO, unreal.SoundWave, replace_existing=True)
-    import_skeletal_pack(PLAYER, (
-        "SK_Survivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",
-        "SurvivorCrouchIdle", "SurvivorCrouchMove", "SurvivorProneIdle", "SurvivorProneMove",
-    ), SOURCE / "Survivor" / "SK_Survivor.glb")
+
+
+def import_rifle():
     sniper = ART + "/SniperSurface"
     import_skeletal_pack(sniper, ("SK_SniperViewmodel", "SniperHold", "SniperFire", "SniperReload"),
                          SOURCE / "Weapons" / "SK_SniperViewmodel.glb")
     world_rifle = SOURCE / "Weapons" / "SM_CrossroadsSniper.glb"
     import_asset(world_rifle, sniper, unreal.StaticMesh)
+
+
+def import_characters():
+    generated = TOOLS.parent / "Saved" / "GeneratedArt"
+    import_skeletal_pack(PLAYER, (
+        "SK_Survivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",
+        "SurvivorCrouchIdle", "SurvivorCrouchMove", "SurvivorProneIdle", "SurvivorProneMove",
+    ), SOURCE / "Survivor" / "SK_Survivor.glb")
+    import_skeletal_pack(ZOMBIE,
+        ("SK_StationZombie", "StationZombieIdle", "StationZombieWalk", "StationZombieAttack"),
+        SOURCE / "Enemy" / "zombie_rigged__animated.glb", generated / "StationZombie.glb", "prepare_zombie_glb")
+
+
+def import_interface():
+    import_inventory_icons()
     for icon in sorted((SOURCE / "Interface").glob("T_UI_*.png")):
         import_asset(icon, ART + "/Interface", unreal.Texture2D)
     if not os.environ.get("SURVIVAL_PREPARED_MARKER"):
         import_local_medicine_sheet()
+
+
+def build_region():
+    import_surfaces()
+    import_building()
+    prepare_region = runpy.run_path(str(TOOLS / "prepare_region.py"))["prepare_region"]
+    return prepare_region(TOOLS, unreal.load_asset(f"{SURFACES}/M_Ground036"))
+
+
+def prepare():
+    failures = []
+    for label, action in (("sidearm", import_sidearm), ("rifle", import_rifle),
+                          ("characters", import_characters), ("interface", import_interface)):
+        unreal.log(f"Crossroads: importing {label}.")
+        try:
+            action()
+        except Exception as error:
+            failures.append(f"{label}: {error}")
+            unreal.log_error(traceback.format_exc())
+    unreal.log("Crossroads: baking the region and saving its external actors.")
+    map_path = build_region()
+    if failures:
+        raise RuntimeError("Incomplete Crossroads imports: " + ", ".join(failures))
     if marker := os.environ.get("SURVIVAL_PREPARED_MARKER"):
         Path(marker).write_text(map_path, encoding="utf-8")
 

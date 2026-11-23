@@ -10,7 +10,6 @@ import unreal
 
 
 REGION = "/Game/Maps/L_CrossroadsRelief"
-FALLBACK = "/Game/Maps/L_SouthernCrossroads"
 READY_TAG = "CrossroadsRegionReady"
 
 
@@ -48,7 +47,6 @@ def prepare_if_needed():
 
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     required = (
-        FALLBACK,
         REGION,
         "/Game/Art/Crossroads/World/SM_WarehouseDoorwayShell",
         "/Game/Art/Crossroads/World/SM_WeatheredShelf",
@@ -63,6 +61,10 @@ def prepare_if_needed():
         "/Game/Art/Crossroads/SniperSurface/SniperReload",
         "/Game/Art/Crossroads/StationZombie/SK_StationZombie",
         "/Game/Art/Crossroads/AlignedSidearm/SK_SidearmViewmodel",
+        "/Game/Art/Crossroads/Building/SM_CrossroadsSidearm",
+        "/Game/Art/Crossroads/AlignedSidearm/ViewmodelIdle",
+        "/Game/Art/Crossroads/AlignedSidearm/ViewmodelWalk",
+        "/Game/Art/Crossroads/AlignedSidearm/ViewmodelFire",
         "/Game/Art/Crossroads/AlignedSidearm/ViewmodelReload",
         "/Game/Art/Crossroads/AlignedSidearm/ViewmodelReloadEmpty",
         "/Game/Art/Crossroads/Building/M_BuildPlan",
@@ -107,15 +109,14 @@ def prepare_if_needed():
         runpy.run_path(str(project / "Tools" / "prepare_crossroads.py"), run_name="__main__")
         if not region_is_ready():
             raise RuntimeError("The region did not finish preparing.")
-    except Exception:
-        unreal.log_error("Crossroads preparation failed. See the Python traceback in the Output Log.\n"
-                         + traceback.format_exc())
-        if not assets.does_asset_exist(REGION) or not region_is_ready():
-            if not assets.does_asset_exist(FALLBACK) or not open_level(FALLBACK):
-                unreal.log_error("Crossroads: the fallback map could not be opened.")
-            else:
-                unreal.log_warning("Crossroads: opened the fallback playtest map. "
-                                   "The full region will retry on the next editor launch.")
+        missing = [path for path in required if not assets.does_asset_exist(path)]
+        if missing:
+            raise RuntimeError("Missing prepared assets: " + ", ".join(missing))
+    except Exception as error:
+        unreal.log_error("Crossroads preparation failed.\n" + traceback.format_exc())
+        unreal.EditorDialog.show_message("Crossroads preparation failed",
+                                         f"{error}\n\nSee Saved/Logs/Survival.log for the traceback.",
+                                         unreal.AppMsgType.OK)
         return
     stamp.parent.mkdir(parents=True, exist_ok=True)
     stamp.write_text(revision, encoding="utf-8")
