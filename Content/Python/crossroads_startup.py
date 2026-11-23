@@ -55,6 +55,10 @@ def prepare_if_needed():
                      "YardTransformer")
     )
     required += tuple(
+        f"/Game/Art/Crossroads/World/Communications/{name}/SM_{name}"
+        for name in ("RepeaterMast", "BroadcastTower", "CheckpointWall", "TimberWire", "RoadSpikes")
+    )
+    required += tuple(
         f"/Game/Art/Crossroads/Inventory/T_Item_{name}"
         for name in ("Sidearm", "Food", "Water", "Bandage", "Timber", "Stone", "Cloth", "Rounds", "TimberDoor", "Rifle", "RifleRounds", "BuilderGuide", "ScavengerNotes", "DressingSchematic", "FieldDressing",
                      "RifleStock", "RifleReceiver", "RifleBarrel", "RifleOptic")

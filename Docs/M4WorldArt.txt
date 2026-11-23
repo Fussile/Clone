@@ -74,3 +74,30 @@ Gas Station low - USSR fuel pump by Milionna (https://sketchfab.com/milionna)
 Source: https://sketchfab.com/3d-models/gas-station-low-ussr-29c6e42636834359afd50f76dfe5196e
 License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 Changes: Imported the fuel pump from the content branch and fit it to the forecourt.
+
+Repeater Radio Tower (updated) by Veterock (https://sketchfab.com/windofglass)
+Source: https://sketchfab.com/3d-models/repeater-radio-tower-updated-f17b20e7e13546efac44aff1f097ef25
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Extracted the mast from the FBX compound, simplified the mesh,
+centered it at its footing, and packed resized textures.
+
+Cell Tower Skalka concrete tower by panfoto (https://sketchfab.com/panfoto)
+Source: https://sketchfab.com/3d-models/cell-tower-skalka-concrete-tower-b61436f067654e8282fd32a251980550
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Joined and simplified the scan, centered it at ground level,
+and resized the embedded texture.
+
+Concrete wall protection by Mehdi Shahsavan (https://sketchfab.com/ahmagh2e)
+Source: https://sketchfab.com/3d-models/concrete-wall-protection-47c3c48fac3a4f0c8ca0fe61d34daff2
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Isolated the concrete panel and repacked its textures.
+
+Wooden barbed wire protection by Mehdi Shahsavan (https://sketchfab.com/ahmagh2e)
+Source: https://sketchfab.com/3d-models/barrier---wooden--barbed--wire-protection-13-mb-a99f8daa113a4439b24869e41643ecb4
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Fit to checkpoint and compound placements in the map bake.
+
+Wooden spike barricade by iGauravRajput (https://sketchfab.com/igauravrajput)
+Source: https://sketchfab.com/3d-models/wooden--spike--barricad-3d-model-free-0a61ae606efb493f94b9f126d2273d1e
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Fit to roadside placements in the map bake.

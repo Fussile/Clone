@@ -11,10 +11,11 @@ LEVEL = "/Game/Maps/L_CrossroadsRelief"
 def place():
     root = Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()))
     plan = json.loads((root / "Saved" / "WorldBake" / "world.json").read_text(encoding="utf-8"))
-    if plan.get("version", 0) != 6:
-        raise RuntimeError("Rebake Saved/WorldBake/world.json with Tools/generate_world.py before stamping the M4 route.")
+    if plan.get("version", 0) != 7:
+        raise RuntimeError("Rebake Saved/WorldBake/world.json with Tools/generate_world.py before stamping the region.")
     site_tools = runpy.run_path(str(root / "Tools" / "place_region_sites.py"))
     interiors = runpy.run_path(str(root / "Tools" / "place_region_interiors.py"))
+    communications = runpy.run_path(str(root / "Tools" / "communications_layout.py"))
     landmarks = runpy.run_path(str(root / "Tools" / "place_region_landmarks.py"))
     airfield_dimensions = runpy.run_path(str(root / "Tools" / "airfield_layout.py"))
     warehouse_doors = json.loads((root / "Tools" / "warehouse_doors.json").read_text(encoding="utf-8"))
@@ -67,6 +68,10 @@ def place():
         import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Props/{name}", unreal.StaticMesh)
         for name in ("ScavengeCrate", "FuelPump")
     )
+    communications_meshes = {
+        name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Communications/{name}", unreal.StaticMesh)
+        for name in ("RepeaterMast", "BroadcastTower", "CheckpointWall", "TimberWire", "RoadSpikes")
+    }
     crate_class = unreal.load_class(None, "/Script/Survival.SurvivalSupplyCrate")
     zombie_class = unreal.load_class(None, "/Script/Survival.SurvivalZombie")
     door_class = unreal.load_class(None, "/Script/Survival.SurvivalWorldDoor")
@@ -74,6 +79,7 @@ def place():
         raise RuntimeError("Build SurvivalEditor before placing structures and loot.")
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     for mesh in (warehouse_mesh, shelf_mesh, desk_mesh, bed_mesh, crate_mesh, pump_mesh,
+                 *communications_meshes.values(),
                  *(landmark_meshes[name] for name in sorted(landmark_collision))):
         if not unreal.CrossroadsWorldBake.set_static_mesh_collision(mesh):
             raise RuntimeError(f"Could not prepare collision for {mesh.get_name()}.")
@@ -81,8 +87,9 @@ def place():
             raise RuntimeError(f"Could not save {mesh.get_name()}.")
     surface_path = "/Game/Art/Crossroads/Surfaces"
     asphalt = unreal.load_asset(f"{surface_path}/M_Asphalt021")
+    gravel = unreal.load_asset(f"{surface_path}/M_Ground036")
     concrete = unreal.load_asset(f"{surface_path}/M_Concrete034")
-    if not asphalt or not concrete:
+    if not asphalt or not concrete or not gravel:
         raise RuntimeError("Prepare the Crossroads surface materials before placing the region.")
 
     # Simple blockout colors keep the styles legible while detailed modules are sourced.
@@ -141,20 +148,39 @@ def place():
 
         return spawn(crate_class, key, label, x, y, z, setup, relocate=True, reconfigure=True)
 
-    def fitted_mesh(actor, asset, dimensions):
+    def fitted_mesh(actor, asset, dimensions, yaw=0, align_long_axis=False):
         component = actor.get_component_by_class(unreal.StaticMeshComponent)
         component.set_static_mesh(asset)
         component.set_collision_profile_name("BlockAll")
         bounds = asset.get_bounding_box()
         extent = bounds.max - bounds.min
+        if align_long_axis and extent.x < extent.y:
+            dimensions = (dimensions[1], dimensions[0], dimensions[2])
+            yaw += 90
         pad = [maximum * 100 / span for maximum, span in zip(
             dimensions, (extent.x, extent.y, extent.z), strict=True)]
         center = (bounds.min + bounds.max) * .5
         actor.set_actor_scale3d(unreal.Vector(*pad))
-        pos = actor.get_actor_location()
-        actor.set_actor_location(pos - unreal.Vector(center.x*pad[0], center.y*pad[1], center.z*pad[2]),
-                                 False, False)
+        actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
+        angle = math.radians(yaw)
+        dx, dy = center.x*pad[0], center.y*pad[1]
+        offset = unreal.Vector(dx*math.cos(angle)-dy*math.sin(angle),
+                               dx*math.sin(angle)+dy*math.cos(angle), center.z*pad[2])
+        actor.set_actor_location(actor.get_actor_location()-offset, False, False)
         return component
+
+    def communications_art(key, label, name, x, y, floor, dimensions, *, yaw=0, health=None):
+        asset = communications_meshes[name]
+        z = floor + dimensions[2]/2
+
+        def configure(actor):
+            fitted_mesh(actor, asset, dimensions, yaw, align_long_axis=health is not None)
+
+        if health is not None:
+            prop_kind(key, label, health, "BUILDING", x, y, z, configure)
+        else:
+            spawn(unreal.StaticMeshActor, key, label, x, y, z, configure,
+                  relocate=True, reconfigure=True)
 
     prop_profiles = {
         "Station counter": (95, "GENERAL"),
@@ -355,6 +381,7 @@ def place():
 
     def place_route(route):
         width = route["width_m"]
+        road_surface = gravel if route.get("surface") == "gravel" else asphalt
         for index, segment in enumerate(route["segments"]):
             ax, ay, az = segment["start"]
             bx, by, bz = segment["end"]
@@ -365,7 +392,7 @@ def place():
             pitch = math.degrees(math.atan2(dz, horizontal))
             bridge = segment["bridge"]
             thickness = .50 if bridge else .28
-            material = concrete if bridge else asphalt
+            material = concrete if bridge else road_surface
             key = f'CrossroadsRoute_{route["id"]}_{index}'
             x, y, z = (ax+bx)/2, (ay+by)/2, (az+bz)/2
 
@@ -611,6 +638,11 @@ def place():
 
     for route in plan["m4_route"]:
         place_route(route)
+    for site in plan["communications"]:
+        communications["stamp_compound"](site, box, door, sign, site_tools["building_shell"],
+                                         storefront_window, communications_art, cache, encounter, style_materials)
+    for checkpoint in plan["checkpoints"]:
+        communications["stamp_checkpoint"](checkpoint, communications_art)
 
     if not levels.save_current_level():
         raise RuntimeError(f"Could not save {LEVEL}.")

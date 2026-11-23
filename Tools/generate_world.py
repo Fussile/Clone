@@ -8,6 +8,7 @@ import struct
 import zlib
 
 from airfield_layout import facilities
+from communications_layout import bake_checkpoints, bake_communications
 from region_route import bake_route
 
 LAYOUT = Path(__file__).with_name("world_layout.json")
@@ -95,6 +96,15 @@ def generate(seed):
 
     plots = []
     road_segments = [(a, b, road["width_m"]) for road in plan["roads"] for a, b in segments(road["points_m"])]
+
+    def available(px, py, clearance):
+        return (clearance < min(px, width-px, py, depth-py)
+                and water_distance(px, py) > clearance + 12
+                and all(segment_distance(px, py, a, b) > clearance + rw/2 for a, b, rw in road_segments)
+                and all(segment_distance(px, py, a, b) > clearance + span
+                        for span, _, fault in fissures for a, b in fault)
+                and all(math.hypot(px-sx, py-sy) > clearance + sr for sx, sy, sr, _ in plots))
+
     for site in plan["sites"]:
         if site["kind"] not in FOOTPRINTS:
             continue
@@ -102,18 +112,10 @@ def generate(seed):
         clearance = math.hypot(w, d)/2 + 5
         x, y = site["xy_m"]
 
-        def available(px, py):
-            return (clearance < min(px, width-px, py, depth-py)
-                    and water_distance(px, py) > clearance + 12
-                    and all(segment_distance(px, py, a, b) > clearance + rw/2 for a, b, rw in road_segments)
-                    and all(segment_distance(px, py, a, b) > clearance + span
-                            for span, _, fault in fissures for a, b in fault)
-                    and all(math.hypot(px-sx, py-sy) > clearance + sr for sx, sy, sr, _ in plots))
-
         for radius in range(0, 301, 10):
             candidates = [(round(x + radius*math.cos(i*math.tau/16)),
                            round(y + radius*math.sin(i*math.tau/16))) for i in range(16 if radius else 1)]
-            position = next(((px, py) for px, py in candidates if available(px, py)), None)
+            position = next(((px, py) for px, py in candidates if available(px, py, clearance)), None)
             if position is not None:
                 break
         if position is None:
@@ -133,7 +135,7 @@ def generate(seed):
             for index, point in enumerate(sorted(hits), 1):
                 bridges.append({"id": f'{road["id"]}-{river["id"]}-{index}', "xy_m": point,
                                 "road": road["id"], "river": river["id"]})
-    plan.update(version=6, seed=seed, bridge_candidates=bridges, stream_cell_m=256, stream_radius_m=768,
+    plan.update(version=7, seed=seed, bridge_candidates=bridges, stream_cell_m=256, stream_radius_m=768,
                 climate_celsius_offset={"north_edge": -15, "city": 0, "south_edge": 14},
                 terrain={"resolution": RESOLUTION, "xyz_scale_cm": [width*100/(RESOLUTION-1),
                                                                   depth*100/(RESOLUTION-1), 100]})
@@ -157,10 +159,14 @@ def generate(seed):
     sites = {site["id"]: site for site in plan["sites"]}
     plan["facilities"] = facilities(sites["airport"], sites["stadium"], height)
     plan["m4_route"] = bake_route(plan, ground_height, height)
+    # The new pads follow today's terrain so an existing editor map needs no landscape replacement.
+    plan["communications"] = bake_communications(plan, height, available, water_distance)
+    plan["checkpoints"] = bake_checkpoints(plan["checkpoints"], plan["m4_route"])
+    plan["m4_route"].extend(site["approach"] for site in plan["communications"])
 
     # Assign static content to planned cells. IDs persist when exact coordinates change.
     cells = {}
-    for site in plan["sites"]:
+    for site in [*plan["sites"], *plan["communications"]]:
         x, y = site.get("plot_xy_m", site["xy_m"])
         cells.setdefault((x//256, y//256), []).append(site["id"])
     plan["site_cells"] = [{"xy": key, "sites": ids} for key, ids in sorted(cells.items())]
@@ -210,7 +216,8 @@ def write_map(path, plan):
         return " ".join(f"{x:.1f},{y:.1f}" for x, y in map(svg_xy, line))
 
     palette = {"hospital": "#ed8f93", "police": "#b39bf2", "civic": "#e6b7eb",
-               "shops": "#e0b88e", "industry": "#e2a773", "highrise": "#f1f4de"}
+               "shops": "#e0b88e", "industry": "#e2a773", "highrise": "#f1f4de",
+               "repeater": "#d990f3", "radio": "#d990f3", "transmitter": "#d990f3"}
     labels = {"crater-town", "winter-village", "north-industry", "hill-town", "city-hospital",
               "city-police", "city-towers", "west-factory", "university", "airport", "south-base",
               "south-services", "warehouses", "west-entertainment", "east-clinic", "farms", "western-estates", "east-factory"}
@@ -260,17 +267,22 @@ def write_map(path, plan):
     for bridge in plan["bridge_candidates"]:
         x, y = svg_xy(bridge["xy_m"])
         lines.append(f'<rect x="{x-3}" y="{y-3}" width="6" height="6" fill="#17242a" stroke="#fff3d4"/>')
-    for site in plan["sites"]:
+    for checkpoint in plan["checkpoints"]:
+        x, y = svg_xy(checkpoint["xyz_m"])
+        lines.append(f'<path d="M{x-4:.1f},{y:.1f}h8m-4,-4v8" stroke="#fab376" stroke-width="1.6"/>')
+    for site in [*plan["sites"], *plan["communications"]]:
         x, y = svg_xy(site.get("plot_xy_m", site["xy_m"]))
         color = palette.get(site["kind"], "#d8dfc1")
         lines.append(f'<circle cx="{x}" cy="{y}" r="3.2" fill="{color}" stroke="#1b2524"/>')
-        if site["id"] in labels:
+        if site["id"] in labels or site["kind"] in {"repeater", "radio", "transmitter"}:
             label = html.escape(site["name"])
-            lines.append(f'<text x="{x+6}" y="{y-5}" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">{label}</text>')
+            align = "end" if x>900 or site["kind"] == "radio" else "start"
+            offset = -6 if align == "end" else 6
+            lines.append(f'<text x="{x+offset}" y="{y-5}" text-anchor="{align}" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">{label}</text>')
     lines += ['<g fill="#e1e8dc" font-family="sans-serif" font-size="14">',
               '<text x="925" y="39">N ↑</text><text x="0" y="907">20 km²  ·  5 km east–west  ·  4 km north–south</text>',
               '<text x="0" y="936">Gold highway  ·  Grey proposed roads  ·  Squares mark candidate bridges  ·  Salmon marks fissures</text>',
-              '<text x="0" y="959">Lime marks the city loop and site approaches. Orange marks the elevated decks.</text></g></svg>']
+              '<text x="0" y="959">Lime approaches  ·  Orange elevated decks  ·  Purple communications sites  ·  Crosses checkpoints</text></g></svg>']
     path.write_text("\n".join(lines)+"\n", encoding="utf-8")
 
 

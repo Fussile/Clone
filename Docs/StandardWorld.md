@@ -51,3 +51,7 @@ At the warehouse, check both entrances and the supply crates inside. From the hi
 The southeast airport has a 426 m runway at map scale with the uploaded threshold and centerline markings, a parallel taxiway, two turnoffs and a terminal apron. The airport road reaches the landside entrance. A walkable concourse and control room sit beside the uploaded damaged terminal wing and ruined shop. Hangars at the airport and the southern hangar site use the uploaded interior mesh, with operable shutters at the modeled opening. The existing terrain remains the base for the new local pavement grades.
 
 The northern community pitch replaces the stadium placeholder. Take the local approach from the winter crossroad to reach the uploaded field scan and entrance sign. [Model credits](M4WorldArt.txt)
+
+The communications compounds are the Lowlands, East Ridge, and Southwest cell repeaters, the Crossroads Radio Station, and the separate radio transmitter tower. The studio and service sheds have working doors, supplies, and zombie encounters. Eight abandoned checkpoints mark the city approaches and several outlying roads. Their concrete barriers, wire barricades, and spikes use the damageable world prop system. The middle of each checkpoint stays passable.
+
+The region overview labels the communications plots in purple and marks checkpoints with crosses.

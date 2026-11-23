@@ -7,6 +7,23 @@
     2451,
     2069
   ],
+  "communications": [
+    {"id": "repeater-lowlands", "name": "Lowlands Cell Repeater", "xy_m": [1300, 3000], "kind": "repeater", "road": "crater-arterial"},
+    {"id": "repeater-east-ridge", "name": "East Ridge Cell Repeater", "xy_m": [4660, 2610], "kind": "repeater", "road": "great-lake-road"},
+    {"id": "repeater-southwest", "name": "Southwest Cell Repeater", "xy_m": [530, 760], "kind": "repeater", "road": "plateau-road"},
+    {"id": "radio-station", "name": "Crossroads Radio Station", "xy_m": [4020, 1120], "kind": "radio", "road": "airport-road"},
+    {"id": "radio-transmitter", "name": "Radio Transmitter Tower", "xy_m": [4330, 1120], "kind": "transmitter", "road": "airport-road"}
+  ],
+  "checkpoints": [
+    {"id": "city-west", "road": "east-west-highway", "xy_m": [1730, 2049]},
+    {"id": "city-east", "road": "east-west-highway", "xy_m": [3105, 2051]},
+    {"id": "city-north", "road": "downtown-loop", "xy_m": [2475, 2333]},
+    {"id": "police-hq", "road": "city-police_access", "xy_m": [1948, 2193]},
+    {"id": "hospital", "road": "hospital-arterial", "xy_m": [2148, 2685]},
+    {"id": "south-station", "road": "southern-arterial", "xy_m": [2501, 955]},
+    {"id": "airport", "road": "airport-road", "xy_m": [4460, 1522]},
+    {"id": "winter-village", "road": "north-lowland-road", "xy_m": [1870, 3580]}
+  ],
   "sites": [
     {
       "id": "crater-town",
