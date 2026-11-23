@@ -65,8 +65,8 @@ void ASurvivalFacade::FitPanels(UStaticMesh* PanelMesh, double WidthCm, double D
             }
         };
 
-        // The front faces local -Y. Leave its center open for the gameplay door.
-        if (Face == 2)
+        // The street-facing wall is local +Y in the baked map.
+        if (Face == 0)
         {
             AddBays(-Span * 0.5, -EntranceWidthCm * 0.5, 0, GroundHeightCm);
             AddBays(EntranceWidthCm * 0.5, Span * 0.5, 0, GroundHeightCm);

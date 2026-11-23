@@ -14,6 +14,7 @@ def place():
     if plan.get("version", 0) != 8:
         raise RuntimeError("Rebake Saved/WorldBake/world.json with Tools/generate_world.py before stamping the region.")
     site_tools = runpy.run_path(str(root / "Tools" / "place_region_sites.py"))
+    civic = runpy.run_path(str(root / "Tools" / "civic_landmarks.py"))
     interiors = runpy.run_path(str(root / "Tools" / "place_region_interiors.py"))
     communications = runpy.run_path(str(root / "Tools" / "communications_layout.py"))
     pavement = runpy.run_path(str(root / "Tools" / "city_pavement.py"))
@@ -333,6 +334,74 @@ def place():
                              ground_height*100, entrance_width*100, panel_materials[name])
         spawn(facade_class, key, "City facade panels", x, y, z, configure)
 
+    hero_folder = "/Game/CitySampleBuildings/Building/Library/Kit_Hero_Bldg/LevelInstance"
+    hero_classes = {}
+
+    def hero_class(name):
+        if name not in hero_classes:
+            package = f"{hero_folder}/BPP_{name}_N1"
+            hero_classes[name] = (unreal.EditorAssetLibrary.load_blueprint_class(package)
+                                  if assets.does_asset_exist(package) else None)
+        return hero_classes[name]
+
+    def hero_art(key, role, x, y, floor, width, depth, height, ground_height, yaw, entrance_width):
+        name, has_ground = civic["HEROES"][role]
+        pieces = [("main", name, height, floor, entrance_width)]
+        if has_ground:
+            pieces = [("ground", name+"_Level01", ground_height, floor, entrance_width)]
+            # Preserve the distinct roofline at civic landmarks and use real one-to-four-storey
+            # envelopes for the different teaching blocks.
+            full_height = {"police": 17, "civic": 52}.get(role, height+1.1)
+            if height > ground_height:
+                pieces.append(("main", name, full_height-ground_height, floor+ground_height, 0))
+            else:
+                remove_generated(key+"_sample_main")
+        elif role == "library":
+            pieces = [("main", name, 26, floor, entrance_width)]
+        sources = [(suffix, hero_class(asset_name), h, bottom, opening)
+                   for suffix, asset_name, h, bottom, opening in pieces]
+        existing_skins = (key+"_sample_main", key+"_sample_ground")
+        if any(source_class is None for _, source_class, *_ in sources):
+            remove_generated(*existing_skins)
+            unreal.log_warning(f"Crossroads retained the playable {role} blockout. Missing City Sample {name}.")
+            return False
+
+        # Copy the pack's authored instances into native actors and let the gameplay walls
+        # own collision. Temporary sample actors never become external actors in the map.
+        for suffix, source_class, h, bottom, opening in sources:
+            tag = f"{key}_sample_{suffix}"
+            probe = actors.spawn_actor_from_class(source_class, unreal.Vector(), transient=True)
+            if not probe:
+                remove_generated(*existing_skins)
+                return False
+            try:
+                def install(actor):
+                    actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
+                    dimensions = unreal.Vector(width*100, depth*100, h*100)
+                    if not unreal.CrossroadsWorldBake.copy_landmark_skin(
+                            actor, probe, dimensions, opening*100, 293):
+                        raise ValueError(f"Empty City Sample exterior {name}")
+                    for component in actor.get_components_by_class(unreal.InstancedStaticMeshComponent):
+                        for slot in range(component.get_num_materials()):
+                            try:
+                                dark = unpowered(component.get_material(slot))
+                            except (RuntimeError, TypeError) as error:
+                                unreal.log_warning(f"Crossroads could not darken {name}: {error}")
+                                dark = None
+                            component.set_material(slot, dark or style_materials["classical_civic"])
+
+                spawn(facade_class, tag, "City Sample "+role+" exterior", x, y, bottom,
+                      install, relocate=True, reconfigure=True)
+            except ValueError as error:
+                remove_generated(*existing_skins)
+                unreal.log_warning(str(error))
+                return False
+            finally:
+                actors.destroy_actor(probe)
+        remove_generated(*(tag for tag in actor_tags if tag.startswith((key+"_window_", key+"_pilaster_"))))
+        unreal.log(f"Crossroads placed {name} as {role}.")
+        return True
+
     def cable(key, a, b):
         asset = district_meshes["TransmissionCable"]
         x,y,z = ((v+w)*.5 for v,w in zip(a,b))
@@ -452,8 +521,7 @@ def place():
             if rotation:
                 pitch, yaw = rotation
                 actor.set_actor_rotation(unreal.Rotator(pitch=pitch, yaw=yaw), False)
-            if hidden:
-                actor.set_actor_hidden_in_game(True)
+            actor.set_actor_hidden_in_game(hidden)
 
         if label in prop_profiles and collision and not ground and not hidden:
             health, profile = prop_profiles[label]
@@ -535,13 +603,13 @@ def place():
         box(key, label, x, y, z, math.hypot(y1-y0, upper-floor), width, thickness,
             material=material, rotation=(math.degrees(pitch), -90*direction))
 
-    def sign(key, label, x, y, z, size=38):
+    def sign(key, label, x, y, z, size=38, yaw=90):
         def configure(actor):
             text = actor.get_component_by_class(unreal.TextRenderComponent)
             text.set_text(label)
             text.set_world_size(size)
             text.set_horizontal_alignment(unreal.HorizTextAligment.EHTA_CENTER)
-            actor.set_actor_rotation(unreal.Rotator(yaw=90), False)
+            actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
         spawn(unreal.TextRenderActor, key, label, x, y, z, configure)
 
     def door(key, label, x, y, floor, width, height, *, yaw=0, roll_up=False,
@@ -834,7 +902,7 @@ def place():
         } and site["id"] not in {
             "stadium", "hangars", "city-hospital", "warehouses", "city-nightlife"
         } else None
-        if site["id"] != "stadium":
+        if site["id"] not in {"stadium", "university", "city-police", "city-hall"}:
             box(key+"_slab", name+" slab", x, y, z-.6, w, d, .8, ground=True, material=concrete)
         # Leave a walkable pad at the front, including the initial spawn.
         if site["id"] == "stadium":
@@ -852,6 +920,17 @@ def place():
             landmarks["aircraft_hangar"](box, landmark_mesh, door, cache, new_key,
                                           x, y, z+.215, concrete)
             migrate_landmark(key, new_key, (key+"_slab",))
+        elif site["id"] in {"city-police", "city-hall", "university"}:
+            new_key = key+"_landmark"
+            resized_site = new_key
+            if site["id"] == "university":
+                civic["campus"](new_key, x, y, z+.2, box, door, cache, encounter, sign, hero_art, wreck,
+                                style_materials)
+            else:
+                role = "police" if site["id"] == "city-police" else "civic"
+                civic["place_landmark"](new_key, role, x, y, z+.2, box, door, cache, encounter,
+                                        sign, hero_art, style_materials)
+            migrate_landmark(key, new_key)
         elif site["id"] == "city-hospital":
             place_hospital(key, x, y, z+.2)
         elif site["id"] == "warehouses":
@@ -864,7 +943,7 @@ def place():
             remove_blockout(key)
         elif site["kind"] == "police":
             site_tools["precinct_layout"](box, door, cache, encounter, sign, key, x, y, z+.2,
-                                         style_materials, "Crossroads Police" if site["id"]=="city-police" else name)
+                                         style_materials, name)
             remove_generated(key+"_portico_roof", *(f"{key}_portico_{i}" for i in range(4)))
             remove_blockout(key)
         elif site["id"] == "city-parking":
@@ -933,11 +1012,9 @@ def place():
             scatter_caches(key+"_annex", annex_x, y, z+.2,
                            ((-2.1,-5.5), (2.1,-3), (-2.1,2.3), (2,6.1), (-2,7.7)),
                            (51, 9, 9, 4, 10, 17), 95)
-        if site["id"] in {"city-hospital", "city-police", "city-hall", "city-parking", "city-nightlife"}:
+        if site["id"] in {"city-hospital", "city-parking", "city-nightlife"}:
             city_cache_layouts = {
                 "city-hospital": (((-7.6,-1.5), (7.65,-1.5), (-6.65,5.5), (6,2.4)), (5, 4, 78, 3, 6, 4)),
-                "city-police": (((-9.6,-2.6), (9.6,-2.6), (-7.6,6.5), (8.1,6.4)), (7, 7, 12, 60, 8, 6)),
-                "city-hall": (((-9,-3.5), (8,1.6), (-10,6.5), (9.6,5.4)), (10, 10, 8, 5, 52, 15)),
                 "city-parking": (((-7.5,9.4), (2.2,9.4), (8,9.4), (12.1,8.9)), (10, 51, 9, 8, 7, 15)),
                 "city-nightlife": (((-12.8,2.1), (-10.8,-1.4), (2.9,4.4), (4.7,-1.4)), (68, 5, 9, 3, 6, 9)),
             }

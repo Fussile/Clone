@@ -1,9 +1,11 @@
 #include "CrossroadsWorldBake.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Editor.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "Landscape.h"
 #include "LandscapeSubsystem.h"
 #include "Materials/Material.h"
@@ -223,4 +225,114 @@ UStaticMesh* UCrossroadsWorldBake::CreateRoadMesh(const FString& PackagePath,
     FAssetRegistryModule::AssetCreated(Mesh);
     Mesh->MarkPackageDirty();
     return Mesh;
+}
+
+bool UCrossroadsWorldBake::CopyLandmarkSkin(AActor* Target, AActor* Source, FVector Dimensions,
+    double EntryWidth, double EntryHeight)
+{
+    if (!Target || !Target->GetRootComponent() || !Source)
+    {
+        return false;
+    }
+
+    const FName SkinTag(TEXT("CrossroadsLandmarkSkin"));
+    struct FMeshGroup
+    {
+        UStaticMeshComponent* Component;
+        TArray<FTransform> Transforms;
+    };
+    TArray<FMeshGroup> Groups;
+    TArray<UStaticMeshComponent*> SourceComponents;
+    Source->GetComponents(SourceComponents, true);
+    const FTransform Origin = Source->GetActorTransform();
+    FBox Envelope(ForceInit);
+    for (UStaticMeshComponent* Component : SourceComponents)
+    {
+        UStaticMesh* Mesh = Component->GetStaticMesh();
+        if (!Mesh)
+        {
+            continue;
+        }
+        FMeshGroup& Group = Groups.AddDefaulted_GetRef();
+        Group.Component = Component;
+        if (auto* Instanced = Cast<UInstancedStaticMeshComponent>(Component))
+        {
+            for (int32 Index = 0; Index < Instanced->GetInstanceCount(); ++Index)
+            {
+                FTransform Instance;
+                if (Instanced->GetInstanceTransform(Index, Instance, true))
+                {
+                    Group.Transforms.Add(Instance.GetRelativeTransform(Origin));
+                }
+            }
+        }
+        else
+        {
+            Group.Transforms.Add(Component->GetComponentTransform().GetRelativeTransform(Origin));
+        }
+        for (const FTransform& Instance : Group.Transforms)
+        {
+            Envelope += Mesh->GetBoundingBox().TransformBy(Instance);
+        }
+    }
+    if (!Envelope.IsValid || Envelope.GetSize().GetMin() <= UE_SMALL_NUMBER)
+    {
+        return false;
+    }
+
+    const FVector Size = Envelope.GetSize();
+    const FVector Scale(Dimensions.X / Size.X, Dimensions.Y / Size.Y, Dimensions.Z / Size.Z);
+    const FVector Base(Envelope.GetCenter().X, Envelope.GetCenter().Y, Envelope.Min.Z);
+    const double HalfEntry = (EntryWidth * 0.5 + 18.0) / Scale.X;
+    const FBox Opening(FVector(Base.X - HalfEntry, Base.Y + Size.Y * 0.05, Base.Z + 14.0 / Scale.Z),
+        FVector(Base.X + HalfEntry, Envelope.Max.Y + 1.0, Base.Z + EntryHeight / Scale.Z));
+    TArray<UInstancedStaticMeshComponent*> OldComponents;
+    Target->GetComponents(OldComponents);
+    Target->Modify();
+    for (UActorComponent* Component : OldComponents)
+    {
+        if (Component->ComponentHasTag(SkinTag))
+        {
+            Component->Modify();
+            Target->RemoveInstanceComponent(Component);
+            Component->DestroyComponent();
+        }
+    }
+
+    Target->SetActorScale3D(Scale);
+    for (FMeshGroup& Group : Groups)
+    {
+        UStaticMesh* Mesh = Group.Component->GetStaticMesh();
+        TArray<FTransform> Visible;
+        for (FTransform& Instance : Group.Transforms)
+        {
+            if (EntryWidth > 0.0 && Mesh->GetBoundingBox().TransformBy(Instance).Intersect(Opening))
+            {
+                continue;
+            }
+            Instance.AddToTranslation(-Base);
+            Visible.Add(Instance);
+        }
+        if (Visible.IsEmpty())
+        {
+            continue;
+        }
+
+        auto* Skin = NewObject<UInstancedStaticMeshComponent>(Target, NAME_None, RF_Transactional);
+        Target->AddInstanceComponent(Skin);
+        Skin->ComponentTags.Add(SkinTag);
+        Skin->SetupAttachment(Target->GetRootComponent());
+        Skin->SetMobility(EComponentMobility::Static);
+        Skin->SetStaticMesh(Mesh);
+        Skin->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        Skin->SetCanEverAffectNavigation(false);
+        for (int32 Slot = 0; Slot < Group.Component->GetNumMaterials(); ++Slot)
+        {
+            Skin->SetMaterial(Slot, Group.Component->GetMaterial(Slot));
+        }
+        Skin->AddInstances(Visible, false, false, false);
+        Skin->RegisterComponent();
+    }
+    Target->MarkPackageDirty();
+    return true;
 }

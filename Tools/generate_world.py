@@ -8,6 +8,7 @@ import struct
 import zlib
 
 from airfield_layout import facilities
+from civic_landmarks import CAMPUS_SIZE
 from communications_layout import bake_checkpoints, bake_communications
 from region_route import bake_route
 from downtown_layout import bake_city, bake_traffic, streets
@@ -113,7 +114,7 @@ def generate(seed):
     for site in plan["sites"]:
         if site["kind"] not in FOOTPRINTS:
             continue
-        w, d = FOOTPRINTS[site["kind"]]
+        w, d = CAMPUS_SIZE if site["id"] == "university" else FOOTPRINTS[site["kind"]]
         clearance = math.hypot(w, d)/2 + 5
         x, y = site["xy_m"]
 

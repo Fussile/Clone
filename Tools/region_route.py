@@ -1,6 +1,7 @@
 """Bake arterial pavement, overpasses, and the playable POI approaches."""
 import math
 
+from civic_landmarks import CAMPUS_PARKING_END
 from city_pavement import is_city_route
 
 
@@ -28,17 +29,18 @@ def bake_route(plan, ground_height, terrain_height):
         "south-services": "southern-arterial", "warehouses": "southern-industrial-road",
         "city-hospital": "hospital-arterial", "city-police": "downtown-loop",
         "city-parking": "east-west-highway", "city-nightlife": "east-west-highway",
+        "university": "airport-road",
     }
     for site in plan["sites"]:
         if site["id"] not in links:
             continue
         x, y = site["plot_xy_m"]
-        entrance = (x, y-site["footprint_m"][1]/2)
+        entrance = (x, y+CAMPUS_PARKING_END if site["id"] == "university" else y-site["footprint_m"][1]/2)
         approach = (x, entrance[1]-8)
         road = roads[links[site["id"]]]
         connection = nearest_on_road(approach, road)
         roads[site["id"]+"_access"] = {
-            "id": site["id"]+"_access", "width_m": 7,
+            "id": site["id"]+"_access", "width_m": 8 if site["id"] == "university" else 7,
             "points_m": [entrance, approach, connection],
             "start_z": site["foundation_z_m"]+.2,
         }

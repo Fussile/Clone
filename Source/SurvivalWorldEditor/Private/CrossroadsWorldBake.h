@@ -3,6 +3,7 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "CrossroadsWorldBake.generated.h"
 
+class AActor;
 class UMaterial;
 class UMaterialInterface;
 class UStaticMesh;
@@ -21,6 +22,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
     static void DisableMaterialEmission(UMaterial* Material);
+
+    UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
+    static bool CopyLandmarkSkin(AActor* Target, AActor* Source, FVector Dimensions, double EntryWidth, double EntryHeight);
 
     UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
     static UStaticMesh* CreateRoadMesh(const FString& PackagePath, const TArray<FVector>& Positions,
