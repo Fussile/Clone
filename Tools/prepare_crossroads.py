@@ -270,6 +270,7 @@ def apply_blockout_surfaces():
 
 
 def prepare():
+    unreal.log("Crossroads: building the fallback playtest map.")
     # Save the playable map before importing art. A failed import must leave a world to play.
     runpy.run_path(str(TOOLS / "build_crossroads.py"), run_name="__main__")
     runpy.run_path(str(TOOLS / "place_crossroads_supplies.py"), run_name="__main__")
@@ -284,6 +285,11 @@ def prepare():
     if not levels.save_current_level():
         raise RuntimeError(f"Could not save the surfaces in {LEVEL}.")
     import_building()
+    unreal.log("Crossroads: baking the region and saving its external actors.")
+    prepare_region = runpy.run_path(str(TOOLS / "prepare_region.py"))["prepare_region"]
+    map_path = prepare_region(TOOLS, unreal.load_asset(f"{SURFACES}/M_Ground036"))
+
+    unreal.log("Crossroads: importing character, weapon, and interface assets.")
     import_inventory_icons()
     generated = TOOLS.parent / "Saved" / "GeneratedArt"
     sidearm = SOURCE / "Weapons" / "SM_CrossroadsSidearm.glb"
@@ -312,8 +318,6 @@ def prepare():
         import_asset(icon, ART + "/Interface", unreal.Texture2D)
     if not os.environ.get("SURVIVAL_PREPARED_MARKER"):
         import_local_medicine_sheet()
-    prepare_region = runpy.run_path(str(TOOLS / "prepare_region.py"))["prepare_region"]
-    map_path = prepare_region(TOOLS, unreal.load_asset(f"{SURFACES}/M_Ground036"))
     if marker := os.environ.get("SURVIVAL_PREPARED_MARKER"):
         Path(marker).write_text(map_path, encoding="utf-8")
 

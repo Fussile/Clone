@@ -811,9 +811,11 @@ def place():
     for checkpoint in plan["checkpoints"]:
         communications["stamp_checkpoint"](checkpoint, communications_art)
 
+    spawn(unreal.TargetPoint, "CrossroadsRegionReady", "Crossroads region bake complete",
+          sx, sy, 0, lambda actor: None, always_loaded=True)
     if not levels.save_current_level():
         raise RuntimeError(f"Could not save {LEVEL}.")
-    unreal.log(f"Stamped {LEVEL}. Save external actors with Save All.")
+    unreal.log(f"Stamped {LEVEL}. Saving external actors.")
 
 
 if __name__ == "__main__":

@@ -21,11 +21,14 @@ def prepare_region(tools, ground_material):
     if not current or current.get_path_name().split(".")[0] != LEVEL:
         if not (levels.load_level(LEVEL) if exists else levels.new_level(LEVEL, True)):
             raise RuntimeError(f"Could not open or create {LEVEL}.")
-    if exists:
+    def load_partition_actors():
         partition = unreal.WorldPartitionBlueprintLibrary
         descriptors = partition.get_actor_descs()
         if descriptors:
             partition.load_actors([actor.guid for actor in descriptors])
+
+    if exists:
+        load_partition_actors()
 
     output = tools.parent / "Saved" / "WorldBake"
     output.mkdir(parents=True, exist_ok=True)
@@ -37,8 +40,7 @@ def prepare_region(tools, ground_material):
         sys.path.remove(str(tools))
     (output / "world.json").write_text(json.dumps(plan, indent=2)+"\n", encoding="utf-8")
 
-    existing = actors.get_all_level_actors()
-    if not any(isinstance(actor, unreal.Landscape) for actor in existing):
+    if not any(isinstance(actor, unreal.Landscape) for actor in actors.get_all_level_actors()):
         raw = output / "crossroads-height.r16"
         terrain = plan["terrain"]
         # Reuse the baked samples on subsequent attempts when the source layout matches.
@@ -56,6 +58,9 @@ def prepare_region(tools, ground_material):
             str(raw), terrain["resolution"], unreal.Vector(*terrain["xyz_scale_cm"]), ground_material
         ):
             raise RuntimeError("Failed to import the Crossroads terrain.")
+        load_partition_actors()
+
+    existing = actors.get_all_level_actors()
 
     def light(kind, tag, setup):
         if any(actor.actor_has_tag(unreal.Name(tag)) for actor in existing):

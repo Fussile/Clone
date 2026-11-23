@@ -4,8 +4,28 @@ import hashlib
 import os
 from pathlib import Path
 import runpy
+import traceback
 
 import unreal
+
+
+REGION = "/Game/Maps/L_CrossroadsRelief"
+FALLBACK = "/Game/Maps/L_SouthernCrossroads"
+READY_TAG = "CrossroadsRegionReady"
+
+
+def open_level(path):
+    editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
+    levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+    world = editor.get_editor_world()
+    return (world and world.get_path_name().split(".")[0] == path) or levels.load_level(path)
+
+
+def region_is_ready():
+    if not open_level(REGION):
+        return False
+    actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    return any(actor.actor_has_tag(unreal.Name(READY_TAG)) for actor in actors.get_all_level_actors())
 
 
 def prepare_if_needed():
@@ -28,8 +48,8 @@ def prepare_if_needed():
 
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     required = (
-        "/Game/Maps/L_SouthernCrossroads",
-        "/Game/Maps/L_CrossroadsRelief",
+        FALLBACK,
+        REGION,
         "/Game/Art/Crossroads/World/SM_WarehouseDoorwayShell",
         "/Game/Art/Crossroads/World/SM_WeatheredShelf",
         "/Game/Art/Crossroads/World/SM_SchoolDesk",
@@ -79,13 +99,27 @@ def prepare_if_needed():
     if medicine_sheet.is_file():
         required += ("/Game/Art/Crossroads/Local/MedicineSheet",)
     if (stamp.is_file() and stamp.read_text(encoding="utf-8") == revision
-            and all(assets.does_asset_exist(path) for path in required)):
+            and all(assets.does_asset_exist(path) for path in required) and region_is_ready()):
         return
 
     unreal.log("Crossroads: preparing the default region map and assets.")
-    runpy.run_path(str(project / "Tools" / "prepare_crossroads.py"), run_name="__main__")
+    try:
+        runpy.run_path(str(project / "Tools" / "prepare_crossroads.py"), run_name="__main__")
+        if not region_is_ready():
+            raise RuntimeError("The region did not finish preparing.")
+    except Exception:
+        unreal.log_error("Crossroads preparation failed. See the Python traceback in the Output Log.\n"
+                         + traceback.format_exc())
+        if not assets.does_asset_exist(REGION) or not region_is_ready():
+            if not assets.does_asset_exist(FALLBACK) or not open_level(FALLBACK):
+                unreal.log_error("Crossroads: the fallback map could not be opened.")
+            else:
+                unreal.log_warning("Crossroads: opened the fallback playtest map. "
+                                   "The full region will retry on the next editor launch.")
+        return
     stamp.parent.mkdir(parents=True, exist_ok=True)
     stamp.write_text(revision, encoding="utf-8")
+    unreal.log("Crossroads: region ready. You can press Play.")
 
 
 def schedule_preparation():
@@ -94,7 +128,7 @@ def schedule_preparation():
     _, switches, params = unreal.SystemLibrary.parse_command_line(command_line)
     if (os.environ.get("SURVIVAL_PREPARED_MARKER")
             or any(key.lower() == "run" for key in params)
-            or any(switch.lower() == "game" for switch in switches)):
+            or any(switch.lower() in {"game", "run"} for switch in switches)):
         return
 
     def prepare_after_editor_load(_delta_seconds):
