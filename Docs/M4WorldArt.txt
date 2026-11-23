@@ -113,3 +113,48 @@ License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 Changes: Reassembled the USDZ meshes into workstation, filing cabinet, drawer and water cooler props. Resized embedded textures and packed material channels.
 
 Station brick and shop tile finishes incorporate the ambientCG Concrete034 color texture (CC0).
+
+Soviet Electrical Substation Old by MrUnity
+Source: https://sketchfab.com/3d-models/soviet-electrical-substation-old-687f2d25e1e24d1386b4cbd3f7986eb6
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Converted the USDZ scan to GLB, simplified the geometry, and retained the color and normal textures.
+
+Substation by One80 Solar
+Source: https://sketchfab.com/3d-models/substation-8f4e54879b664104bece03d8e7236c15
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Cropped a section of switchgear, simplified the geometry, and resized the color texture.
+
+Power Lines High voltage electricity by Mehdi Shahsavan
+Source: https://sketchfab.com/3d-models/power-lines-high-voltage-electricity-1e59aeb1068144d1baba87d7cc97023b
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Extracted one freestanding pylon and replaced the bundled wires with fitted conductors.
+
+Gas station by Elbolillo
+Source: https://sketchfab.com/3d-models/gas-station-eeb913b90b4344ddbd7852f82a7ef160
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Extracted the furnished 6twelve shop and canopy from the FBX and relinked the materials.
+The gameplay map supplies the pumps, loot, and working doors.
+
+Burned-out Cars by Renafox
+Source: https://sketchfab.com/3d-models/burned-out-cars-701066df6b914fd08318524c7ccd96a7
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Split into two standalone collision-ready vehicles with resized maps.
+
+Truck Cargo Destroyed erosion rust by meng5142
+Source: https://sketchfab.com/3d-models/truck-cargo-destroyed-erosion-rust-9fd34db7ef3b425982d05275a1fd3621
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Centered and resized for placement in the region.
+
+Corner Shop Block, Office Facade Module, Stone Facade Module, and Storefront Base Module by tevy
+Sources:
+https://tevy.dev/models/corner-shop-block
+https://tevy.dev/models/facade-office-module
+https://tevy.dev/models/facade-stone-module
+https://tevy.dev/models/storefront-module
+License: CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)
+Changes: Decoded the geometry and textures and joined the pieces for direct editor import.
+
+Moldering Minivan (Free Raw Scan) by Renafox
+Source: https://sketchfab.com/3d-models/moldering-minivan-free-raw-scan-14acd80b35004d8b932cb6ee94dca468
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Simplified and centered the scan and packed a resized color atlas.

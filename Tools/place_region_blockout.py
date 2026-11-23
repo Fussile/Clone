@@ -11,11 +11,13 @@ LEVEL = "/Game/Maps/L_CrossroadsRelief"
 def place():
     root = Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()))
     plan = json.loads((root / "Saved" / "WorldBake" / "world.json").read_text(encoding="utf-8"))
-    if plan.get("version", 0) != 7:
+    if plan.get("version", 0) != 8:
         raise RuntimeError("Rebake Saved/WorldBake/world.json with Tools/generate_world.py before stamping the region.")
     site_tools = runpy.run_path(str(root / "Tools" / "place_region_sites.py"))
     interiors = runpy.run_path(str(root / "Tools" / "place_region_interiors.py"))
     communications = runpy.run_path(str(root / "Tools" / "communications_layout.py"))
+    downtown = runpy.run_path(str(root / "Tools" / "downtown_layout.py"))
+    utility = runpy.run_path(str(root / "Tools" / "utility_layout.py"))
     landmarks = runpy.run_path(str(root / "Tools" / "place_region_landmarks.py"))
     airfield_dimensions = runpy.run_path(str(root / "Tools" / "airfield_layout.py"))
     warehouse_doors = json.loads((root / "Tools" / "warehouse_doors.json").read_text(encoding="utf-8"))
@@ -76,6 +78,17 @@ def place():
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Props/{name}", unreal.StaticMesh)
         for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler")
     }
+    district_solids = {
+        "CornerShop", "SubstationHouse", "SubstationSwitchgear", "TransmissionPylon",
+        "BurnedSedan", "BurnedCompact", "RustedTruck", "AbandonedVan",
+        "SixTwelveShop", "SixTwelveCanopy",
+    }
+    district_assets = district_solids | {"StoneFacade", "OfficeFacade", "Storefront", "TransmissionCable"}
+    district_meshes = {
+        name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Region/{name}", unreal.StaticMesh)
+        for name in sorted(district_assets)
+    }
+    district_meshes["YardTransformer"] = landmark_meshes["YardTransformer"]
     crate_class = unreal.load_class(None, "/Script/Survival.SurvivalSupplyCrate")
     zombie_class = unreal.load_class(None, "/Script/Survival.SurvivalZombie")
     door_class = unreal.load_class(None, "/Script/Survival.SurvivalWorldDoor")
@@ -84,7 +97,8 @@ def place():
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     for mesh in (warehouse_mesh, shelf_mesh, desk_mesh, bed_mesh, crate_mesh, pump_mesh,
                  *communications_meshes.values(), *office_meshes.values(),
-                 *(landmark_meshes[name] for name in sorted(landmark_collision))):
+                 *(landmark_meshes[name] for name in sorted(landmark_collision)),
+                 *(district_meshes[name] for name in sorted(district_solids))):
         if not unreal.CrossroadsWorldBake.set_static_mesh_collision(mesh):
             raise RuntimeError(f"Could not prepare collision for {mesh.get_name()}.")
         if not assets.save_loaded_asset(mesh, only_if_is_dirty=True):
@@ -204,6 +218,90 @@ def place():
         else:
             spawn(unreal.StaticMeshActor, key, label, x, y, z, configure,
                   relocate=True, reconfigure=True)
+
+    def district_mesh(key, label, name, x, y, floor, dimensions, *, yaw=0, collision=True, health=None,
+                      align=True):
+        asset = district_meshes[name]
+        center_z = floor + dimensions[2]/2
+
+        def configure(actor):
+            component = fitted_mesh(actor, asset, dimensions, yaw, align_long_axis=align)
+            if not collision:
+                component.set_collision_profile_name("NoCollision")
+
+        if health is None:
+            spawn(unreal.StaticMeshActor, key, label, x, y, center_z, configure,
+                  relocate=True, reconfigure=True)
+        else:
+            prop_kind(key, label, health, "BUILDING", x, y, center_z, configure)
+
+    def cable(key, a, b):
+        asset = district_meshes["TransmissionCable"]
+        x,y,z = ((v+w)*.5 for v,w in zip(a,b))
+        dx,dy,dz = (b[0]-a[0], a[1]-b[1], b[2]-a[2])
+        length = math.hypot(dx,dy,dz)
+        yaw = math.degrees(math.atan2(dy,dx))
+        pitch = math.degrees(math.atan2(dz, math.hypot(dx,dy)))
+        bounds = asset.get_bounding_box()
+        long_is_x = bounds.max.x-bounds.min.x > bounds.max.y-bounds.min.y
+        sag = utility["cable_sag"](length)
+        stretch = unreal.Vector(length, 1, sag) if long_is_x else unreal.Vector(1, length, sag)
+
+        def configure(actor):
+            component = actor.get_component_by_class(unreal.StaticMeshComponent)
+            component.set_static_mesh(asset)
+            component.set_collision_profile_name("NoCollision")
+            component.set_editor_property("cast_shadow", False)
+            actor.set_actor_scale3d(stretch)
+            rotation = unreal.Rotator(pitch=pitch,yaw=yaw)
+            if not long_is_x:
+                rotation = unreal.MathLibrary.compose_rotators(unreal.Rotator(yaw=90), rotation)
+            actor.set_actor_rotation(rotation,False)
+
+        spawn(unreal.StaticMeshActor,key,"Overhead transmission conductor",x,y,z,configure,
+              relocate=True,reconfigure=True)
+
+    def imported_station(key, x, y, floor):
+        asset = district_meshes["SixTwelveShop"]
+        bounds = asset.get_bounding_box()
+        center = (bounds.min+bounds.max)*.5
+        # The packed shop has an asymmetric pivot so the original entrance
+        # orientation and coordinates survive either glTF axis convention.
+        source_x_is_mesh_x = abs(center.x)>abs(center.y)
+        source_x_sign = math.copysign(1, center.x if source_x_is_mesh_x else center.y)
+        source_y_sign = math.copysign(1, center.y if source_x_is_mesh_x else center.x)
+        yaw = (180 if source_y_sign>0 else 0) if source_x_is_mesh_x else (-90 if source_y_sign>0 else 90)
+        angle = math.radians(yaw)
+        east = source_x_sign*(math.cos(angle) if source_x_is_mesh_x else -math.sin(angle))
+        width, depth, height = 14.0, 12.9, 4.86
+        dimensions = (width, depth, height) if source_x_is_mesh_x else (depth, width, height)
+        shop_y = y+2.8
+        district_mesh(key+"_shop", "6twelve convenience shop", "SixTwelveShop",
+                      x, shop_y, floor, dimensions, yaw=yaw, align=False)
+
+        # Door leaves from the source were removed to install working gameplay doors.
+        for suffix, sx, sy, bottom, door_width, door_height in (
+            ("shop_door", 6.19, 14.25, .13, .94, 2.53),
+            ("stockroom_door", 8.40, 24.58, .13, .93, 2.49),
+        ):
+            door(key+"_"+suffix, "Convenience store door",
+                 x+east*(sx-4.21)*width/15, shop_y+(sy-21.43)*depth/16.816,
+                 floor+(bottom+.023)*height/5.213, door_width*width/15, door_height*height/5.213,
+                 finish="petrol")
+        door(key+"_side_door","Store service door",
+             x+east*(10.33-4.21)*width/15, shop_y+(27.45-21.43)*depth/16.816,
+             floor+.142, .93*depth/16.816, 2.3, yaw=90*east, finish="petrol")
+        district_mesh(key+"_canopy", "6twelve fuel canopy", "SixTwelveCanopy",
+                      x, y-6.0, floor, (17.0,6.4,5.5))
+        site_tools["service_forecourt"](box, key, x, y+2.4, floor, style_materials)
+        cache(key+"_stock", "Convenience shop provisions", x+east*3.6, y+4.7, floor+.13, profile="FOOD")
+        cache(key+"_yard", "Delivery crate", x-7.6, y+3.1, floor, profile="BUILDING")
+
+    def wreck(key, x, y, z, yaw, name):
+        dimensions = {"BurnedSedan": (4.6,1.92,1.34), "BurnedCompact": (4.05,1.73,1.19),
+                      "RustedTruck": (6.4,2.37,2.52), "AbandonedVan": (4.44,1.83,1.72)}
+        label = "Abandoned vehicle" if name == "AbandonedVan" else "Wrecked vehicle"
+        district_mesh(key,label,name,x,y,z,dimensions[name],yaw=yaw,health=240)
 
     prop_profiles = {
         "Station counter": (95, "GENERAL"),
@@ -600,6 +698,13 @@ def place():
             remove_blockout(key)
         elif site["id"] == "city-parking":
             site_tools["garage_layout"](box, door, ramp, cache, encounter, sign, key, x, y, z+.2, style_materials)
+            for row, offset in enumerate((-6.0, 5.8)):
+                for index, dx in enumerate((-7.8,-3.3,1.4,6.0)):
+                    name = ("AbandonedVan", "BurnedCompact", "BurnedSedan")[(row+index)%3]
+                    wreck(f"{key}_parked_{row}_{index}", x+dx, y+offset, z+.2, row*180+90, name)
+            for i, dx in enumerate((-7, 1.5, 6)):
+                wreck(f"{key}_upper_wreck_{i}", x+dx, y-6, z+3.35, 90,
+                      "AbandonedVan" if i%2 else "BurnedCompact")
             remove_blockout(key)
         elif site["id"] == "southwest-apartments":
             site_tools["apartment_layout"](box, door, cache, encounter, key, x, y-7, z+.2, plan["seed"])
@@ -608,6 +713,10 @@ def place():
                 site, x, y+10, z+.2, 34, 12, style_materials, scatter_caches)
             remove_generated(key+"_exterior", key+"_closed")
             remove_blockout(key)
+        elif site["id"] == "southwest-services":
+            new_key = key+"_SixTwelve"
+            imported_station(new_key, x, y, z+.2)
+            migrate_landmark(key,new_key,(key+"_slab",))
         elif site["kind"] == "services":
             box(key+"_floor_finish", "Station shop floor", x, y+.5, z+.199,
                 12, 8.3, .021, ground=True, material=style_materials["ShopTile"])
@@ -685,6 +794,20 @@ def place():
         if site["kind"] == "radio":
             key = "CrossroadsComms_" + site["id"]
             migrate_landmark(key, key+"_Laitse")
+    for site in plan["substations"]:
+        utility["stamp_substation"](site, box, district_mesh, district_mesh, cache, sign, concrete)
+    transmission = plan["grid"]
+    for key, pole in transmission["poles"].items():
+        district_mesh("CrossroadsPylon_"+key, "High-voltage transmission pylon", "TransmissionPylon",
+                      pole["x"],pole["y"],pole["z"],(10.432,2.622,pole["height_m"]),yaw=pole["yaw"])
+    for a,b in transmission["spans"]:
+        for index,(start,end) in enumerate(zip(transmission["poles"][a]["phases"],
+                                             transmission["poles"][b]["phases"], strict=True)):
+            cable(f"CrossroadsCable_{a}_{b}_{index}",start,end)
+    downtown["stamp_city"](plan["city_lots"],plan["city_barriers"],box,district_mesh,
+                           communications_art,door,cache,style_materials)
+    for car in plan["wrecks"]:
+        wreck("CrossroadsWreck_"+car["id"],car["x"],car["y"],car["z"],car["yaw"],car["model"])
     for checkpoint in plan["checkpoints"]:
         communications["stamp_checkpoint"](checkpoint, communications_art)
 

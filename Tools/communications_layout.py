@@ -1,7 +1,7 @@
 """Place communications compounds and roadside defenses against the baked terrain."""
 import math
 
-COMPOUNDS = {"repeater": (32, 28), "radio": (40, 36), "transmitter": (38, 36)}
+COMPOUNDS = {"repeater": (32, 28), "radio": (40, 36), "transmitter": (38, 36), "substation": (31, 25)}
 
 
 def bake_communications(plan, height, available, water_distance):

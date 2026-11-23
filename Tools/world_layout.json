@@ -7,6 +7,24 @@
     2451,
     2069
   ],
+  "substations": [
+    {"id": "substation-1", "name": "Substation 1", "xy_m": [1500, 2205], "kind": "substation", "road": "east-west-highway"},
+    {"id": "substation-2", "name": "Substation 2", "xy_m": [2200, 972], "kind": "substation", "road": "southern-arterial"},
+    {"id": "substation-3", "name": "Substation 3", "xy_m": [3910, 1085], "kind": "substation", "road": "airport-road"},
+    {"id": "substation-4", "name": "Substation 4", "xy_m": [3150, 2510], "kind": "substation", "road": "northern-arterial"},
+    {"id": "substation-5", "name": "Substation 5", "xy_m": [4435, 2350], "kind": "substation", "road": "east-west-highway"},
+    {"id": "substation-6", "name": "Substation 6", "xy_m": [870, 3308], "kind": "substation", "road": "crater-arterial"}
+  ],
+  "transmission": [
+    ["power-southwest", "substation-2"],
+    ["substation-2", "substation-1"],
+    ["substation-1", "substation-6"],
+    ["power-northeast", "substation-4"],
+    ["power-northeast", "substation-5"],
+    ["substation-5", "substation-3"],
+    ["substation-2", "substation-3"],
+    ["substation-1", "substation-4"]
+  ],
   "communications": [
     {"id": "repeater-lowlands", "name": "Lowlands Cell Repeater", "xy_m": [1300, 3000], "kind": "repeater", "road": "crater-arterial"},
     {"id": "repeater-east-ridge", "name": "East Ridge Cell Repeater", "xy_m": [4660, 2610], "kind": "repeater", "road": "great-lake-road"},

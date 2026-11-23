@@ -71,6 +71,11 @@ def prepare_if_needed():
                       for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler"))
     required += tuple(f"/Game/Art/Crossroads/World/M_RegionFinish_{name}"
                       for name in ("Concrete", "StationBrick", "ShopTile"))
+    required += tuple(f"/Game/Art/Crossroads/World/Region/{name}/SM_{name}" for name in (
+        "CornerShop", "SubstationHouse", "SubstationSwitchgear", "TransmissionPylon", "TransmissionCable",
+        "BurnedSedan", "BurnedCompact", "RustedTruck", "AbandonedVan", "SixTwelveShop", "SixTwelveCanopy",
+        "StoneFacade", "OfficeFacade", "Storefront",
+    ))
     if medicine_sheet.is_file():
         required += ("/Game/Art/Crossroads/Local/MedicineSheet",)
     if (stamp.is_file() and stamp.read_text(encoding="utf-8") == revision
