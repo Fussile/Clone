@@ -69,7 +69,9 @@ ASurvivalSupplyCrate::ASurvivalSupplyCrate()
 void ASurvivalSupplyCrate::BeginPlay()
 {
     Super::BeginPlay();
-    if (bContainsSidearm || bContainsRifle)
+    const UStaticMesh* CrateAsset = Mesh->GetStaticMesh();
+    if ((bContainsSidearm || bContainsRifle) && CrateAsset &&
+        CrateAsset->GetPathName() == TEXT("/Engine/BasicShapes/Cube.Cube"))
     {
         if (UMaterialInterface* Steel = LoadObject<UMaterialInterface>(nullptr,
             TEXT("/Game/Art/Crossroads/Building/M_DefenseSteel.M_DefenseSteel")))

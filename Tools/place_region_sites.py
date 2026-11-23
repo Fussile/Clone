@@ -5,12 +5,18 @@ import unreal
 
 
 def station_layout(box, door, key, x, y, floor, palette):
-    wall, roof, trim, counter = (palette[name] for name in ("concrete", "asphalt", "petrol", "timber"))
+    wall, roof, trim, counter = (palette[name] for name in ("StationBrick", "asphalt", "petrol", "timber"))
     box(key+"_rear", "Station rear wall", x, y+4, floor, 12, .3, 3.15, material=wall)
     for sign, side in ((-1, "west"), (1, "east")):
         box(f"{key}_{side}", f"Station {side} wall", x+sign*5.85, y, floor, .3, 8, 3.15, material=wall)
-        box(f"{key}_{side}_front", f"Station {side} storefront", x+sign*3.75, y-4,
-            floor, 4.5, .3, 3.15, material=wall)
+        bay = f"{key}_{side}_display"
+        cx = x+sign*3.75
+        box(bay+"_sill", "Storefront sill", cx, y-4, floor, 4.5, .3, .94, material=wall)
+        box(bay+"_head", "Storefront lintel", cx, y-4, floor+2.38, 4.5, .3, .77, material=wall)
+        for i, offset in enumerate((-2.04, 0, 2.04)):
+            width = .42 if offset else .08
+            box(f"{bay}_post_{i}", "Storefront window post", cx+offset, y-4,
+                floor+.94, width, .16, 1.44, material=trim)
         box(f"{key}_{side}_leg", "Canopy column", x+sign*4.5, y-7, floor, .3, .3, 3.15, material=wall)
     box(key+"_roof", "Station roof", x, y, floor+3.15, 12, 8.3, .3, material=roof)
     box(key+"_canopy", "Station canopy", x, y-6, floor+3.15, 12, 4, .3, material=roof)

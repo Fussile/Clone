@@ -66,11 +66,15 @@ def place():
     }
     crate_mesh, pump_mesh = (
         import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Props/{name}", unreal.StaticMesh)
-        for name in ("ScavengeCrate", "FuelPump")
+        for name in ("ScavengeCrate", "FuelPumpSolid")
     )
     communications_meshes = {
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Communications/{name}", unreal.StaticMesh)
-        for name in ("RepeaterMast", "BroadcastTower", "CheckpointWall", "TimberWire", "RoadSpikes")
+        for name in ("RepeaterMast", "SkalkaTower", "LaitseStation", "CheckpointWall", "TimberWire", "RoadSpikes")
+    }
+    office_meshes = {
+        name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Props/{name}", unreal.StaticMesh)
+        for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler")
     }
     crate_class = unreal.load_class(None, "/Script/Survival.SurvivalSupplyCrate")
     zombie_class = unreal.load_class(None, "/Script/Survival.SurvivalZombie")
@@ -79,7 +83,7 @@ def place():
         raise RuntimeError("Build SurvivalEditor before placing structures and loot.")
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     for mesh in (warehouse_mesh, shelf_mesh, desk_mesh, bed_mesh, crate_mesh, pump_mesh,
-                 *communications_meshes.values(),
+                 *communications_meshes.values(), *office_meshes.values(),
                  *(landmark_meshes[name] for name in sorted(landmark_collision))):
         if not unreal.CrossroadsWorldBake.set_static_mesh_collision(mesh):
             raise RuntimeError(f"Could not prepare collision for {mesh.get_name()}.")
@@ -92,7 +96,7 @@ def place():
     if not asphalt or not concrete or not gravel:
         raise RuntimeError("Prepare the Crossroads surface materials before placing the region.")
 
-    # Simple blockout colors keep the styles legible while detailed modules are sourced.
+    # Architectural finishes use world-space repeats. Accents use solid paint.
     colors = {
         "late_soviet": (.28, .26, .23), "brick_hardwood": (.30, .115, .065),
         "stucco_metal": (.84, .83, .78), "classical_civic": (.65, .61, .53),
@@ -104,9 +108,25 @@ def place():
     style_materials = {
         style: prepare_art["make_material"](world_art, f"M_Region_{style}", (),
                                            tint=unreal.LinearColor(*color, 1.0))
-        for style, color in colors.items()
+        for style, color in colors.items() if style in {"dark_trim", "traffic", "glazing", "linen", "soil", "grass"}
     }
 
+    color_map = unreal.load_asset(f"{surface_path}/Concrete034_Color")
+    roughness = unreal.load_asset(f"{surface_path}/Concrete034_Roughness")
+    sampler, prop = unreal.MaterialSamplerType, unreal.MaterialProperty
+    def finish(name, texture, repeat, color=None):
+        return prepare_art["make_material"](world_art, "M_RegionFinish_"+name, (
+            (texture, sampler.SAMPLERTYPE_COLOR, "RGB", prop.MP_BASE_COLOR),
+            (roughness, sampler.SAMPLERTYPE_LINEAR_COLOR, "R", prop.MP_ROUGHNESS),
+        ), tint=color, world_repeat_cm=repeat)
+
+    for name in ("StationBrick", "ShopTile"):
+        tex = import_asset(source_art / "Finishes" / f"T_{name}.jpg", surface_path, unreal.Texture2D)
+        style_materials[name] = finish(name, tex, 200 if name == "StationBrick" else 160)
+    for style in ("late_soviet", "stucco_metal", "classical_civic", "modern", "petrol"):
+        style_materials[style] = finish(style, color_map, 165, unreal.LinearColor(*colors[style], 1.0))
+    style_materials["brick_hardwood"] = style_materials["StationBrick"]
+    concrete = finish("Concrete", color_map, 200)
     style_materials["timber"] = unreal.load_asset("/Game/Art/Crossroads/Building/M_CrossroadsTimber")
     style_materials["concrete"] = concrete
     style_materials["asphalt"] = asphalt
@@ -151,6 +171,9 @@ def place():
     def fitted_mesh(actor, asset, dimensions, yaw=0, align_long_axis=False):
         component = actor.get_component_by_class(unreal.StaticMeshComponent)
         component.set_static_mesh(asset)
+        # Previously baked cube props can carry a slot override into their replacement.
+        for slot in range(component.get_num_materials()):
+            component.set_material(slot, asset.get_material(slot))
         component.set_collision_profile_name("BlockAll")
         bounds = asset.get_bounding_box()
         extent = bounds.max - bounds.min
@@ -174,7 +197,7 @@ def place():
         z = floor + dimensions[2]/2
 
         def configure(actor):
-            fitted_mesh(actor, asset, dimensions, yaw, align_long_axis=health is not None)
+            fitted_mesh(actor, asset, dimensions, yaw, align_long_axis=health is not None or name == "LaitseStation")
 
         if health is not None:
             prop_kind(key, label, health, "BUILDING", x, y, z, configure)
@@ -213,7 +236,15 @@ def place():
         "Concourse seating": (70, "GENERAL"),
     }
 
-    station_surfaces = set()
+    furniture_slots = {
+        **dict.fromkeys(("Shelved work station", "Triage desk", "Reception desk",
+                         "Reception station", "Work tables"), ("OfficeWorkstation", (1.95, 1.52, 1.32))),
+        **dict.fromkeys(("Archive shelving", "Wall cabinets", "Treatment room cabinet"),
+                        ("OfficeFiles", (.73, .54, 1.45))),
+        "Bedroom dresser": ("OfficeDrawer", (.81, .44, 1.03)),
+        "Water cooler": ("OfficeCooler", (.38, .40, 1.58)),
+    }
+    prop_profiles["Water cooler"] = (45, "FOOD")
 
     def box(key, label, x, y, z, w, d, h, ground=False, material=None, hidden=False,
             collision=True, rotation=None):
@@ -232,10 +263,14 @@ def place():
             health, profile = prop_profiles[label]
             asset = {"Weathered cargo crate": crate_mesh, "Crated cargo": crate_mesh,
                      "Fuel dispenser": pump_mesh}.get(label)
+            dimensions = (w, d, h)
+            if label in furniture_slots:
+                name, dimensions = furniture_slots[label]
+                asset = office_meshes[name]
             if asset:
                 def configure_mesh(actor):
-                    fitted_mesh(actor, asset, (w, d, h))
-                prop_kind(key, label, health, profile, x, y, z+h/2, configure_mesh)
+                    fitted_mesh(actor, asset, dimensions, align_long_axis=label in furniture_slots)
+                prop_kind(key, label, health, profile, x, y, z+dimensions[2]/2, configure_mesh)
             else:
                 actor = prop_kind(key, label, health, profile, x, y, z+h/2, configure)
                 if material:
@@ -245,7 +280,7 @@ def place():
                       ("StructuralGround",) if ground else ())
         if material:
             component = actor.get_component_by_class(unreal.StaticMeshComponent)
-            if component.get_material(0) == cube.get_material(0) or key in station_surfaces:
+            if component.get_material(0) != material:
                 component.set_material(0, material)
 
     def landmark_mesh(key, label, name, x, y, z, *, scale=(1, 1, 1), collision=False,
@@ -324,6 +359,8 @@ def place():
         def configure(actor):
             component = actor.get_component_by_class(unreal.StaticMeshComponent)
             component.set_static_mesh(bed_mesh)
+            for slot in range(component.get_num_materials()):
+                component.set_material(slot, bed_mesh.get_material(slot))
             component.set_collision_profile_name("BlockAll")
         prop_kind(key, label, 85, "MEDICAL", x, y, floor, configure)
 
@@ -333,6 +370,8 @@ def place():
         def configure(actor):
             component = actor.get_component_by_class(unreal.StaticMeshComponent)
             component.set_static_mesh(mesh)
+            for slot in range(component.get_num_materials()):
+                component.set_material(slot, mesh.get_material(slot))
             component.set_collision_profile_name("BlockAll")
 
         prop_kind(key, label, 75, "FOOD" if kind == "shelf" else "OFFICE", x, y, floor, configure)
@@ -527,7 +566,7 @@ def place():
         z = site["foundation_z_m"]
         name = site["name"]
         if site["id"] != "stadium":
-            box(key+"_slab", name+" slab", x, y, z-.6, w, d, .8, ground=True)
+            box(key+"_slab", name+" slab", x, y, z-.6, w, d, .8, ground=True, material=concrete)
         # Leave a walkable pad at the front, including the initial spawn.
         if site["id"] == "stadium":
             new_key = key+"_community"
@@ -570,15 +609,17 @@ def place():
             remove_generated(key+"_exterior", key+"_closed")
             remove_blockout(key)
         elif site["kind"] == "services":
-            def station_box(key, label, *args, **kwargs):
-                station_surfaces.add(key)
-                box(key, label, *args, **kwargs)
-
-            station_box(key+"_floor_finish", "Station shop floor", x, y+.5, z+.199,
-                        12, 8.3, .021, ground=True, material=concrete)
-            site_tools["station_layout"](station_box, door, key, x, y+.5, z+.22, style_materials)
+            box(key+"_floor_finish", "Station shop floor", x, y+.5, z+.199,
+                12, 8.3, .021, ground=True, material=style_materials["ShopTile"])
+            site_tools["station_layout"](box, door, key, x, y+.5, z+.22, style_materials)
             remove_generated(*(tag for tag in actor_tags if tag.startswith(key+"_pump_")
                                and tag.endswith("_face")))
+            remove_generated(key+"_east_front", key+"_west_front")
+            sign(key+"_forecourt_sign", "CROSSROADS  /  PETROL", x, y-7.65, z+3.6, size=34)
+            for index, offset in enumerate((-3.8, -1.7)):
+                furniture(f"{key}_shop_shelf_{index}", "Station shop shelving", "shelf",
+                          x+offset, y-.3, z+.22)
+            box(key+"_cooler", "Water cooler", x+4.9, y+3.4, z+.22, .4, .4, 1.58)
             site_tools["service_forecourt"](box, key, x, y+.5, z+.2, style_materials)
             cache(key+"_provisions", "Station provisions", x+3, y+3, z+.2, food_amount=2, water_amount=3)
             if site["id"] == "south-services":
@@ -641,6 +682,9 @@ def place():
     for site in plan["communications"]:
         communications["stamp_compound"](site, box, door, sign, site_tools["building_shell"],
                                          storefront_window, communications_art, cache, encounter, style_materials)
+        if site["kind"] == "radio":
+            key = "CrossroadsComms_" + site["id"]
+            migrate_landmark(key, key+"_Laitse")
     for checkpoint in plan["checkpoints"]:
         communications["stamp_checkpoint"](checkpoint, communications_art)
 

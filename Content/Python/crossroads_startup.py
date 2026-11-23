@@ -34,7 +34,7 @@ def prepare_if_needed():
         "/Game/Art/Crossroads/World/SM_WeatheredShelf",
         "/Game/Art/Crossroads/World/SM_SchoolDesk",
         "/Game/Art/Crossroads/World/Props/ScavengeCrate/SM_ScavengeCrate",
-        "/Game/Art/Crossroads/World/Props/FuelPump/SM_FuelPump",
+        "/Game/Art/Crossroads/World/Props/FuelPumpSolid/SM_FuelPumpSolid",
         "/Game/Art/Crossroads/Player/SK_Survivor",
         "/Game/Art/Crossroads/SniperSurface/SK_SniperViewmodel",
         "/Game/Art/Crossroads/SniperSurface/SM_CrossroadsSniper",
@@ -56,7 +56,7 @@ def prepare_if_needed():
     )
     required += tuple(
         f"/Game/Art/Crossroads/World/Communications/{name}/SM_{name}"
-        for name in ("RepeaterMast", "BroadcastTower", "CheckpointWall", "TimberWire", "RoadSpikes")
+        for name in ("RepeaterMast", "SkalkaTower", "LaitseStation", "CheckpointWall", "TimberWire", "RoadSpikes")
     )
     required += tuple(
         f"/Game/Art/Crossroads/Inventory/T_Item_{name}"
@@ -67,6 +67,10 @@ def prepare_if_needed():
         f"/Game/Art/Crossroads/Interface/{icon.stem}"
         for icon in (project / "SourceArt" / "Crossroads" / "Interface").glob("T_UI_*.png")
     )
+    required += tuple(f"/Game/Art/Crossroads/World/Props/{name}/SM_{name}"
+                      for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler"))
+    required += tuple(f"/Game/Art/Crossroads/World/M_RegionFinish_{name}"
+                      for name in ("Concrete", "StationBrick", "ShopTile"))
     if medicine_sheet.is_file():
         required += ("/Game/Art/Crossroads/Local/MedicineSheet",)
     if (stamp.is_file() and stamp.read_text(encoding="utf-8") == revision

@@ -159,6 +159,7 @@ def civic(site, medical=False, classroom=False):
         site.part(f"waiting_{side}", "Waiting area bench", side*w*.37, -d*.24,
                   0, 2.1, .58, .46, "petrol")
     site.part("wing_divider", "Interior masonry", 0, d*.28, 0, .22, d*.44, 4.16, site.wall)
+    site.part("cooler", "Water cooler", w*.38, -d*.37, 0, .4, .4, 1.58, "petrol")
     site.part("reception", "Reception station", -2.5, -d*.13, 0, 2.7, .88, 1.02, "timber")
     site.part("porch", "Entry canopy", 0, front-site.y-.84, 3.42, w*.49, 1.95, .27, "classical_civic")
     site.storage("wing_case", "Emergency supplies" if medical else "Records desk",

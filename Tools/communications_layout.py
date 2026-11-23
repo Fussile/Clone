@@ -102,6 +102,8 @@ def bake_checkpoints(specs, routes):
 
 def stamp_compound(site, box, door, sign, shell, window, art, cache, encounter, palette):
     key = "CrossroadsComms_" + site["id"]
+    if site["kind"] == "radio":
+        key += "_Laitse"
     x, y = site["plot_xy_m"]
     w, d = site["footprint_m"]
     floor, base = site["floor_z_m"], site["footing_z_m"]
@@ -126,37 +128,21 @@ def stamp_compound(site, box, door, sign, shell, window, art, cache, encounter, 
     sign(key+"_name", site["name"].upper(), x, y-d/2+.4, floor+2.65, size=40)
 
     if site["kind"] == "radio":
-        front = building("_studio", x, y+3, 25, 17, 4.3, 1.65)
-        box(key+"_fascia", "Radio studio fascia", x, front-.14, floor+2.8, 10, .13, .48,
-            material=petrol)
-        sign(key+"_studio_sign", "STUDIO / CONTROL", x, front-.24, floor+3.12, size=30)
-        for side in (-1, 1):
-            window(f"{key}_studio_window_{side}", x+side*6.2, front, floor)
-        box(key+"_antenna_plinth", "Studio roof antenna plinth", x+9, y+7, floor+4.55,
-            1.4, 1.4, .28, material=concrete)
-        box(key+"_antenna_pole", "Studio roof antenna", x+9, y+7, floor+4.83,
-            .13, .13, 2.2, material=trim)
-        for rise in (.8, 1.45, 2.1):
-            box(f"{key}_antenna_element_{rise}", "Studio antenna element", x+9, y+7,
-                floor+4.83+rise, 1.3, .05, .055, material=trim, collision=False)
-        for side in (-1, 1):
-            box(f"{key}_studio_partition_{side}", "Broadcast studio partition",
-                x+side*6.55, y+4.8, floor, 11.65, .24, 3.5, material=concrete)
-        box(key+"_studio_lintel", "Studio control-room lintel", x, y+4.8,
-            floor+2.3, 1.45, .24, 1.2, material=concrete)
-        door(key+"_studio_inner", "Studio control-room door", x, y+4.8, floor, 1.45, 2.3,
-             finish="petrol")
-        box(key+"_console", "Shelved work station", x-6.3, y+8.2, floor, 6.2, .95, 1.12,
-            material=timber)
-        box(key+"_records", "Archive shelving", x+9, y+8.8, floor, 3.0, .72, 1.95,
-            material=trim)
-        cache(key+"_studio_case", "Studio equipment case", x-9, y+1, floor, profile="OFFICE")
-        cache(key+"_records_case", "Station records case", x+7, y+9, floor, profile="OFFICE")
-        cache(key+"_first_aid", "Station first aid", x+10.1, y-2.5, floor, profile="MEDICAL")
-        encounter(key+"_studio_walker", "Radio studio walker", x-1.8, y+7, floor)
+        # The survey is an exterior scan. Keep the accessible control room
+        # in its own footprint so scan triangles never block the entrance.
+        art(key+"_hall", "Laitse radio station", "LaitseStation",
+            x, y+5, floor, (30, 22, 6.46))
+        front = building("_control", x, y-10.3, 10, 6.3, 3.15, 1.65)
+        sign(key+"_control_sign", "BROADCAST CONTROL", x, front-.18, floor+2.85, size=24)
+        box(key+"_console", "Shelved work station", x-2.7, y-9.4, floor, 2, 1.5, 1.3)
+        box(key+"_records", "Archive shelving", x+3.95, y-8.2, floor, .8, .6, 1.5)
+        cache(key+"_studio_case", "Studio equipment case", x-3.7, y-12.1, floor, profile="OFFICE")
+        cache(key+"_records_case", "Station records case", x+2.4, y-8.2, floor, profile="OFFICE")
+        cache(key+"_first_aid", "Station first aid", x+3.7, y-12.1, floor, profile="MEDICAL")
+        encounter(key+"_studio_walker", "Radio studio walker", x+.7, y-9, floor)
     else:
         large = site["kind"] == "transmitter"
-        name = "BroadcastTower" if large else "RepeaterMast"
+        name = "SkalkaTower" if large else "RepeaterMast"
         dimensions = (20, 21, 42) if large else (11, 11, 36)
         art(key+"_tower", "Broadcast transmitter" if large else "Cell relay mast",
             name, x+5, y+3, floor, dimensions)

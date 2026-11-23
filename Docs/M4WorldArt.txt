@@ -73,7 +73,7 @@ Changes: Imported from the content branch and fit to the regional loot slots.
 Gas Station low - USSR fuel pump by Milionna (https://sketchfab.com/milionna)
 Source: https://sketchfab.com/3d-models/gas-station-low-ussr-29c6e42636834359afd50f76dfe5196e
 License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
-Changes: Imported the fuel pump from the content branch and fit it to the forecourt.
+Changes: Retained the original pump geometry and textures, made the body material opaque and fit the pump to the forecourt.
 
 Repeater Radio Tower (updated) by Veterock (https://sketchfab.com/windofglass)
 Source: https://sketchfab.com/3d-models/repeater-radio-tower-updated-f17b20e7e13546efac44aff1f097ef25
@@ -84,8 +84,7 @@ centered it at its footing, and packed resized textures.
 Cell Tower Skalka concrete tower by panfoto (https://sketchfab.com/panfoto)
 Source: https://sketchfab.com/3d-models/cell-tower-skalka-concrete-tower-b61436f067654e8282fd32a251980550
 License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
-Changes: Joined and simplified the scan, centered it at ground level,
-and resized the embedded texture.
+Changes: Combined the triangular scan sections, simplified with a geometric error limit, and resized the embedded color texture.
 
 Concrete wall protection by Mehdi Shahsavan (https://sketchfab.com/ahmagh2e)
 Source: https://sketchfab.com/3d-models/concrete-wall-protection-47c3c48fac3a4f0c8ca0fe61d34daff2
@@ -101,3 +100,16 @@ Wooden spike barricade by iGauravRajput (https://sketchfab.com/igauravrajput)
 Source: https://sketchfab.com/3d-models/wooden--spike--barricad-3d-model-free-0a61ae606efb493f94b9f126d2273d1e
 License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 Changes: Fit to roadside placements in the map bake.
+
+
+Laitse Radio Station by 3Di
+Source: https://sketchfab.com/3d-models/laitse-radio-station-adb7c2ef2a7e47318b688af5f739f930
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Converted the USDZ exterior scan to a simplified GLB with four color and normal atlases and aligned it to the plot.
+
+Office Props Pack by seenoise
+Source: https://sketchfab.com/3d-models/office-props-pack-260ff7a37a674505903708a0dc513e7e
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Reassembled the USDZ meshes into workstation, filing cabinet, drawer and water cooler props. Resized embedded textures and packed material channels.
+
+Station brick and shop tile finishes incorporate the ambientCG Concrete034 color texture (CC0).

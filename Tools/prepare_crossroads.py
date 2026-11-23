@@ -51,7 +51,7 @@ def import_asset(source, directory, asset_type, options=None, *, replace_existin
     return asset
 
 
-def make_material(directory, name, textures, tint=None):
+def make_material(directory, name, textures, tint=None, world_repeat_cm=None):
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     path = f"{directory}/{name}"
     if assets.does_asset_exist(path):
@@ -61,6 +61,24 @@ def make_material(directory, name, textures, tint=None):
     if material is None:
         raise RuntimeError(f"Could not create {path}.")
     editing = unreal.MaterialEditingLibrary
+    uv = None
+    if world_repeat_cm is not None:
+        # Pick a projection on each flat face so a 40 m wall and a 1 m jamb
+        # use the same physical texel density, including rotated structures.
+        pos = editing.create_material_expression(material, unreal.MaterialExpressionWorldPosition, -900, 0)
+        uv = editing.create_material_expression(material, unreal.MaterialExpressionCustom, -620, 0)
+        normal = editing.create_material_expression(material, unreal.MaterialExpressionPixelNormalWS, -900, 160)
+        uv.set_editor_property("inputs", [unreal.CustomInput(input_name="P"), unreal.CustomInput(input_name="N")])
+        uv.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT2)
+        uv.set_editor_property("code", (
+            "float3 n = abs(N); "
+            "float2 uv = n.z >= max(n.x,n.y) ? P.xy : "
+            "(n.x > n.y ? float2(P.y,-P.z) : float2(P.x,-P.z)); "
+            f"return uv / {world_repeat_cm:.1f};"
+        ))
+        if (not editing.connect_material_expressions(pos, "", uv, "P")
+                or not editing.connect_material_expressions(normal, "", uv, "N")):
+            raise RuntimeError(f"Could not project textures for {path}.")
     if not textures and tint is not None:
         color = editing.create_material_expression(material, unreal.MaterialExpressionConstant3Vector, -300, 0)
         color.set_editor_property("constant", tint)
@@ -72,6 +90,8 @@ def make_material(directory, name, textures, tint=None):
         )
         sample.set_editor_property("texture", texture)
         sample.set_editor_property("sampler_type", sampler)
+        if uv and not editing.connect_material_expressions(uv, "", sample, "UVs"):
+            raise RuntimeError(f"Could not set texture scale for {path}.")
         expression = sample
         if tint is not None and prop == unreal.MaterialProperty.MP_BASE_COLOR:
             color = editing.create_material_expression(
