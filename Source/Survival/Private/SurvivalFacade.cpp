@@ -48,13 +48,13 @@ void ASurvivalFacade::FitPanels(UStaticMesh* PanelMesh, double WidthCm, double D
             RowHeight / Size.Z);
         const FRotator FaceRotation(0, Face * 90.0, 0);
         const FQuat Rotation = FRotator(0, Face * 90.0 + (bWideX ? 0 : 90), 0).Quaternion();
-        const FVector PivotOffset = Rotation.RotateVector(Scale * Bounds.GetCenter());
+        const FVector PanelCenterOffset = Rotation.RotateVector(Scale * Bounds.GetCenter());
         for (int32 Row = 0; Row < Rows; ++Row)
         {
             for (int32 Col = 0; Col < Columns; ++Col)
             {
                 const FVector Center((Col + 0.5) * BayWidth - Span * 0.5, Outset, (Row + 0.5) * RowHeight);
-                Instances.Emplace(Rotation, FaceRotation.RotateVector(Center) - PivotOffset, Scale);
+                Instances.Emplace(Rotation, FaceRotation.RotateVector(Center) - PanelCenterOffset, Scale);
             }
         }
     }
