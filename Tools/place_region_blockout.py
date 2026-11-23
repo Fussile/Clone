@@ -64,7 +64,7 @@ def place():
     landmark_names = sorted(landmark_collision | {"RunwayMarkings"})
     landmark_meshes = {
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Landmarks/{name}", unreal.StaticMesh)
-        for name in landmark_names
+        for name in landmark_names if name not in {"RuinedTerminal", "RuinedAirportShop"}
     }
     crate_mesh, pump_mesh = (
         import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Props/{name}", unreal.StaticMesh)
@@ -74,10 +74,27 @@ def place():
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Communications/{name}", unreal.StaticMesh)
         for name in ("RepeaterMast", "CheckpointWall", "TimberWire", "RoadSpikes")
     }
-    # Keep revised imports in a fresh package so existing bakes pick up the new atlases.
+    # Cut the original scan geometry so rendering and complex collision share the same openings.
+    cuts = {
+        "LaitseStation": [((cx-.38,cx+.38),(-10,-4.28),(-20,20)) for cx in (-2.4,2.5)]
+                         + [((-20,20),(-10,-4.24),(-1.45,-.45))],
+        "RuinedTerminal": [((-1.35,1.35),(.15,2.55),(-20,20))],
+        "RuinedAirportShop": [((-1.35,1.35),(.15,2.45),(-25,25))],
+        "SkalkaTower": [((-.9,.9),(-8,1.5),(-20,20))],
+        "SubstationHouse": [((-.54,.54),(-1,1.62),(-4,4))],
+    }
+    cut_mesh = runpy.run_path(str(root/"Tools"/"survey_access.py"))["prepare"]
+    def survey_mesh(name):
+        package = f"{world_art}/SurveyAccess/{name}"
+        loaded = unreal.load_asset(f"{package}/SM_{name}") if unreal.get_editor_subsystem(unreal.EditorAssetSubsystem).does_asset_exist(f"{package}/SM_{name}") else None
+        if loaded:
+            return loaded
+        source = cut_mesh(source_art/f"SM_{name}.glb", root/"Saved"/"WorldBake"/"Access", cuts[name])
+        return import_asset(source, package, unreal.StaticMesh)
+    for name in ("RuinedTerminal", "RuinedAirportShop"):
+        landmark_meshes[name] = survey_mesh(name)
     for name in ("SkalkaTower", "LaitseStation"):
-        communications_meshes[name] = import_asset(source_art / f"SM_{name}.glb",
-            f"{world_art}/SurveyDetail/{name}", unreal.StaticMesh)
+        communications_meshes[name] = survey_mesh(name)
     office_meshes = {
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Props/{name}", unreal.StaticMesh)
         for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler")
@@ -90,8 +107,9 @@ def place():
     district_assets = district_solids | {"StoneFacade", "OfficeFacade", "Storefront", "TransmissionCable"}
     district_meshes = {
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Region/{name}", unreal.StaticMesh)
-        for name in sorted(district_assets - {"AbandonedVan"})
+        for name in sorted(district_assets - {"AbandonedVan", "SubstationHouse"})
     }
+    district_meshes["SubstationHouse"] = survey_mesh("SubstationHouse")
     district_meshes["AbandonedVan"] = import_asset(source_art / "SM_AbandonedVan.glb",
         f"{world_art}/SurveyDetail/AbandonedVan", unreal.StaticMesh)
     district_meshes["YardTransformer"] = landmark_meshes["YardTransformer"]
@@ -255,10 +273,35 @@ def place():
     if not facade_class:
         raise RuntimeError("Rebuild SurvivalEditor to load the instanced downtown facades.")
 
+    city_panels = []
+    if (root/"Content"/"CitySampleBuildings").is_dir():
+        registry = unreal.AssetRegistryHelpers.get_asset_registry()
+        registry.scan_paths_synchronous(["/Game/CitySampleBuildings"], True)
+        candidates = sorted((str(a.package_name), a) for a in
+            registry.get_assets_by_path("/Game/CitySampleBuildings", recursive=True)
+            if str(a.asset_name).upper().startswith("SM_BLDG_") and "_WALL_" in str(a.asset_name).upper())
+        families = set()
+        for path, entry in candidates:
+            family = path.rsplit("/", 1)[0]
+            if family in families:
+                continue
+            panel = entry.get_asset()
+            if not isinstance(panel, unreal.StaticMesh):
+                continue
+            bounds = panel.get_bounding_box()
+            size = bounds.max - bounds.min
+            if (180 <= max(size.x,size.y) <= 2000 and 180 <= size.z <= 1600
+                    and 1 < min(size.x,size.y) < max(size.x,size.y)*.35):
+                city_panels.append(panel)
+                families.add(family)
+                if len(city_panels) == 16:
+                    break
+        unreal.log(f"Crossroads selected {len(city_panels)} City Sample wall modules.")
     def facade(key, style, x, y, z, width, depth, height, yaw):
         def configure(actor):
             actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
-            actor.fit_panels(district_meshes[style], width*100, depth*100, height*100)
+            panel = random.Random(key).choice(city_panels) if city_panels else district_meshes[style]
+            actor.fit_panels(panel, width*100, depth*100, height*100)
         spawn(facade_class, key, "City facade panels", x, y, z, configure)
 
     def cable(key, a, b):
@@ -435,7 +478,8 @@ def place():
         if name in {"WeatheredBusStop", "YardTransformer", "PitchEntranceSign", "RadiationSign"}:
             prop_kind(key, label, 120, "BUILDING", x, y, z, configure)
         else:
-            spawn(unreal.StaticMeshActor, key, label, x, y, z, configure)
+            spawn(unreal.StaticMeshActor, key, label, x, y, z, configure,
+                  reconfigure=name in {"RuinedTerminal", "RuinedAirportShop"})
 
     def remove_generated(*keys):
         for key in keys:
@@ -570,7 +614,8 @@ def place():
 
             spawn(unreal.StaticMeshActor, key, "Bridge deck" if bridge else "Scavenging route",
                   x, y, z-thickness/2, lambda actor: road_actor(actor, (length+.5, width, thickness), material),
-                  ("StructuralGround",))
+                  ("StructuralGround",), relocate=route["id"].endswith("_access"),
+                  reconfigure=route["id"].endswith("_access"))
             if "pier_base_z_m" in segment:
                 base = segment["pier_base_z_m"]
                 box(key+"_pier", "Bridge pier", x, y, base, 1.2, 2.4, z-thickness-base, material=concrete)
@@ -821,7 +866,9 @@ def place():
     for route in plan["m4_route"]:
         place_route(route)
     for site in plan["communications"]:
-        resized_site = "CrossroadsComms_" + site["id"] + "_Laitse" if site["kind"] == "radio" else None
+        resized_site = "CrossroadsComms_" + site["id"]
+        if site["kind"] in {"radio","transmitter"}:
+            remove_generated(resized_site + ("_Laitse_pad" if site["kind"] == "radio" else "_pad"))
         communications["stamp_compound"](site, box, door, sign, site_tools["building_shell"],
                                          storefront_window, communications_art, cache, encounter, style_materials)
         if site["kind"] == "radio":

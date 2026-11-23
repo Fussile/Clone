@@ -1,7 +1,7 @@
 """Place communications compounds and roadside defenses against the baked terrain."""
 import math
 
-COMPOUNDS = {"repeater": (32, 28), "radio": (40, 36), "transmitter": (38, 36), "substation": (31, 25)}
+COMPOUNDS = {"repeater": (32, 28), "radio": (66, 62), "transmitter": (38, 36), "substation": (31, 25)}
 
 
 def bake_communications(plan, height, available, water_distance):
@@ -41,6 +41,8 @@ def bake_communications(plan, height, available, water_distance):
         samples = elevations(x, y, w, d)
         floor = round(max(samples)+.22, 3)
         footing = round(min(samples)-.65, 3)
+        natural = spec["kind"] in {"radio", "transmitter"}
+        ground = [[round(height(x+w*(i/4-.5), y+d*(j/4-.5)),3) for i in range(5)] for j in range(5)]
         entry = (x, y-d/2)
         approach = (x, entry[1]-14)
         road = roads[spec["road"]]
@@ -61,7 +63,7 @@ def bake_communications(plan, height, available, water_distance):
             count = max(1, math.ceil(distance / 8))
             samples = [(a[0]+(b[0]-a[0])*i/count, a[1]+(b[1]-a[1])*i/count) for i in range(count+1)]
             heights = [height(*p)+.10 for p in samples]
-            if index == 0:
+            if index == 0 and not natural:
                 # Span the whole apron down to grade instead of dropping at the pad edge.
                 bottom = heights[-1]
                 heights = [max(grade, floor+(bottom-floor)*i/count)
@@ -70,7 +72,7 @@ def bake_communications(plan, height, available, water_distance):
             segments.extend({"start": start, "end": end, "bridge": False}
                             for start, end in zip(positions, positions[1:]))
         sites.append({**spec, "plot_xy_m": [x, y], "footprint_m": [w, d],
-                      "floor_z_m": floor, "footing_z_m": footing,
+                      "ground_samples": ground, "floor_z_m": floor, "footing_z_m": footing,
                       "approach": {"id": spec["id"]+"_access", "width_m": 4.2,
                                    "surface": "gravel", "segments": segments}})
     return sites
@@ -108,10 +110,23 @@ def stamp_compound(site, box, door, sign, shell, window, art, cache, encounter, 
     w, d = site["footprint_m"]
     floor, base = site["floor_z_m"], site["footing_z_m"]
     concrete, trim, petrol, timber = (palette[k] for k in ("concrete", "dark_trim", "petrol", "timber"))
-    box(key+"_pad", "Communications yard foundation", x, y, base, w, d, floor-base,
+    natural = site["kind"] in {"radio", "transmitter"}
+    def grade(px, py):
+        if not natural:
+            return floor
+        u = min(4,max(0,(.5+(px-x)/w)*4))
+        v = min(4,max(0,(.5+(py-y)/d)*4))
+        i,j = min(int(u),3), min(int(v),3)
+        grid = site["ground_samples"]
+        return sum(grid[j+b][i+a]*(u-i if a else 1-u+i)*(v-j if b else 1-v+j)
+                   for a in (0,1) for b in (0,1))
+    if not natural:
+        box(key+"_pad", "Communications yard foundation", x, y, base, w, d, floor-base,
         ground=True, material=concrete)
 
     def building(suffix, bx, by, width, depth, height, opening):
+        if natural:
+            box(key+suffix+"_footing", "Service building floor", bx, by, base, width, depth, floor-base, ground=True, material=concrete)
         front = shell(box, key+suffix, bx, by, floor, width, depth, height,
                       opening, concrete, trim)
         door(key+suffix+"_entrance", "Communications entrance", bx, front-.055, floor,
@@ -121,33 +136,36 @@ def stamp_compound(site, box, door, sign, shell, window, art, cache, encounter, 
     for side in (-1, 1):
         for index, offset in enumerate((-6, -1, 4)):
             art(f"{key}_security_{side}_{index}", "Perimeter wire barricade", "TimberWire",
-                x+side*(w/2-1.22), y+offset, floor, (4.65, 1.3, 1.28), yaw=90,
+                x+side*(w/2-1.22), y+offset, grade(x+side*(w/2-1.22), y+offset), (4.65, 1.3, 1.28), yaw=90,
                 health=100)
         art(f"{key}_entry_chicane_{side}", "Concrete entry barricade", "CheckpointWall",
-            x+side*5.4, y-d/2+1.3, floor, (5, .68, 1.35), health=180)
+            x+side*5.4, y-d/2+1.3, grade(x+side*5.4, y-d/2+1.3), (5, .68, 1.35), health=180)
     sign(key+"_name", site["name"].upper(), x, y-d/2+.4, floor+2.65, size=40)
 
     if site["kind"] == "radio":
         # The survey is an exterior scan. Keep the accessible control room
         # in its own footprint so scan triangles never block the entrance.
         art(key+"_hall", "Laitse radio station", "LaitseStation",
-            x, y+5, floor, (30, 22, 6.46))
-        control_x = x-11
-        front = building("_control", control_x, y-10.3, 10, 6.3, 3.15, 1.65)
+            x, y+5, grade(x,y+5)-.8, (52, 47, 15))
+        control_x = x-18
+        floor = grade(control_x,y-23.3)+.12
+        control_y = y-23.3
+        front = building("_control", control_x, control_y, 10, 6.3, 3.15, 1.65)
         sign(key+"_control_sign", "BROADCAST CONTROL", control_x, front-.18, floor+2.85, size=24)
-        box(key+"_console", "Shelved work station", control_x-2.7, y-9.4, floor, 2, 1.5, 1.3)
-        box(key+"_records", "Archive shelving", control_x+3.95, y-8.2, floor, .8, .6, 1.5)
-        cache(key+"_studio_case", "Studio equipment case", control_x-3.7, y-12.1, floor, profile="OFFICE")
-        cache(key+"_records_case", "Station records case", control_x+2.4, y-8.2, floor, profile="OFFICE")
-        cache(key+"_first_aid", "Station first aid", control_x+3.7, y-12.1, floor, profile="MEDICAL")
-        encounter(key+"_studio_walker", "Radio studio walker", control_x+.7, y-9, floor)
+        box(key+"_console", "Shelved work station", control_x-2.7, control_y+.9, floor, 2, 1.5, 1.3)
+        box(key+"_records", "Archive shelving", control_x+3.95, control_y+2.1, floor, .8, .6, 1.5)
+        cache(key+"_studio_case", "Studio equipment case", control_x-3.7, control_y-1.8, floor, profile="OFFICE")
+        cache(key+"_records_case", "Station records case", control_x+2.4, control_y+2.1, floor, profile="OFFICE")
+        cache(key+"_first_aid", "Station first aid", control_x+3.7, control_y-1.8, floor, profile="MEDICAL")
+        encounter(key+"_studio_walker", "Radio studio walker", control_x+.7, control_y+1.3, floor)
     else:
         large = site["kind"] == "transmitter"
         name = "SkalkaTower" if large else "RepeaterMast"
         dimensions = (20, 21, 42) if large else (11, 11, 36)
         art(key+"_tower", "Broadcast transmitter" if large else "Cell relay mast",
-            name, x+5, y+3, floor, dimensions)
+            name, x+5, y+3, grade(x+5,y+3)-(1.55 if large else 0), dimensions)
         shed_x, shed_y = x-11, y-2
+        floor = grade(shed_x,shed_y)+(.12 if natural else 0)
         building("_service", shed_x, shed_y, 5.6, 5.8, 3.05, 1.45)
         cache(key+"_equipment", "Relay maintenance crate", shed_x-1.35, shed_y+1.2, floor,
               profile="BUILDING")

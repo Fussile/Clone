@@ -43,6 +43,10 @@ def prepare_if_needed():
         with path.open("rb") as source:
             for chunk in iter(lambda: source.read(1024 * 1024), b""):
                 digest.update(chunk)
+    sample = project / "Content" / "CitySampleBuildings"
+    for path in sorted(sample.rglob("*.uasset")):
+        digest.update(path.relative_to(sample).as_posix().encode("utf-8"))
+        digest.update(str(path.stat().st_size).encode())
     revision = digest.hexdigest()
 
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
@@ -73,7 +77,7 @@ def prepare_if_needed():
     required += tuple(
         f"/Game/Art/Crossroads/World/Landmarks/{name}/SM_{name}"
         for name in ("AircraftHangar", "CommunityPitch", "PitchEntranceSign", "RadiationSign",
-                     "RuinedAirportShop", "RuinedTerminal", "RunwayMarkings", "WeatheredBusStop",
+                     "RunwayMarkings", "WeatheredBusStop",
                      "YardTransformer")
     )
     required += tuple(
@@ -81,7 +85,9 @@ def prepare_if_needed():
         for name in ("RepeaterMast", "CheckpointWall", "TimberWire", "RoadSpikes")
     )
     required += tuple(f"/Game/Art/Crossroads/World/SurveyDetail/{name}/SM_{name}"
-                      for name in ("SkalkaTower", "LaitseStation", "AbandonedVan"))
+                      for name in ("AbandonedVan",))
+    required += tuple(f"/Game/Art/Crossroads/World/SurveyAccess/{name}/SM_{name}"
+                      for name in ("SkalkaTower", "LaitseStation", "SubstationHouse", "RuinedTerminal", "RuinedAirportShop"))
     required += tuple(
         f"/Game/Art/Crossroads/Inventory/T_Item_{name}"
         for name in ("Sidearm", "Food", "Water", "Bandage", "Timber", "Stone", "Cloth", "Rounds", "TimberDoor", "Rifle", "RifleRounds", "BuilderGuide", "ScavengerNotes", "DressingSchematic", "FieldDressing",
@@ -96,7 +102,7 @@ def prepare_if_needed():
     required += tuple(f"/Game/Art/Crossroads/World/M_RegionFinish_{name}"
                       for name in ("Concrete", "StationBrick", "ShopTile"))
     required += tuple(f"/Game/Art/Crossroads/World/Region/{name}/SM_{name}" for name in (
-        "CornerShop", "SubstationHouse", "SubstationSwitchgear", "TransmissionPylon", "TransmissionCable",
+        "CornerShop", "SubstationSwitchgear", "TransmissionPylon", "TransmissionCable",
         "BurnedSedan", "BurnedCompact", "RustedTruck", "SixTwelveShop", "SixTwelveCanopy",
         "StoneFacade", "OfficeFacade", "Storefront",
     ))

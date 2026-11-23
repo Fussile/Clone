@@ -158,3 +158,5 @@ Moldering Minivan (Free Raw Scan) by Renafox
 Source: https://sketchfab.com/3d-models/moldering-minivan-free-raw-scan-14acd80b35004d8b932cb6ee94dca468
 License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 Changes: Simplified and centered the scan, smoothed the display normals across UV seams, and packed a 2K color atlas from the original 8K image.
+
+Regional bake modification: Cut ground-level pedestrian openings in Laitse Radio Station, Skalka tower and the Soviet substation building. The prepared meshes retain their original materials and attribution above.

@@ -166,8 +166,7 @@ def stamp_city(lots, blockers, box, mesh, facade, prop, door, cache, palette):
         slab("_walk", "Street sidewalk", 0, -d/2-1.15, z-.20, w+.4, 2.3, .20, "concrete")
         style = lot["facade"]
         if style == "CornerShop":
-            mesh(key+"_corner", "Brick corner shops", style, x, y, z, (w,d,13.8), yaw=yaw)
-            continue
+            style = "StoneFacade"
 
         height = lot["levels"]*3.65
         wall = "classical_civic" if style == "StoneFacade" else "modern"
