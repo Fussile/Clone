@@ -132,14 +132,15 @@ def stamp_compound(site, box, door, sign, shell, window, art, cache, encounter, 
         # in its own footprint so scan triangles never block the entrance.
         art(key+"_hall", "Laitse radio station", "LaitseStation",
             x, y+5, floor, (30, 22, 6.46))
-        front = building("_control", x, y-10.3, 10, 6.3, 3.15, 1.65)
-        sign(key+"_control_sign", "BROADCAST CONTROL", x, front-.18, floor+2.85, size=24)
-        box(key+"_console", "Shelved work station", x-2.7, y-9.4, floor, 2, 1.5, 1.3)
-        box(key+"_records", "Archive shelving", x+3.95, y-8.2, floor, .8, .6, 1.5)
-        cache(key+"_studio_case", "Studio equipment case", x-3.7, y-12.1, floor, profile="OFFICE")
-        cache(key+"_records_case", "Station records case", x+2.4, y-8.2, floor, profile="OFFICE")
-        cache(key+"_first_aid", "Station first aid", x+3.7, y-12.1, floor, profile="MEDICAL")
-        encounter(key+"_studio_walker", "Radio studio walker", x+.7, y-9, floor)
+        control_x = x-11
+        front = building("_control", control_x, y-10.3, 10, 6.3, 3.15, 1.65)
+        sign(key+"_control_sign", "BROADCAST CONTROL", control_x, front-.18, floor+2.85, size=24)
+        box(key+"_console", "Shelved work station", control_x-2.7, y-9.4, floor, 2, 1.5, 1.3)
+        box(key+"_records", "Archive shelving", control_x+3.95, y-8.2, floor, .8, .6, 1.5)
+        cache(key+"_studio_case", "Studio equipment case", control_x-3.7, y-12.1, floor, profile="OFFICE")
+        cache(key+"_records_case", "Station records case", control_x+2.4, y-8.2, floor, profile="OFFICE")
+        cache(key+"_first_aid", "Station first aid", control_x+3.7, y-12.1, floor, profile="MEDICAL")
+        encounter(key+"_studio_walker", "Radio studio walker", control_x+.7, y-9, floor)
     else:
         large = site["kind"] == "transmitter"
         name = "SkalkaTower" if large else "RepeaterMast"

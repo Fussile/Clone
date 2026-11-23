@@ -84,7 +84,7 @@ centered it at its footing, and packed resized textures.
 Cell Tower Skalka concrete tower by panfoto (https://sketchfab.com/panfoto)
 Source: https://sketchfab.com/3d-models/cell-tower-skalka-concrete-tower-b61436f067654e8282fd32a251980550
 License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
-Changes: Combined the triangular scan sections, simplified with a geometric error limit, and resized the embedded color texture.
+Changes: Combined the triangular scan sections, preserved source normals and UV seams during simplification, and packed a 2K color atlas.
 
 Concrete wall protection by Mehdi Shahsavan (https://sketchfab.com/ahmagh2e)
 Source: https://sketchfab.com/3d-models/concrete-wall-protection-47c3c48fac3a4f0c8ca0fe61d34daff2
@@ -105,7 +105,7 @@ Changes: Fit to roadside placements in the map bake.
 Laitse Radio Station by 3Di
 Source: https://sketchfab.com/3d-models/laitse-radio-station-adb7c2ef2a7e47318b688af5f739f930
 License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
-Changes: Converted the USDZ exterior scan to a simplified GLB with four color and normal atlases and aligned it to the plot.
+Changes: Converted the USDZ exterior scan to a GLB, retained UV seams and the four original 1K color/normal pairs, and aligned it to the plot.
 
 Office Props Pack by seenoise
 Source: https://sketchfab.com/3d-models/office-props-pack-260ff7a37a674505903708a0dc513e7e
@@ -157,4 +157,4 @@ Changes: Decoded the geometry and textures and joined the pieces for direct edit
 Moldering Minivan (Free Raw Scan) by Renafox
 Source: https://sketchfab.com/3d-models/moldering-minivan-free-raw-scan-14acd80b35004d8b932cb6ee94dca468
 License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
-Changes: Simplified and centered the scan and packed a resized color atlas.
+Changes: Simplified and centered the scan, smoothed the display normals across UV seams, and packed a 2K color atlas from the original 8K image.

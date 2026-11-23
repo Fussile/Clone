@@ -45,37 +45,74 @@ def segment_samples(route, spacing):
         remaining -= length
 
 
+def lots_overlap(x, y, w, d, yaw, other):
+    # Separating axes of the two oriented footprints, with a service passage.
+    def axes(angle):
+        theta = math.radians(-angle)
+        return ((math.cos(theta), math.sin(theta)), (-math.sin(theta), math.cos(theta)))
+
+    a, b = axes(yaw), axes(other["yaw"])
+    dx, dy = other["x"]-x, other["y"]-y
+    for ux, uy in (*a, *b):
+        def span(basis, width, depth):
+            return (width*abs(ux*basis[0][0]+uy*basis[0][1]) +
+                    depth*abs(ux*basis[1][0]+uy*basis[1][1]))/2
+        if abs(dx*ux+dy*uy) >= span(a, w, d)+span(b, other["w"], other["d"])+3:
+            return False
+    return True
+
+
+def lot_is_available(available, x, y, dx, dy, width, depth):
+    # Cover the rectangle with small discs. One diagonal-sized disc would reject
+    # viable street frontage, especially between two parallel streets.
+    nx, ny = math.ceil(width/9), math.ceil(depth/9)
+    cell_w, cell_d = width/nx, depth/ny
+    radius = math.hypot(cell_w, cell_d)/2
+    for i in range(nx):
+        u = (i+.5)*cell_w-width/2
+        for j in range(ny):
+            v = (j+.5)*cell_d-depth/2
+            if not available(x+dx*u-dy*v, y+dy*u+dx*v, radius):
+                return False
+    return True
+
+
 def bake_city(routes, height, available, seed):
     rng = random.Random(seed)
     buildings = []
     blockers = []
-    for route in routes:
-        if not route["id"].startswith("downtown-street-"):
-            continue
-        placements = list(segment_samples(route, 30))
-        for index, ((x, y, z), dx, dy) in enumerate(placements):
-            # Both rows face the same street, leaving roughly 4 m between lots.
-            for side in (-1, 1):
-                width, depth = rng.choice(((20, 15), (23, 18), (23, 17)))
-                offset = route["width_m"]/2 + depth/2 + 6
-                px, py = x-dy*offset*side, y+dx*offset*side
-                margin = math.hypot(width, depth)/2
-                if not available(px, py, margin):
-                    continue
-                if any(math.hypot(px-lot["x"], py-lot["y"]) < (width+lot["w"])/2+3.4
-                       for lot in buildings):
-                    continue
-                samples = [height(px+dx*u-dy*v, py+dy*u+dx*v)
-                           for u in (-width/2, width/2) for v in (-depth/2, depth/2)]
-                if max(samples)-min(samples) > 2.8:
-                    continue
-                ident = f'{route["id"]}_{index}_{side}'
-                face = rng.choice(("StoneFacade", "OfficeFacade", "OfficeFacade", "CornerShop"))
-                levels = 3 if face == "CornerShop" else rng.choice((4, 4, 6, 7, 9))
-                buildings.append(dict(id=ident, x=px, y=py, z=max(samples)+.08,
-                                      base=min(samples)-.35, w=width, d=depth,
-                                      yaw=math.degrees(math.atan2(-dy, dx))+(180 if side==-1 else 0),
-                                      facade=face, levels=levels))
+    city_routes = [route for route in routes if route["id"].startswith("downtown-street-")]
+    for suffix, spacing, sizes in (
+        ("", 39, ((30, 27), (33, 31), (35, 36))),
+        ("_mid", 16, ((23, 20), (26, 22), (24, 19))),
+    ):
+        for route in city_routes:
+            placements = list(segment_samples(route, spacing))
+            for index, ((x, y, z), dx, dy) in enumerate(placements):
+                # Reserve larger floor plates and leave a service alley between neighbors.
+                for side in (-1, 1):
+                    width, depth = rng.choice(sizes)
+                    offset = route["width_m"]/2 + depth/2 + 3.2
+                    px, py = x-dy*offset*side, y+dx*offset*side
+                    if not lot_is_available(available, px, py, dx, dy, width, depth):
+                        continue
+                    yaw = math.degrees(math.atan2(-dy, dx)) + (180 if side == -1 else 0)
+                    if any(lots_overlap(px, py, width, depth, yaw, lot) for lot in buildings):
+                        continue
+                    samples = [height(px+dx*u-dy*v, py+dy*u+dx*v)
+                               for u in (-width/2, width/2) for v in (-depth/2, depth/2)]
+                    if max(samples)-min(samples) > 2.8:
+                        continue
+                    ident = f'{route["id"]}_{index}_{side}{suffix}'
+                    face = rng.choice(("StoneFacade", "OfficeFacade", "OfficeFacade", "CornerShop"))
+                    core = math.hypot((px-2451)/340, (py-2069)/220) < 1
+                    levels = 3 if face == "CornerShop" else rng.choice(
+                        (13, 17, 21, 25) if core and face == "OfficeFacade" else (5, 9, 13))
+                    buildings.append(dict(id=ident, x=px, y=py, z=max(samples)+.08,
+                                          base=min(samples)-.35, w=width, d=depth,
+                                          yaw=yaw,
+                                          facade=face, levels=levels))
+    for route in city_routes:
         # Barricade local roads at intervals with a staggered pedestrian gap.
         for index, ((x, y, z), dx, dy) in enumerate(segment_samples(route, 81)):
             blockers.append(dict(id=f'{route["id"]}_{index}', x=x, y=y, z=z, dx=dx, dy=dy,
@@ -111,7 +148,7 @@ def bake_traffic(routes, sites, blockers, seed):
     return parked
 
 
-def stamp_city(lots, blockers, box, mesh, prop, door, cache, palette):
+def stamp_city(lots, blockers, box, mesh, facade, prop, door, cache, palette):
     for lot in lots:
         key = "CrossroadsInfill_"+lot["id"]
         x, y, z, w, d, yaw = (lot[k] for k in ("x", "y", "z", "w", "d", "yaw"))
@@ -135,9 +172,10 @@ def stamp_city(lots, blockers, box, mesh, prop, door, cache, palette):
         height = lot["levels"]*3.65
         wall = "classical_civic" if style == "StoneFacade" else "modern"
         # Make the street-level recessed foyer reachable through a real door.
+        lobby_depth = d * .47
         for side in (-1, 1):
-            slab(f"_foyer_{side}", "Foyer side wall", side*(w/2-.13), -d/2+2.7,
-                 z, .26, 5.4, 3.24, wall)
+            slab(f"_foyer_{side}", "Foyer side wall", side*(w/2-.13), -d/2+lobby_depth/2,
+                 z, .26, lobby_depth, 3.24, wall)
             u = side*(w+1.75)/4
             slab(f"_front_{side}", "Retail display backing", u, -d/2+.22,
                  z, (w-1.75)/2, .42, 3.24, wall)
@@ -145,19 +183,11 @@ def stamp_city(lots, blockers, box, mesh, prop, door, cache, palette):
                  *point(u, -d/2-.29), z, ((w-2.05)/2, .68, 3.2), yaw=yaw, collision=False)
         door(key+"_foyer_door", "Lobby door", *point(0,-d/2), z, 1.75, 2.35, yaw=yaw)
         slab("_lintel", "Lobby door lintel", 0, -d/2+.22, z+2.35, 1.75, .42, .89, wall)
-        slab("_foyer_back", "Foyer rear wall", 0, -d/2+5.55, z, w, .32, 3.24, wall)
+        slab("_foyer_back", "Foyer rear wall", 0, -d/2+lobby_depth, z, w, .32, 3.24, wall)
         slab("_structure", "Upper office block", 0, 0, z+3.24, w, d, height-3.24, wall)
-        slab("_rear_base", "Rear service block", 0, 2.8, z, w, d-5.6, 3.24, wall)
+        slab("_rear_base", "Rear service block", 0, lobby_depth/2, z, w, d-lobby_depth, 3.24, wall)
         slab("_parapet", "Office roof cap", 0, 0, z+height, w+.36, d+.36, .34, "dark_trim")
-        for face, offset, wide in ((0, -d/2, w), (180, -d/2, w), (90, -w/2, d), (270, -w/2, d)):
-            theta = math.radians(face)
-            for bay in (-1, 1):
-                u, v = wide*.25*bay, offset-.20
-                bx, by = point(math.cos(theta)*u+math.sin(theta)*v,
-                               -math.sin(theta)*u+math.cos(theta)*v)
-                mesh(f"{key}_facade_{face}_{bay}", "Upper floor facade", style, bx, by, z+3.24,
-                     (wide*.5, .80 if style == "StoneFacade" else .35, height-3.25),
-                     yaw=yaw+face, collision=False)
+        facade(key+"_panels", style, x, y, z+3.24, w, d, height-3.24, yaw)
         cache(key+"_lobby_cache", "Lobby scavenging cache", *point(-w*.28, -d/2+3.5), z,
               profile="OFFICE", chance=82)
 

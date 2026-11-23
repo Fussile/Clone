@@ -72,8 +72,12 @@ def place():
     )
     communications_meshes = {
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Communications/{name}", unreal.StaticMesh)
-        for name in ("RepeaterMast", "SkalkaTower", "LaitseStation", "CheckpointWall", "TimberWire", "RoadSpikes")
+        for name in ("RepeaterMast", "CheckpointWall", "TimberWire", "RoadSpikes")
     }
+    # Keep revised imports in a fresh package so existing bakes pick up the new atlases.
+    for name in ("SkalkaTower", "LaitseStation"):
+        communications_meshes[name] = import_asset(source_art / f"SM_{name}.glb",
+            f"{world_art}/SurveyDetail/{name}", unreal.StaticMesh)
     office_meshes = {
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Props/{name}", unreal.StaticMesh)
         for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler")
@@ -86,8 +90,10 @@ def place():
     district_assets = district_solids | {"StoneFacade", "OfficeFacade", "Storefront", "TransmissionCable"}
     district_meshes = {
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Region/{name}", unreal.StaticMesh)
-        for name in sorted(district_assets)
+        for name in sorted(district_assets - {"AbandonedVan"})
     }
+    district_meshes["AbandonedVan"] = import_asset(source_art / "SM_AbandonedVan.glb",
+        f"{world_art}/SurveyDetail/AbandonedVan", unreal.StaticMesh)
     district_meshes["YardTransformer"] = landmark_meshes["YardTransformer"]
     crate_class = unreal.load_class(None, "/Script/Survival.SurvivalSupplyCrate")
     zombie_class = unreal.load_class(None, "/Script/Survival.SurvivalZombie")
@@ -145,8 +151,18 @@ def place():
     style_materials["concrete"] = concrete
     style_materials["asphalt"] = asphalt
 
+    previous_infill = {key for key in actor_tags if key.startswith("CrossroadsInfill_")}
+    touched_infill = set()
+    # Geometry and dependent doors, furnishings and loot share the same rebake.
+    resized_site = None
+
     def spawn(kind, key, label, x, y, z, configure, tags=(), always_loaded=False, relocate=False,
               reconfigure=False):
+        if key.startswith("CrossroadsInfill_"):
+            touched_infill.add(key)
+            relocate = reconfigure = True
+        elif resized_site and key.startswith(resized_site + "_"):
+            relocate = reconfigure = True
         pos = unreal.Vector(west + x*100, north + (depth-y)*100, z_zero + z*100)
         if key in actor_tags:
             actor = actor_tags[key]
@@ -234,6 +250,16 @@ def place():
                   relocate=True, reconfigure=True)
         else:
             prop_kind(key, label, health, "BUILDING", x, y, center_z, configure)
+
+    facade_class = unreal.load_class(None, "/Script/Survival.SurvivalFacade")
+    if not facade_class:
+        raise RuntimeError("Rebuild SurvivalEditor to load the instanced downtown facades.")
+
+    def facade(key, style, x, y, z, width, depth, height, yaw):
+        def configure(actor):
+            actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
+            actor.fit_panels(district_meshes[style], width*100, depth*100, height*100)
+        spawn(facade_class, key, "City facade panels", x, y, z, configure)
 
     def cable(key, a, b):
         asset = district_meshes["TransmissionCable"]
@@ -663,6 +689,11 @@ def place():
         w, d = site["footprint_m"]
         z = site["foundation_z_m"]
         name = site["name"]
+        resized_site = key if site["kind"] in {
+            "highrise", "shops", "village", "suburbs", "ranch", "clinic", "hospital", "civic", "industry"
+        } and site["id"] not in {
+            "stadium", "hangars", "city-hospital", "warehouses", "city-nightlife"
+        } else None
         if site["id"] != "stadium":
             box(key+"_slab", name+" slab", x, y, z-.6, w, d, .8, ground=True, material=concrete)
         # Leave a walkable pad at the front, including the initial spawn.
@@ -786,14 +817,17 @@ def place():
                   lambda actor: actor.set_actor_rotation(unreal.Rotator(yaw=-90), False),
                   always_loaded=True)
 
+    resized_site = None
     for route in plan["m4_route"]:
         place_route(route)
     for site in plan["communications"]:
+        resized_site = "CrossroadsComms_" + site["id"] + "_Laitse" if site["kind"] == "radio" else None
         communications["stamp_compound"](site, box, door, sign, site_tools["building_shell"],
                                          storefront_window, communications_art, cache, encounter, style_materials)
         if site["kind"] == "radio":
             key = "CrossroadsComms_" + site["id"]
             migrate_landmark(key, key+"_Laitse")
+    resized_site = None
     for site in plan["substations"]:
         utility["stamp_substation"](site, box, district_mesh, district_mesh, cache, sign, concrete)
     transmission = plan["grid"]
@@ -804,8 +838,9 @@ def place():
         for index,(start,end) in enumerate(zip(transmission["poles"][a]["phases"],
                                              transmission["poles"][b]["phases"], strict=True)):
             cable(f"CrossroadsCable_{a}_{b}_{index}",start,end)
-    downtown["stamp_city"](plan["city_lots"],plan["city_barriers"],box,district_mesh,
+    downtown["stamp_city"](plan["city_lots"],plan["city_barriers"],box,district_mesh,facade,
                            communications_art,door,cache,style_materials)
+    remove_generated(*(previous_infill - touched_infill))
     for car in plan["wrecks"]:
         wreck("CrossroadsWreck_"+car["id"],car["x"],car["y"],car["z"],car["yaw"],car["model"])
     for checkpoint in plan["checkpoints"]:

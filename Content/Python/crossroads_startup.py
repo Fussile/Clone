@@ -78,8 +78,10 @@ def prepare_if_needed():
     )
     required += tuple(
         f"/Game/Art/Crossroads/World/Communications/{name}/SM_{name}"
-        for name in ("RepeaterMast", "SkalkaTower", "LaitseStation", "CheckpointWall", "TimberWire", "RoadSpikes")
+        for name in ("RepeaterMast", "CheckpointWall", "TimberWire", "RoadSpikes")
     )
+    required += tuple(f"/Game/Art/Crossroads/World/SurveyDetail/{name}/SM_{name}"
+                      for name in ("SkalkaTower", "LaitseStation", "AbandonedVan"))
     required += tuple(
         f"/Game/Art/Crossroads/Inventory/T_Item_{name}"
         for name in ("Sidearm", "Food", "Water", "Bandage", "Timber", "Stone", "Cloth", "Rounds", "TimberDoor", "Rifle", "RifleRounds", "BuilderGuide", "ScavengerNotes", "DressingSchematic", "FieldDressing",
@@ -95,7 +97,7 @@ def prepare_if_needed():
                       for name in ("Concrete", "StationBrick", "ShopTile"))
     required += tuple(f"/Game/Art/Crossroads/World/Region/{name}/SM_{name}" for name in (
         "CornerShop", "SubstationHouse", "SubstationSwitchgear", "TransmissionPylon", "TransmissionCable",
-        "BurnedSedan", "BurnedCompact", "RustedTruck", "AbandonedVan", "SixTwelveShop", "SixTwelveCanopy",
+        "BurnedSedan", "BurnedCompact", "RustedTruck", "SixTwelveShop", "SixTwelveCanopy",
         "StoneFacade", "OfficeFacade", "Storefront",
     ))
     if medicine_sheet.is_file():

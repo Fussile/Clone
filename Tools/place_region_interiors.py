@@ -1,4 +1,5 @@
 """Walkable site layouts for Crossroads' regional plots."""
+import math
 from dataclasses import dataclass
 
 
@@ -73,15 +74,15 @@ class Site:
 
 
 def homes(site, ranch=False):
-    w, d = min(site.width*.69, 16), min(site.depth*.73, 12)
+    w, d = site.width*.82, site.depth*.84
     if ranch:
         w = site.width*.58
     h = 3.0
     site.building("_house", w, d, h, 1.35, finish="timber")
     # Paired pitched surfaces preserve a recognizable roofline on cabins and farmhouses.
     for side in (-1, 1):
-        site.part(f"roof_pitch_{side}", "Pitched roof", side*w/4, 0, h+.62,
-                  w*.56, d+.75, .19, "dark_trim", rotation=(-side*17, 0))
+        site.part(f"roof_pitch_{side}", "Pitched roof", side*w/4, 0, h+w*.25*math.tan(math.radians(17)),
+                  (w*.5+.35)/math.cos(math.radians(17)), d+.75, .19, "dark_trim", rotation=(-side*17, 0))
     for side in (-1, 1):
         offset = side*w*.25
         span = (0, w/2-.18) if side>0 else (-w/2+.18, 0)
@@ -112,7 +113,7 @@ def homes(site, ranch=False):
 
 
 def retail(site, use_windows):
-    w, d = min(site.width*.78, 28), min(site.depth*.73, 16)
+    w, d = site.width*.92, site.depth*.90
     front = site.building("_market", w, d, 3.65, 2.6, finish="petrol")
     site.label(front)
     if use_windows:
@@ -136,7 +137,7 @@ def retail(site, use_windows):
 
 
 def civic(site, medical=False, classroom=False):
-    w, d = min(site.width*.77, 40), min(site.depth*.66, 24)
+    w, d = site.width*.88, site.depth*.84
     front = site.building("_main", w, d, 4.25, 3.0, finish="petrol")
     site.label(front)
     for side in (-1, 1):
@@ -169,8 +170,14 @@ def civic(site, medical=False, classroom=False):
 
 
 def industrial(site, kind):
-    w, d = min(site.width*.76, 42), min(site.depth*.71, 25)
-    front = site.building("_works", w, d, 5.35, 4.5 if kind!="terminal" else 3.2, finish="petrol")
+    w, d = site.width*.90, site.depth*.86
+    hall_height = 8.4
+    front = site.building("_works", w, d, hall_height, 4.5 if kind!="terminal" else 3.2, finish="petrol")
+    for i in range(6):
+        bay = (i-2.5)*w/6
+        for side in (-1, 1):
+            site.part(f"clerestory_{side}_{i}", "Factory clerestory", bay, side*(d/2+.03),
+                      5.7, w/6-.55, .10, 1.6, "glazing", collision=False)
     # The loading opening stays unobstructed on the approach.
     if kind=="terminal":
         site.label(front-.14)
@@ -191,7 +198,7 @@ def industrial(site, kind):
         for i in range(3):
             dx = (i-1)*w*.24
             site.part(f"equipment_{i}", "Generator bank", dx, d*.35, 0, 2.25, 2, 1.65, "dark_trim")
-            site.part(f"stack_{i}", "Exhaust stack", dx, d*.34, 5.6, .86, .86, 4+i*.6, "concrete")
+            site.part(f"stack_{i}", "Exhaust stack", dx, d*.34, hall_height+.20, .86, .86, 4+i*.6, "concrete")
     elif kind=="terminal":
         site.part("counter", "Check-in counter", -w*.22, -d*.13, 0, 8.6, .82, 1.12, "petrol")
         site.part("observation", "Terminal observation room", w*.29, d*.19, 5.60,
@@ -203,7 +210,7 @@ def industrial(site, kind):
 
 
 def offices(site, count):
-    w, d, storey = site.width*.63, site.depth*.66, 3.15
+    w, d, storey = site.width*.83, site.depth*.86, 3.45
     front = site.building("_tower", w, d, count*storey, 3.0, finish="petrol")
     site.label(front)
     shaft = 5.1
@@ -256,6 +263,8 @@ def place_site(box, door, ramp, cache, encounter, sign, window, bed, furniture, 
     elif kind in {"industry","airport"}:
         industrial(site, "terminal" if kind=="airport" else "power" if ident.startswith("power-") else "works")
     elif kind=="highrise":
-        offices(site, 6 if ident=="city-towers" else 4)
+        if ident == "city-towers":
+            site.x -= 4.4  # Keep the east annex entrance and sidewalk clear.
+        offices(site, 22 if ident=="city-towers" else 9)
     else:
         raise ValueError(f"No interior layout for {ident} ({kind})")
