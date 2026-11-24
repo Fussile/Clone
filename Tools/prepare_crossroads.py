@@ -1,5 +1,6 @@
 """Import the starter art and prepare the editable playtest map in UE5.8."""
 
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -21,11 +22,16 @@ VIEWMODEL = ART + "/AlignedSidearm"
 LEVEL = "/Game/Maps/L_SouthernCrossroads"
 
 
-def import_asset(source, directory, asset_type, options=None, *, replace_existing=False):
+def import_asset(source, directory, asset_type, options=None, *, replace_existing=False,
+                 refresh_if_source_changed=False):
     name = source.stem
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     path = f"{directory}/{name}"
     asset = assets.load_asset(path) if assets.does_asset_exist(path) else None
+    revision = None
+    if refresh_if_source_changed:
+        revision = hashlib.sha256(source.read_bytes()).hexdigest()
+        replace_existing |= asset is not None and assets.get_metadata_tag(asset, "CrossroadsSourceHash") != revision
     if asset is None or replace_existing:
         if not source.is_file():
             raise FileNotFoundError(source)
@@ -45,6 +51,8 @@ def import_asset(source, directory, asset_type, options=None, *, replace_existin
         if asset.get_path_name().split(".")[0] != path:
             if not assets.rename_loaded_asset(asset, path):
                 raise RuntimeError(f"Could not save {source} as {path}.")
+        if revision is not None:
+            assets.set_metadata_tag(asset, "CrossroadsSourceHash", revision)
         if not assets.save_directory(directory, only_if_is_dirty=True, recursive=True):
             raise RuntimeError(f"Could not save imported assets in {directory}.")
     if not isinstance(asset, asset_type):

@@ -21,6 +21,14 @@
 
 IMPLEMENT_MODULE(FDefaultModuleImpl, SurvivalWorldEditor)
 
+namespace
+{
+bool IsVisibleLandmarkMesh(const UStaticMeshComponent* Component)
+{
+    return Component->GetStaticMesh() && Component->GetVisibleFlag() && !Component->bHiddenInGame;
+}
+}
+
 bool UCrossroadsWorldBake::ImportTerrain(const FString& HeightFile, int32 Resolution, FVector Scale,
     UMaterialInterface* GroundMaterial)
 {
@@ -206,7 +214,7 @@ TArray<UMaterialInterface*> UCrossroadsWorldBake::GetLandmarkMaterials(AActor* S
     Source->GetComponents(Components, true);
     for (const UStaticMeshComponent* Component : Components)
     {
-        if (!Component->GetStaticMesh())
+        if (!IsVisibleLandmarkMesh(Component))
         {
             continue;
         }
@@ -243,11 +251,11 @@ bool UCrossroadsWorldBake::CopyLandmarkSkin(AActor* Target, AActor* Source, FVec
     FBox Envelope(ForceInit);
     for (UStaticMeshComponent* Component : SourceComponents)
     {
-        UStaticMesh* Mesh = Component->GetStaticMesh();
-        if (!Mesh)
+        if (!IsVisibleLandmarkMesh(Component))
         {
             continue;
         }
+        UStaticMesh* Mesh = Component->GetStaticMesh();
         FMeshGroup& Group = Groups.AddDefaulted_GetRef();
         Group.Component = Component;
         if (auto* Instanced = Cast<UInstancedStaticMeshComponent>(Component))
@@ -281,6 +289,29 @@ bool UCrossroadsWorldBake::CopyLandmarkSkin(AActor* Target, AActor* Source, FVec
     const double HalfEntry = (EntryWidth * 0.5 + 18.0) / Scale.X;
     const FBox Opening(FVector(Base.X - HalfEntry, Base.Y + Size.Y * 0.05, Base.Z + 14.0 / Scale.Z),
         FVector(Base.X + HalfEntry, Envelope.Max.Y + 1.0, Base.Z + EntryHeight / Scale.Z));
+    int32 VisibleInstances = 0;
+    int32 RemovedInstances = 0;
+    for (FMeshGroup& Group : Groups)
+    {
+        const FBox Bounds = Group.Component->GetStaticMesh()->GetBoundingBox();
+        if (EntryWidth > 0.0)
+        {
+            RemovedInstances += Group.Transforms.RemoveAll([&](const FTransform& Instance)
+            {
+                return Bounds.TransformBy(Instance).Intersect(Opening);
+            });
+        }
+        for (FTransform& Instance : Group.Transforms)
+        {
+            Instance.AddToTranslation(-Base);
+        }
+        VisibleInstances += Group.Transforms.Num();
+    }
+    if (VisibleInstances == 0)
+    {
+        return false;
+    }
+
     TArray<UInstancedStaticMeshComponent*> OldComponents;
     Target->GetComponents(OldComponents);
     Target->Modify();
@@ -295,20 +326,9 @@ bool UCrossroadsWorldBake::CopyLandmarkSkin(AActor* Target, AActor* Source, FVec
     }
 
     Target->SetActorScale3D(Scale);
-    for (FMeshGroup& Group : Groups)
+    for (const FMeshGroup& Group : Groups)
     {
-        UStaticMesh* Mesh = Group.Component->GetStaticMesh();
-        TArray<FTransform> Visible;
-        for (FTransform& Instance : Group.Transforms)
-        {
-            if (EntryWidth > 0.0 && Mesh->GetBoundingBox().TransformBy(Instance).Intersect(Opening))
-            {
-                continue;
-            }
-            Instance.AddToTranslation(-Base);
-            Visible.Add(Instance);
-        }
-        if (Visible.IsEmpty())
+        if (Group.Transforms.IsEmpty())
         {
             continue;
         }
@@ -318,7 +338,7 @@ bool UCrossroadsWorldBake::CopyLandmarkSkin(AActor* Target, AActor* Source, FVec
         Skin->ComponentTags.Add(SkinTag);
         Skin->SetupAttachment(Target->GetRootComponent());
         Skin->SetMobility(EComponentMobility::Static);
-        Skin->SetStaticMesh(Mesh);
+        Skin->SetStaticMesh(Group.Component->GetStaticMesh());
         Skin->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         Skin->SetCanEverAffectNavigation(false);
         for (int32 Slot = 0; Slot < Group.Component->GetNumMaterials(); ++Slot)
@@ -326,9 +346,11 @@ bool UCrossroadsWorldBake::CopyLandmarkSkin(AActor* Target, AActor* Source, FVec
             UMaterialInterface* const* Finish = Finishes.Find(Group.Component->GetMaterial(Slot));
             Skin->SetMaterial(Slot, Finish ? *Finish : DefaultFinish);
         }
-        Skin->AddInstances(Visible, false, false, false);
+        Skin->AddInstances(Group.Transforms, false, false, false);
         Skin->RegisterComponent();
     }
     Target->MarkPackageDirty();
+    UE_LOG(LogTemp, Display, TEXT("Crossroads City Sample %s: copied %d mesh instances, removed %d at the entrance."),
+        *Source->GetClass()->GetName(), VisibleInstances, RemovedInstances);
     return true;
 }

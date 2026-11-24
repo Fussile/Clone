@@ -59,7 +59,8 @@ def place():
     world_art = prop_art["WORLD"]
     source_art = root / "SourceArt" / "Crossroads" / "World"
     bed_mesh, bay_mesh, warehouse_mesh, shelf_mesh, desk_mesh = (
-        import_asset(source_art / f"SM_{name}.glb", world_art, unreal.StaticMesh)
+        import_asset(source_art / f"SM_{name}.glb", world_art, unreal.StaticMesh,
+                     refresh_if_source_changed=name == "WarehouseDoorwayShell")
         for name in ("HospitalBed", "DowntownWindowBay", "WarehouseDoorwayShell",
                      "WeatheredShelf", "SchoolDesk")
     )
@@ -361,24 +362,27 @@ def place():
                 remove_generated(key+"_sample_main")
         elif role == "library":
             pieces = [("main", name, 26, floor, entrance_width)]
-        sources = [(suffix, hero_class(asset_name), h, bottom, opening)
+        sources = [(suffix, asset_name, hero_class(asset_name), h, bottom, opening)
                    for suffix, asset_name, h, bottom, opening in pieces]
         existing_skins = (key+"_sample_main", key+"_sample_ground")
         def clear_skin():
             remove_generated(*existing_skins, *(tag for tag in actor_tags if tag.startswith(key+"_trim_")))
 
-        if any(source_class is None for _, source_class, *_ in sources):
+        missing = [f"BPP_{asset_name}_N1" for _, asset_name, source_class, *_ in sources if source_class is None]
+        if missing:
             clear_skin()
-            unreal.log_warning(f"Crossroads retained the playable {role} blockout. Missing City Sample {name}.")
+            unreal.log_warning(f"Crossroads retained the playable {role} blockout. Missing City Sample packages in "
+                               f"{hero_folder}: {', '.join(missing)}.")
             return False
 
         # Copy the pack's authored instances into native actors and let the gameplay walls
         # own collision. Temporary sample actors never become external actors in the map.
-        for suffix, source_class, h, bottom, opening in sources:
+        for suffix, asset_name, source_class, h, bottom, opening in sources:
             tag = f"{key}_sample_{suffix}"
             probe = actors.spawn_actor_from_class(source_class, unreal.Vector(), transient=True)
             if not probe:
                 clear_skin()
+                unreal.log_warning(f"Crossroads retained the playable {role} blockout. Could not spawn {asset_name}.")
                 return False
             try:
                 def install(actor):
@@ -388,7 +392,8 @@ def place():
                                 for source in unreal.CrossroadsWorldBake.get_landmark_materials(probe)}
                     if not unreal.CrossroadsWorldBake.copy_landmark_skin(
                             actor, probe, dimensions, opening*100, 293, finishes, style_materials["classical_civic"]):
-                        raise ValueError(f"Empty City Sample exterior {name}")
+                        raise ValueError(f"Crossroads retained the playable {role} blockout. "
+                                         f"City Sample {asset_name} has no visible exterior to copy.")
 
                 spawn(facade_class, tag, "City Sample "+role+" exterior", x, y, bottom,
                       install, relocate=True, reconfigure=True)

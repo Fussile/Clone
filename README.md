@@ -38,4 +38,12 @@ For editor-only work, build and open `Survival.uproject`. The first editor launc
 
 To update an existing checkout from a GitHub source ZIP, close Unreal Editor and merge the ZIP into the project root, overwriting matching files. Keep `Content/CitySampleBuildings`, `Content/OvergrownFactoryENV`, and the existing generated content. Rebuild the **Development Editor** target and reopen the project. Crossroads detects the changed bake scripts and refreshes the existing map.
 
+If an incremental bake leaves broken buildings, close Unreal Editor and run this from the project root before reopening the project.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Tools\reset_crossroads_world.ps1
+```
+
+The script moves the region map, its World Partition packages, generated world art and bake state into `Saved/CrossroadsWorldBackup-*`. It leaves both Fab packs, the source art and the playtest log in place. Add `-WhatIf` to preview the files it will move. The next editor launch rebuilds the region. To restore hand edits, close the editor, move the newly generated copies aside, and copy the backed-up paths to their original locations.
+
 See [architecture](ARCHITECTURE.md), [decisions](DECISIONS.md), [asset manifest](ASSETS.md), and [M0 checklist](Docs/M0.md). Proposed choices remain provisional until confirmed by the developer.
