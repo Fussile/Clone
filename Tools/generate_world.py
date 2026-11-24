@@ -112,7 +112,7 @@ def generate(seed):
                         for span, _, fault in fissures for a, b in fault)
                 and all(math.hypot(px-sx, py-sy) > clearance + sr for sx, sy, sr, _ in plots))
 
-    parcel_sizes = {"university": CAMPUS_SIZE, "warehouses": (154, 92), "hangars": (180, 90),
+    parcel_sizes = {"west-factory": (108, 54), "east-factory": (108, 54), "university": CAMPUS_SIZE, "warehouses": (154, 92), "hangars": (180, 90),
                     "west-entertainment": (106, 74), "east-entertainment": (106, 74)}
     pads = []
     for site in plan["sites"]:

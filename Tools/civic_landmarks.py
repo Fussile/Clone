@@ -48,6 +48,15 @@ def hall(key, x, y, floor, width, depth, levels, yaw, role, title, box, door, ca
         for side in (-1,1):
             part(f"trim_{side}", "Recessed entrance jamb", side*(entry/2+.105), front-.03,
                  0, .21, .4, 2.65)
+        # A source bay can span more than one storey. Line the recessed portal
+        # behind it when the skin baker clears that bay for the working doors.
+        for side in (-1, 1):
+            part(f"portal_return_{side}", "Entrance reveal", side*(entry/2+.12),
+                 front+1.2, 0, .24, 2.4, story)
+            part(f"portal_spandrel_{side}", "Lobby glazing", side*(entry/2+1.45),
+                 front+.42, 0, 2.7, .16, story, "glazing")
+        part("portal_transom", "Entrance transom", 0, front+.38, 2.93,
+             entry+.4, .18, story+.2-2.93, "glazing")
         part("trim_header", "Entrance surround", 0, front-.03, 2.65, entry+.42, .4, .28)
     part("back", "Hall rear wall", 0, depth/2-.28, 0, width-.30, .26, height, hidden=skinned)
     part("roof", "Ceiling slab", 0, 0, height, width-.25, depth-.25, .25, "dark_trim",

@@ -365,17 +365,11 @@ def place():
         return hero_classes[name]
 
     def hero_art(key, role, x, y, floor, width, depth, height, ground_height, yaw, entrance_width):
-        name, has_ground = civic["HEROES"][role]
+        name, _ = civic["HEROES"][role]
         pieces = [("main", name, height, floor, entrance_width)]
-        if has_ground:
-            pieces = [("ground", name+"_Level01", ground_height, floor, entrance_width)]
-            # Preserve the distinct roofline at civic landmarks and use real one-to-four-storey
-            # envelopes for the different teaching blocks.
-            full_height = height
-            if height > ground_height:
-                pieces.append(("main", name, full_height-ground_height, floor+ground_height, 0))
-            else:
-                remove_generated(key+"_sample_main")
+        # Fit the authored silhouette once. Independently scaling its Level01
+        # and upper copy breaks the vertical alignment of their façades.
+        remove_generated(key+"_sample_ground")
         sources = [(suffix, asset_name, hero_class(asset_name), h, bottom, opening)
                    for suffix, asset_name, h, bottom, opening in pieces]
         existing_skins = (key+"_sample_main", key+"_sample_ground")
@@ -998,8 +992,11 @@ def place():
                 part(f"_pier_{side}_{i}","Nave pier",side*width*.405,depth*(i-1)*.29,
                      0,.75,.75,6.8,stone)
         part("_lintel","Entrance lintel",0,front+.25,2.65,3.2,.5,4.15,stone)
-        facade(key+"_masonry", "StoneFacade", x, y, floor, width, depth, 6.8, yaw, 3.15, 3.6,
-               bundled=True)
+        remove_generated(key+"_masonry")
+        for side in (-1, 1):
+            for index in range(5):
+                part(f"_buttress_{side}_{index}", "Nave masonry buttress",
+                     side*width/2, depth*(index-2)*.21, 0, .8, .9, 6.7, stone)
         for side in (-1, 1):
             part(f"_portal_{side}", "Parish entrance pier", side*2.35, front-.72,
                  0, .72, 1.4, 3.8, stone)
@@ -1024,7 +1021,7 @@ def place():
         spawn(unreal.StaticMeshActor, key, label, x, y, floor+size[2]/2, configure,
               relocate=True, reconfigure=True)
 
-    def dress_industrial(key, x, y, floor, width, depth, warehouse=False):
+    def dress_industrial(key, x, y, floor, width, depth, warehouse=False, bridge_side=None):
         if warehouse:
             # Rear dispatch apron, beyond the roll-up doors and within the site slab.
             wreck(key+"_dispatch_truck", x-9, y+13, floor, 6, "RustedTruck")
@@ -1034,8 +1031,8 @@ def place():
                            x+side*20, y+7, floor, (4.2,1.1,2.1), 90)
                 cache(f"{key}_dispatch_load_{side}", "Outbound freight", x+side*20,
                       y+10.5, floor, profile="BUILDING")
-        elif key in {"CrossroadsRegion_west-factory", "CrossroadsRegion_east-factory"}:
-            west_works = key.endswith("west-factory")
+        elif bridge_side is not None:
+            west_works = "west-factory" in key
             wreck(key+"_shift_car", x-10, y+17.7, floor, 0,
                   "BurnedSedan" if west_works else "BurnedCompact")
             for side in (-1, 1):
@@ -1049,6 +1046,18 @@ def place():
                 else:
                     district_mesh(f"{key}_machine_{side}", "Electrical switchgear", "SubstationSwitchgear",
                                   px, py, floor, (3.2,1.65,2.15), yaw=90)
+            for index, (kind, dx, dy, dims) in enumerate((
+                ("drum",7,12,(.65,.65,.94)), ("drum",7.8,12.2,(.65,.65,.94)),
+                ("drum",7.3,13,(.65,.65,.94)), ("debris",12,14,(2.3,1.2,.27)),
+                ("spill",width*.21-1,-depth*.12,(2.1,1.3,.018)),
+            )):
+                if kind in factory:
+                    def detail(actor):
+                        comp = fitted_mesh(actor,factory[kind],dims,index*31,align_long_axis=True)
+                        if kind in {"spill","debris"}:
+                            comp.set_collision_profile_name("NoCollision")
+                    spawn(unreal.StaticMeshActor,f"{key}_detail_{index}",kind.title(),x+dx,y+dy,
+                          floor+.035+dims[2]/2,detail,relocate=True,reconfigure=True)
             cache(key+"_service_parts", "Repair parts", x+width*.18, y+depth*.35,
                   floor, profile="BUILDING")
         desired = set()
@@ -1083,6 +1092,8 @@ def place():
                 for side in (-1, 1):
                     clad(f"front_{side}", x+side*(width+opening)/4, y-depth/2-.055,
                          (width-opening)/2, 0, 5.66)
+                    if side == bridge_side:
+                        continue
                     clad(f"side_{side}", x+side*(width/2+.055), y, depth, 0, 8.4, side*90)
             else:
                 # The source shell and its collision define all twelve shutter and staff openings.
@@ -1189,6 +1200,43 @@ def place():
         elif site["id"] == "city-hospital":
             resized_site = key
             place_hospital(key, x, y, z+.2)
+        elif site["id"] in {"west-factory", "east-factory"}:
+            works = key+"_plant"
+            for side in (-1, 1):
+                hall = f"{works}_{side}"
+                hx = x+side*28
+                inward = -side
+                def shell(place, tag, cx, cy, base, width, depth, height, opening, wall, roof, **options):
+                    def split_wall(actor_key, label, px, py, bottom, sw, sd, sh, **kwargs):
+                        if actor_key != f"{tag}_side_{inward}":
+                            return place(actor_key,label,px,py,bottom,sw,sd,sh,**kwargs)
+                        for i,(lo,hi) in enumerate(((-sd/2,-6),(-2,sd/2))):
+                            place(f"{actor_key}_{i}",label,px,py+(lo+hi)/2,bottom,sw,hi-lo,sh,**kwargs)
+                        place(actor_key+"_sill",label,px,py-4,bottom,sw,4,4,**kwargs)
+                        place(actor_key+"_head",label,px,py-4,bottom+7,sw,4,sh-7,**kwargs)
+                    return site_tools["building_shell"](split_wall,tag,cx,cy,base,width,depth,height,
+                                                       opening,style_materials["StationBrick"],roof,**options)
+                interiors["place_site"](box,door,ramp,cache,encounter,sign,storefront_window,
+                    treatment_bed,furniture,shell,site_tools["double_door"],hall,
+                    dict(site, name="Machine shop" if side<0 else "Packing and dispatch"),
+                    hx,y,z+.2,48,42,style_materials,scatter_caches)
+                dress_industrial(hall,hx,y,z+.2,43.2,36.12,bridge_side=inward)
+                box(hall+"_finish","Sealed production floor",hx,y,z+.2,42.7,35.6,.025,
+                    material=concrete,ground=True)
+                for i in range(3):
+                    box(f"{hall}_mat_{i}","Anti-fatigue mat",hx-8+i*5,y-6,z+.23,
+                        2.4,1.15,.035,material=style_materials["dark_trim"])
+                    box(f"{hall}_pallet_{i}","Shipping pallet",hx-8+i*3,y+12,z+.23,
+                        1.6,1.2,.15,material=style_materials["timber"])
+                    box(f"{hall}_crate_{i}","Weathered cargo crate",hx-8+i*3,y+12,z+.38,
+                        1.3,1,.95,material=style_materials["timber"])
+                ramp(hall+"_access","Gantry access",hx+inward*19.5,y-16,y-6,z+.23,z+4.2,3,concrete)
+            box(works+"_bridge","Transfer bridge deck",x,y-4,z+3.93,21,4,.27,ground=True,material=concrete)
+            for side in (-1,1):
+                box(f"{works}_rail_{side}","Bridge guard",x,y-4+side*1.92,z+4.2,13,.16,1.15,
+                    material=style_materials["dark_trim"])
+            box(works+"_cover","Bridge canopy",x,y-4,z+7.2,13,4.3,.19,material=style_materials["dark_trim"])
+            migrate_landmark(key, works, (key+"_slab",))
         elif site["id"] == "warehouses":
             resized_site = key
             district = key+"_distribution"
@@ -1315,7 +1363,7 @@ def place():
                        0, 3.15, 3.3, bundled=True)
             remove_generated(key+"_shell", key+"_trim", key+"_portico_roof",
                              *(f"{key}_portico_{i}" for i in range(4)))
-        if site["kind"] == "industry" and site["id"] not in {"hangars", "warehouses"}:
+        if site["kind"] == "industry" and site["id"] not in {"hangars", "warehouses", "east-factory", "west-factory"}:
             dress_industrial(key, x, y, z+.2, w*.90, d*.86, warehouse=site["id"] == "warehouses")
         if site["id"] == "city-towers":
             annex_x = x+19.5
