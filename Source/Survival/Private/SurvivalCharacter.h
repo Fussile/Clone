@@ -64,7 +64,8 @@ public:
     void CraftRecipe(int32 RecipeIndex, int32 Quantity);
     void ToggleInventory();
     UTextureRenderTarget2D* GetInventoryPortrait() const { return PortraitTexture; }
-    void ShowWeaponPortrait(bool bWeapon);
+    void ShowWeaponPortrait(bool bWeapon, bool bCharacter = false);
+    bool bCharacterPortrait = false;
     bool CanInspectWeapon(ESurvivalItem Item) const;
     bool HasWeaponMod(ESurvivalItem Weapon, int32 Mod) const;
     bool CanToggleWeaponMod(ESurvivalItem Weapon, int32 Mod) const;
@@ -80,7 +81,7 @@ public:
     int32 GearCount(int32 Index) const;
     bool IsWearing(int32 Index) const { return WornGear.Contains(Index); }
     UFUNCTION(Server, Reliable)
-    void ServerToggleGear(int32 Index);
+    void ServerSetGearEquipped(int32 Index, bool bEquip);
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
     static bool CanQuickSlot(ESurvivalItem Item);
     bool SplitSelection();

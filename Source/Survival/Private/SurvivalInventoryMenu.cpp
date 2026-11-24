@@ -33,9 +33,9 @@ namespace
 const FLinearColor Accent(0.87f, 0.45f, 0.25f);
 const FLinearColor Ink(0.91f, 0.87f, 0.80f);
 const FLinearColor Muted(0.62f, 0.64f, 0.62f);
-const FLinearColor Backdrop(0.019f, 0.024f, 0.027f, 0.97f);
-const FLinearColor PanelColor(0.043f, 0.050f, 0.054f);
-const FLinearColor Tile(0.081f, 0.093f, 0.101f);
+const FLinearColor Backdrop(0.019f, 0.024f, 0.027f, 0.30f);
+const FLinearColor PanelColor(0.043f, 0.050f, 0.054f, 0.64f);
+const FLinearColor Tile(0.081f, 0.093f, 0.101f, 0.60f);
 const FLinearColor Chosen(0.46f, 0.23f, 0.095f);
 
 struct FTrainingTree { const TCHAR* Label; const TCHAR* Category; const TCHAR* Icon; };
@@ -139,6 +139,7 @@ public:
     bool bBelt;
     int32 Slot;
     bool bHalf;
+    int32 GearIndex = INDEX_NONE;
     FText Label;
     FSlateBrush Icon;
 
@@ -152,22 +153,64 @@ public:
         ];
     }
 
-    static TSharedRef<FPackDrag> Start(bool bIsBelt, int32 SourceSlot, ESurvivalItem Item, const FSlateBrush* SourceIcon, bool bSplit)
+    static TSharedRef<FPackDrag> Start(bool bIsBelt, int32 SourceSlot, ESurvivalItem Item, const FSlateBrush* SourceIcon, bool bSplit, int32 Gear = INDEX_NONE)
     {
         auto Op = MakeShared<FPackDrag>();
         Op->bBelt = bIsBelt;
         Op->Slot = SourceSlot;
         Op->bHalf = bSplit;
-        Op->Label = FText::FromString(SurvivalItemName(Item));
+        Op->GearIndex = Gear;
+        Op->Label = FText::FromString(Gear == INDEX_NONE ? SurvivalItemName(Item) : SurvivalGear[Gear].Label);
         if (SourceIcon) { Op->Icon = *SourceIcon; }
         Op->Construct();
         return Op;
     }
 };
 
+class SWearSlot : public SCompoundWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SWearSlot) {}
+        SLATE_ARGUMENT(ASurvivalCharacter*, Player)
+        SLATE_ARGUMENT(FString, WearSlot)
+    SLATE_END_ARGS()
+    void Construct(const FArguments& Args)
+    {
+        Player = Args._Player;
+        Slot = Args._WearSlot;
+        ChildSlot[SNew(SButton).ButtonStyle(&MenuButtonStyle()).ButtonColorAndOpacity(Tile)
+            .ToolTipText(FText::FromString(TEXT("Drag matching gear here. Click a worn item to return it to the backpack.")))
+            .OnClicked_Lambda([this]{ const int32 Id = Worn(); if (Id != INDEX_NONE) Player->ServerSetGearEquipped(Id,false); return FReply::Handled(); })
+            [SNew(STextBlock).AutoWrapText(true).Text_Lambda([this]{
+                const int32 Id = Worn();
+                return FText::FromString(Slot + TEXT("\n") + (Id == INDEX_NONE ? TEXT("Empty") : SurvivalGear[Id].Label));
+            })]];
+    }
+    virtual FReply OnDrop(const FGeometry&, const FDragDropEvent& Event) override
+    {
+        const auto Op = Event.GetOperationAs<FPackDrag>();
+        if (!Op || !Player.IsValid() || Op->GearIndex == INDEX_NONE ||
+            Player->GetPackCell(Op->Slot).GearIndex != Op->GearIndex || Slot != SurvivalGear[Op->GearIndex].Slot)
+            return FReply::Unhandled();
+        Player->ServerSetGearEquipped(Op->GearIndex,true);
+        return FReply::Handled();
+    }
+private:
+    int32 Worn() const
+    {
+        if (Player.IsValid())
+            for (int32 Id = 0; Id < UE_ARRAY_COUNT(SurvivalGear); ++Id)
+                if (Slot == SurvivalGear[Id].Slot && Player->IsWearing(Id)) return Id;
+        return INDEX_NONE;
+    }
+    TWeakObjectPtr<ASurvivalCharacter> Player;
+    FString Slot;
+};
+
 class SPackCell : public SCompoundWidget
 {
 public:
+    virtual bool SupportsKeyboardFocus() const override { return true; }
     SLATE_BEGIN_ARGS(SPackCell) {}
         SLATE_ARGUMENT(ASurvivalCharacter*, Player)
         SLATE_ARGUMENT(bool, Belt)
@@ -183,6 +226,7 @@ public:
         Icons = Args._Icons;
         SetToolTipText(TAttribute<FText>::CreateLambda([this]() {
             const FSurvivalPackCell Cell = bBelt || !Player.IsValid() ? FSurvivalPackCell() : Player->GetPackCell(Index);
+            if (Cell.GearIndex != INDEX_NONE) return FText::FromString(FString::Printf(TEXT("%s  ·  %s\nShift-click to equip"), SurvivalGear[Cell.GearIndex].Label, SurvivalGear[Cell.GearIndex].Slot));
             return DescribeItem(Player.Get(), Item(), Cell.Quality, bBelt ? -1 : Cell.Count);
         }));
         ChildSlot
@@ -190,7 +234,7 @@ public:
             SNew(SBorder).BorderImage(WhiteBrush()).Padding(2)
             .BorderBackgroundColor_Lambda([this]() {
                 const bool bSelected = Player.IsValid() && (bBelt ? Index == Player->GetActiveHotbarSlot()
-                    : Item() != ESurvivalItem::None && Index == Player->GetSelectedPackSlot());
+                    : (Item() != ESurvivalItem::None || Gear() != INDEX_NONE) && Index == Player->GetSelectedPackSlot());
                 return FSlateColor(IsHovered() ? Accent : bSelected ? Chosen : PanelColor);
             })
             [
@@ -199,6 +243,9 @@ public:
                     SNew(SOverlay)
                     + SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
                     [SNew(SImage).DesiredSizeOverride(FVector2D(52,52)).Image_Lambda([this]() { return Icon(); })]
+                    + SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+                    [SNew(STextBlock).AutoWrapText(true).Justification(ETextJustify::Center)
+                        .Text_Lambda([this]{ const int32 Id = Gear(); return Id == INDEX_NONE ? FText::GetEmpty() : FText::FromString(SurvivalGear[Id].Label); })]
                     + SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Top)
                     [SNew(STextBlock).ColorAndOpacity(Muted).Text(bBelt ? FText::AsNumber(Index + 1) : FText::GetEmpty())]
                     + SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom)
@@ -225,7 +272,7 @@ public:
             return FReply::Handled();
         }
         if (Event.GetEffectingButton() != EKeys::LeftMouseButton) { return FReply::Unhandled(); }
-        return FReply::Handled().CaptureMouse(SharedThis(this)).DetectDrag(SharedThis(this), EKeys::LeftMouseButton);
+        return FReply::Handled().SetKeyboardFocus(SharedThis(this)).CaptureMouse(SharedThis(this)).DetectDrag(SharedThis(this), EKeys::LeftMouseButton);
     }
 
     virtual FReply OnMouseButtonUp(const FGeometry& Geometry, const FPointerEvent& Event) override
@@ -234,6 +281,11 @@ public:
         if (Player.IsValid() && Geometry.IsUnderLocation(Event.GetScreenSpacePosition()))
         {
             if (bBelt) { Player->ChooseHotbarSlot(Index); }
+            else if (Gear() != INDEX_NONE)
+            {
+                Player->SetSelectedPackSlot(Index);
+                if (Event.IsShiftDown()) Player->ServerSetGearEquipped(Gear(), true);
+            }
             else if (Item() == ESurvivalItem::None) { Player->SetSelectedInventoryItem(ESurvivalItem::None); }
             else if (Event.IsShiftDown()) { QuickAssign(); }
             else { Player->SetSelectedPackSlot(Index); }
@@ -253,9 +305,9 @@ public:
 
     virtual FReply OnDragDetected(const FGeometry&, const FPointerEvent& Event) override
     {
-        if (Item() == ESurvivalItem::None) { return FReply::Unhandled(); }
+        if (Item() == ESurvivalItem::None && Gear() == INDEX_NONE) { return FReply::Unhandled(); }
         return FReply::Handled().ReleaseMouseCapture().BeginDragDrop(
-            FPackDrag::Start(bBelt, Index, Item(), Icon(), Event.IsControlDown()));
+            FPackDrag::Start(bBelt, Index, Item(), Icon(), Event.IsControlDown(), Gear()));
     }
 
     virtual FReply OnDrop(const FGeometry&, const FDragDropEvent& Event) override
@@ -287,6 +339,7 @@ private:
         Player->ChooseHotbarSlot(Target == INDEX_NONE ? Player->GetActiveHotbarSlot() : Target);
     }
 
+    int32 Gear() const { return !bBelt && Player.IsValid() ? Player->GetPackCell(Index).GearIndex : INDEX_NONE; }
     ESurvivalItem Item() const
     {
         if (!Player.IsValid()) { return ESurvivalItem::None; }
@@ -296,6 +349,11 @@ private:
     int32 Quality() const { return bBelt || !Player.IsValid() ? 0 : Player->GetPackCell(Index).Quality; }
     FText CountText() const
     {
+        if (Gear() != INDEX_NONE)
+        {
+            const int32 Count = Player->GetPackCell(Index).Count;
+            return Count > 1 ? FText::AsNumber(Count) : FText::GetEmpty();
+        }
         const ESurvivalItem Value = Item();
         if (Value == ESurvivalItem::None) { return FText::GetEmpty(); }
         if (SurvivalItemHasQuality(Value)) { return FText::AsNumber(Quality()); }
@@ -561,7 +619,7 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
     }
 
     TSharedRef<SHorizontalBox> Tabs = SNew(SHorizontalBox);
-    const TCHAR* PageNames[] = {TEXT("Pack"), TEXT("Crafting"), TEXT("Skills"), TEXT("Equipment")};
+    const TCHAR* PageNames[] = {TEXT("Inspect"), TEXT("Crafting"), TEXT("Skills"), TEXT("Character")};
     const TCHAR* PageIcons[] = {TEXT("Backpack"), TEXT("Workshop"), TEXT("Skills"), TEXT("Survivor")};
     for (int32 Index = 0; Index < UE_ARRAY_COUNT(PageNames); ++Index)
     {
@@ -588,34 +646,16 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
     Portrait.SetResourceObject(Player->GetInventoryPortrait());
     Portrait.DrawAs = ESlateBrushDrawType::Image;
     Portrait.SetImageSize(FVector2D(180,240));
-    Profile->AddSlot().AutoHeight()[SNew(SBox).HeightOverride(210)[SNew(SImage).Image(&Portrait)]];
-    TSharedRef<SVerticalBox> Wardrobe = SNew(SVerticalBox);
-    for (int32 Index = 0; Index < UE_ARRAY_COUNT(SurvivalGear); ++Index)
+    TSharedRef<SVerticalBox> LeftSlots = SNew(SVerticalBox);
+    TSharedRef<SVerticalBox> RightSlots = SNew(SVerticalBox);
+    const TCHAR* WearSlots[] = {TEXT("Helmet"),TEXT("Eyes"),TEXT("Face"),TEXT("Torso"),TEXT("Body"),
+                                TEXT("Vest"),TEXT("Hands"),TEXT("Belt"),TEXT("Legs")};
+    for (int32 I = 0; I < UE_ARRAY_COUNT(WearSlots); ++I)
     {
-        Wardrobe->AddSlot().AutoHeight().Padding(0,2)
-        [
-            SNew(SButton).ButtonStyle(&MenuButtonStyle()).ContentPadding(FMargin(14,8))
-            .Visibility_Lambda([this,Index]{ return Player.IsValid() && Player->GearCount(Index) ? EVisibility::Visible : EVisibility::Collapsed; })
-            .ButtonColorAndOpacity_Lambda([this,Index]{ return FSlateColor(Player.IsValid() && Player->IsWearing(Index) ? Chosen : Tile); })
-            .Text_Lambda([this,Index]{ const auto& G = SurvivalGear[Index];
-                return FText::FromString(FString::Printf(TEXT("%s    %s    ×%d    %s"), G.Slot,G.Label,
-                    Player.IsValid() ? Player->GearCount(Index) : 0,
-                    Player.IsValid() && Player->IsWearing(Index) ? TEXT("Remove") : TEXT("Equip"))); })
-            .OnClicked_Lambda([this,Index]{ if (Player.IsValid()) Player->ServerToggleGear(Index); return FReply::Handled(); })
-        ];
-        Wardrobe->AddSlot().AutoHeight().HAlign(HAlign_Right)
-        [SNew(SButton).ButtonStyle(&MenuButtonStyle()).Text(FText::FromString(TEXT("Drop one")))
-            .Visibility_Lambda([this,Index]{ return Player.IsValid() && Player->GearCount(Index) ? EVisibility::Visible : EVisibility::Collapsed; })
-            .OnClicked_Lambda([this,Index]{ if (Player.IsValid()) Player->ServerDropGear(Index); return FReply::Handled(); })];
+        auto Column = I < 5 ? LeftSlots : RightSlots;
+        Column->AddSlot().FillHeight(1).Padding(2)[SNew(SWearSlot).Player(Player.Get()).WearSlot(FString(WearSlots[I]))];
     }
-    Profile->AddSlot().AutoHeight().Padding(0, 5, 0, 14)
-        [SNew(STextBlock).Text_Lambda([this]{ return FText::FromString(bModifying ? TEXT("WEAPON INSPECTION") : TEXT("SURVIVOR")); })];
-    Profile->AddSlot().AutoHeight().Padding(0, 0, 0, 20)
-    [
-        SNew(STextBlock).Font(FCoreStyle::GetDefaultFontStyle("Bold", 23)).ColorAndOpacity(Ink)
-        .Text_Lambda([this]() { return Player.IsValid() ? FText::FromString(FString::Printf(TEXT("Level %d"),
-            Player->GetProgression().CharacterLevel)) : FText::GetEmpty(); })
-    ];
+    Profile->AddSlot().AutoHeight().Padding(0,0,0,12)[SectionLabel(TEXT("STATUS"))];
     const TCHAR* VitalNames[] = {TEXT("Health"), TEXT("Stamina"), TEXT("Food"), TEXT("Water")};
     const FLinearColor VitalColors[] = {{.65f,.21f,.16f}, {.35f,.49f,.20f}, {.67f,.44f,.21f}, {.18f,.43f,.56f}};
     for (int32 Index = 0; Index < UE_ARRAY_COUNT(VitalNames); ++Index)
@@ -647,6 +687,16 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
         ];
     }
 
+    Profile->AddSlot().AutoHeight().Padding(0,8)[SectionLabel(TEXT("CONDITIONS"))];
+    Profile->AddSlot().AutoHeight()[SNew(STextBlock).AutoWrapText(true).Text_Lambda([this]{
+        if (!Player.IsValid()) return FText::GetEmpty();
+        const auto& Vitals = Player->GetVitals();
+        TArray<FString> Conditions;
+        if (!Vitals.CanSprint()) Conditions.Add(TEXT("Exhausted"));
+        if (Vitals.Hunger <= 0) Conditions.Add(TEXT("Starving"));
+        if (Vitals.Thirst <= 0) Conditions.Add(TEXT("Dehydrated"));
+        return FText::FromString(Conditions.IsEmpty() ? FString(TEXT("No active conditions")) : FString::Join(Conditions, TEXT("\n")));
+    })];
     // Rifle assembly: one bar per part. Overall quality is the average of these parts.
     TSharedRef<SVerticalBox> PartRows = SNew(SVerticalBox)
         .Visibility_Lambda([this]()
@@ -807,79 +857,31 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                         ]
                     ]
                     + SVerticalBox::Slot().FillHeight(1)
-                    [
-                        SNew(SHorizontalBox)
-                        + SHorizontalBox::Slot().AutoWidth().Padding(0,0,8,0)
-                        [
-                            SNew(SBox).WidthOverride(190)
-                            [SNew(SBorder).BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(12)[Profile]]
-                        ]
+                    [SNew(SHorizontalBox)
+                        + SHorizontalBox::Slot().AutoWidth()
+                        [SNew(SBox).WidthOverride(160).Visibility_Lambda([this]{return Page == EPage::Gear ? EVisibility::Visible : EVisibility::Collapsed;})
+                            [SNew(SVerticalBox)
+                                + SVerticalBox::Slot().AutoHeight().Padding(8)[SectionLabel(TEXT("CHARACTER"))]
+                                + SVerticalBox::Slot().AutoHeight().Padding(8)[SNew(STextBlock).Text_Lambda([this]{ return Player.IsValid() ? FText::FromString(FString::Printf(TEXT("Level %d"),Player->GetProgression().CharacterLevel)) : FText::GetEmpty(); })]
+                                + SVerticalBox::Slot().AutoHeight().Padding(8)[SectionLabel(TEXT("QUESTS"))]
+                                + SVerticalBox::Slot().AutoHeight().Padding(8)[SNew(STextBlock).Text(FText::FromString(TEXT("No active quests")))]]]
                         + SHorizontalBox::Slot().FillWidth(1)
-                        [
-                            SNew(SVerticalBox)
-                    + SVerticalBox::Slot().FillHeight(1)
-                    [
-                        SNew(SHorizontalBox)
-                        .Visibility_Lambda([this]() { return Page == EPage::Crafting ? EVisibility::Visible : EVisibility::Collapsed; })
-                        + SHorizontalBox::Slot().FillWidth(.40f).Padding(0, 0, 12, 0)
-                        [
-                            SNew(SBorder).BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(FMargin(16))
-                            [MakeRecipeBrowser()]
-                        ]
-                        + SHorizontalBox::Slot().FillWidth(.60f)[MakeRecipeDetails()]
-                    ]
-                    + SVerticalBox::Slot().FillHeight(1)[MakeSkillsPanel()]
-                    + SVerticalBox::Slot().AutoHeight()
-                    [
-                        SNew(STextBlock).Font(FCoreStyle::GetDefaultFontStyle("Bold", 14)).AutoWrapText(true)
-                        .Visibility_Lambda([this]{ return Page == EPage::Pack ? EVisibility::Visible : EVisibility::Collapsed; })
-                        .Text_Lambda([this]{ if (!Player.IsValid()) return FText::GetEmpty();
-                            const auto Cell = Player->GetPackCell(Player->GetSelectedPackSlot());
-                            return DescribeItem(Player.Get(), Player->GetSelectedInventoryItem(), Cell.Quality, Cell.Count); })
-                    ]
-                    + SVerticalBox::Slot().FillHeight(1)
-                    [
-                        SNew(SVerticalBox).Visibility_Lambda([this]{ return Page == EPage::Gear ? EVisibility::Visible : EVisibility::Collapsed; })
-                        + SVerticalBox::Slot().AutoHeight().Padding(8)[SectionLabel(TEXT("EQUIPMENT   /   CARRIED CLOTHING"))]
-                        + SVerticalBox::Slot().AutoHeight().Padding(8)[SNew(STextBlock).Text(FText::FromString(TEXT("Search general and security caches for clothing. Select a garment to wear or remove it.")))]
-                        + SVerticalBox::Slot().FillHeight(1)[SNew(SScrollBox) + SScrollBox::Slot()[Wardrobe]]
-                    ]
-                    + SVerticalBox::Slot().FillHeight(1)
-                    [
-                        SNew(SHorizontalBox)
-                        .Visibility_Lambda([this]() { return Page == EPage::Pack ? EVisibility::Visible : EVisibility::Collapsed; })
-                        + SHorizontalBox::Slot().FillWidth(.73f).Padding(0, 0, 12, 0)
-                        [
-                            SNew(SBorder).BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(FMargin(14))
-                            [
-                                SNew(SVerticalBox)
-                                + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 8)
-                                [
-                                    SNew(STextBlock).Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
-                                    .ColorAndOpacity(FSlateColor(Muted)).Text_Lambda([this]()
-                                    {
-                                        int32 Used = 0;
-                                        if (Player.IsValid())
-                                        {
-                                            for (int32 Slot = 0; Slot < Player->GetPackSlotCount(); ++Slot)
-                                            {
-                                                const ESurvivalItem Item = Player->GetPackItem(Slot);
-                                                Used += Item != ESurvivalItem::None ? 1 : 0;
-                                            }
-                                        }
-                                        return FText::FromString(FString::Printf(TEXT("BACKPACK   %d / %d"),
-                                            Used, ASurvivalCharacter::PackSize)
-                                            + (Used > ASurvivalCharacter::PackSize ? FString(TEXT("   over capacity")) : FString()));
-                                    })
-                                ]
-                                + SVerticalBox::Slot().FillHeight(1)[SNew(SScrollBox) + SScrollBox::Slot()[Items]]
-                                + SVerticalBox::Slot().AutoHeight().Padding(0, 16, 0, 7)[SectionLabel(TEXT("QUICK SLOTS"))]
-                                + SVerticalBox::Slot().AutoHeight()[Slots]
-                            ]
-                        ]
-                        + SHorizontalBox::Slot().FillWidth(.27f)[ModifyPanel]
-                        + SHorizontalBox::Slot().FillWidth(.27f)
-                        [
+                        [SNew(SVerticalBox)
+                            + SVerticalBox::Slot().FillHeight(2)
+                            [SNew(SOverlay)
+                                + SOverlay::Slot()[SNew(SHorizontalBox).Visibility_Lambda([this]{return Page == EPage::Crafting ? EVisibility::Visible : EVisibility::Collapsed;})
+                                    + SHorizontalBox::Slot().FillWidth(.45f).Padding(4)[MakeRecipeBrowser()]
+                                    + SHorizontalBox::Slot().FillWidth(.55f).Padding(4)[MakeRecipeDetails()]]
+                                + SOverlay::Slot()[MakeSkillsPanel()]
+                                + SOverlay::Slot()[SNew(SHorizontalBox).Visibility_Lambda([this]{return Page == EPage::Gear ? EVisibility::Visible : EVisibility::Collapsed;})
+                                    + SHorizontalBox::Slot().FillWidth(1)[LeftSlots]
+                                    + SHorizontalBox::Slot().FillWidth(1.4f)[SNew(SScaleBox).Stretch(EStretch::ScaleToFit)[SNew(SImage).Image(&Portrait)]]
+                                    + SHorizontalBox::Slot().FillWidth(1)[RightSlots]]
+                                + SOverlay::Slot()[SNew(SHorizontalBox).Visibility_Lambda([this]{return Page == EPage::Pack ? EVisibility::Visible : EVisibility::Collapsed;})
+                                    + SHorizontalBox::Slot().AutoWidth()[SNew(SBox).WidthOverride(230).Visibility_Lambda([ModifyOpen]{return ModifyOpen() ? EVisibility::Visible : EVisibility::Collapsed;})[SNew(SScaleBox)[SNew(SImage).Image(&Portrait)]]]
+                                    + SHorizontalBox::Slot().FillWidth(1)[SNew(SOverlay)
+                                        + SOverlay::Slot()[ModifyPanel]
+                                        + SOverlay::Slot()[SNew(SScrollBox).Visibility_Lambda([ModifyOpen]{return ModifyOpen()? EVisibility::Collapsed:EVisibility::Visible;}) + SScrollBox::Slot()[
                             SNew(SBorder).Visibility_Lambda([ModifyOpen]() { return ModifyOpen() ? EVisibility::Collapsed : EVisibility::Visible; })
                             .BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(FMargin(20))
                             [
@@ -895,7 +897,9 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                     .Font(FCoreStyle::GetDefaultFontStyle("Bold", 23))
                                     .Text_Lambda([this]()
                                     {
-                                        return Player.IsValid() ? FText::FromString(SurvivalItemName(Player->GetSelectedInventoryItem())) : FText::GetEmpty();
+                                        if (!Player.IsValid()) return FText::GetEmpty();
+                                        const int32 Gear = Player->GetPackCell(Player->GetSelectedPackSlot()).GearIndex;
+                                        return FText::FromString(Gear == INDEX_NONE ? SurvivalItemName(Player->GetSelectedInventoryItem()) : SurvivalGear[Gear].Label);
                                     })
                                 ]
                                 + SVerticalBox::Slot().AutoHeight()
@@ -905,6 +909,8 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                         if (!Player.IsValid()) { return FText::GetEmpty(); }
                                         const ESurvivalItem Item = Player->GetSelectedInventoryItem();
                                         const FSurvivalPackCell Cell = Player->GetPackCell(Player->GetSelectedPackSlot());
+                                        if (Cell.GearIndex != INDEX_NONE)
+                                            return FText::FromString(FString::Printf(TEXT("%s  ·  %d in stack"), SurvivalGear[Cell.GearIndex].Slot, Cell.Count));
                                         if (SurvivalItemHasQuality(Item))
                                         {
                                             return FText::FromString(FString::Printf(TEXT("Quality %d"), Cell.Quality));
@@ -943,6 +949,10 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                 ]
                                 + SVerticalBox::Slot().AutoHeight().Padding(0, 16, 0, 0)[PartRows]
                                 + SVerticalBox::Slot().AutoHeight()
+                                [SNew(SButton).Text(FText::FromString(TEXT("Drop one garment")))
+                                    .Visibility_Lambda([this]{ return Player.IsValid() && Player->GetPackCell(Player->GetSelectedPackSlot()).GearIndex != INDEX_NONE ? EVisibility::Visible : EVisibility::Collapsed; })
+                                    .OnClicked_Lambda([this]{ if (Player.IsValid()) Player->ServerDropGear(Player->GetPackCell(Player->GetSelectedPackSlot()).GearIndex); return FReply::Handled(); })]
+                                + SVerticalBox::Slot().AutoHeight()
                                 [SNew(SButton).Text(FText::FromString(TEXT("Drop stack")))
                                     .Visibility_Lambda([this]{ return Player.IsValid() && Player->CanDropSelection() ? EVisibility::Visible : EVisibility::Collapsed; })
                                     .OnClicked_Lambda([this]{ if (Player.IsValid()) Player->DropSelection(); return FReply::Handled(); })]
@@ -956,6 +966,7 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                     SNew(SButton).ButtonStyle(&MenuButtonStyle()).ButtonColorAndOpacity(Chosen)
                                     .HAlign(HAlign_Center).Text_Lambda([this]()
                                     {
+                                        if (Player.IsValid() && Player->GetPackCell(Player->GetSelectedPackSlot()).GearIndex != INDEX_NONE) return FText::FromString(TEXT("Equip"));
                                         const bool bModify = Player.IsValid() && IsModifiable(Player->GetSelectedInventoryItem());
                                         return FText::FromString(bModify ? TEXT("Modify  [M]") : TEXT("Use selected item"));
                                     })
@@ -963,6 +974,7 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                     {
                                         if (!Player.IsValid()) { return false; }
                                         const ESurvivalItem Item = Player->GetSelectedInventoryItem();
+                                        if (Player->GetPackCell(Player->GetSelectedPackSlot()).GearIndex != INDEX_NONE) return true;
                                         return IsModifiable(Item) ? Player->CanInspectWeapon(Item) : Player->CanUseItem(Item);
                                     })
                                     .OnClicked_Lambda([this]()
@@ -970,7 +982,9 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                         if (ASurvivalCharacter* Character = Player.Get())
                                         {
                                             const ESurvivalItem Item = Character->GetSelectedInventoryItem();
-                                            if (IsModifiable(Item)) { SetWorkbench(Character->CanInspectWeapon(Item)); }
+                                            const int32 Gear = Character->GetPackCell(Character->GetSelectedPackSlot()).GearIndex;
+                                            if (Gear != INDEX_NONE) Character->ServerSetGearEquipped(Gear,true);
+                                            else if (IsModifiable(Item)) { SetWorkbench(Character->CanInspectWeapon(Item)); }
                                             else { Character->UseItem(Item); }
                                         }
                                         return FReply::Handled();
@@ -981,10 +995,18 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                     SNew(STextBlock).AutoWrapText(true).ColorAndOpacity(FSlateColor(Muted))
                                     .Text(FText::FromString(TEXT("Drag to move or merge. Ctrl-drag splits a stack. Shift-click assigns a usable item to a quick slot. Press M to inspect a weapon.")))
                                 ]
+                            ]]]]]
                             ]
+                            + SVerticalBox::Slot().FillHeight(1).Padding(4)
+                            [SNew(SBorder).BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(6)
+                                [SNew(SVerticalBox)
+                                    + SVerticalBox::Slot().AutoHeight()[SectionLabel(TEXT("BACKPACK   ·   SELECT GEAR + E TO EQUIP"))]
+                                    + SVerticalBox::Slot().FillHeight(1)[SNew(SScrollBox) + SScrollBox::Slot()[Items]]
+                                ]]
+                            + SVerticalBox::Slot().AutoHeight()[SNew(SBox).HeightOverride(48)[Slots]]
                         ]
-                    ]
-                        ]
+                        + SHorizontalBox::Slot().AutoWidth()
+                        [SNew(SBox).WidthOverride(150).Padding(8).Visibility_Lambda([this]{return Page == EPage::Gear ? EVisibility::Visible : EVisibility::Collapsed;})[Profile]]
                     ]
                 ]
             ]
@@ -1399,7 +1421,7 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeBrowser()
     return SNew(SVerticalBox)
         + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 6)
         [
-            SNew(SSearchBox).HintText(FText::FromString(TEXT("Find recipe")))
+            SAssignNew(RecipeFilterBox, SSearchBox).HintText(FText::FromString(TEXT("Find recipe")))
             .OnTextChanged_Lambda([this](const FText& Text)
             {
                 SearchText = Text.ToString().TrimStartAndEnd();
@@ -1515,9 +1537,18 @@ FReply SSurvivalInventoryMenu::OnKeyDown(const FGeometry& Geometry, const FKeyEv
 {
     if (ASurvivalCharacter* Character = Player.Get())
     {
-        if (Page == EPage::Pack && Event.GetKey() == EKeys::M && IsModifiable(Character->GetSelectedInventoryItem()) && Character->CanInspectWeapon(Character->GetSelectedInventoryItem()))
+        const bool bSearching = (RecipeFilterBox && RecipeFilterBox->HasFocusedDescendants())
+            || (TrainingFilterBox && TrainingFilterBox->HasFocusedDescendants());
+        if (bSearching && Event.GetKey() != EKeys::Escape) return FReply::Unhandled();
+        const int32 Gear = Character->GetPackCell(Character->GetSelectedPackSlot()).GearIndex;
+        if (Gear != INDEX_NONE && Event.GetKey() == EKeys::E)
         {
-            if (!Event.IsRepeat()) SetWorkbench(!bModifying);
+            if (!Event.IsRepeat()) Character->ServerSetGearEquipped(Gear, true);
+            return FReply::Handled();
+        }
+        if (Event.GetKey() == EKeys::M && IsModifiable(Character->GetSelectedInventoryItem()) && Character->CanInspectWeapon(Character->GetSelectedInventoryItem()))
+        {
+            if (!Event.IsRepeat()) { Page = EPage::Pack; SetWorkbench(!bModifying); }
             return FReply::Handled();
         }
         if (bModifying && Event.GetKey() == EKeys::Escape)
@@ -1538,7 +1569,7 @@ FReply SSurvivalInventoryMenu::OnKeyDown(const FGeometry& Geometry, const FKeyEv
         }
         for (int32 Slot = 0; Slot < UE_ARRAY_COUNT(SlotKeys); ++Slot)
         {
-            if (Page == EPage::Pack && Event.GetKey() == SlotKeys[Slot])
+            if (Event.GetKey() == SlotKeys[Slot])
             {
                 Character->ChooseHotbarSlot(Slot);
                 return FReply::Handled();
@@ -1556,6 +1587,7 @@ void SSurvivalInventoryMenu::SetWorkbench(bool bOpen)
     {
         Player->InspectedWeapon = !bOpen ? ESurvivalItem::None :
             Player->GetSelectedInventoryItem() == ESurvivalItem::Sidearm ? ESurvivalItem::Sidearm : ESurvivalItem::Rifle;
-        Player->ShowWeaponPortrait(bOpen);
+        Player->ShowWeaponPortrait(bOpen, Page == EPage::Gear);
+        Portrait.SetResourceObject(Player->GetInventoryPortrait());
     }
 }

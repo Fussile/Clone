@@ -43,7 +43,9 @@ struct FSurvivalPackCell
     int32 Count = 0;
     int32 Quality = 0;
 
-    bool IsEmpty() const { return Item == ESurvivalItem::None || Count <= 0; }
+    int32 GearIndex = INDEX_NONE;
+
+    bool IsEmpty() const { return (Item == ESurvivalItem::None && GearIndex == INDEX_NONE) || Count <= 0; }
 };
 
 int32 SurvivalItemMaxStack(ESurvivalItem Item);
