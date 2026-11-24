@@ -26,3 +26,7 @@ Crossroads preparation imports the bundled GLB. The model was adapted into one m
 The station zombie source is copied byte-for-byte from the `content` branch. Preparation combines its five skinned parts and imports the original skeleton, textures, and three bone animations. The facial morph tracks are omitted from the generated mesh.
 
 This repository is public. Commercial game use alone does not establish permission to publish raw asset files. Check the actual terms before committing; use private delivery and reproducible import instructions when raw redistribution is restricted. Content/Restricted is ignored as a guardrail, not proof of compliance. Git LFS does not make assets private. Store required acknowledgments for inclusion in shipped credits.
+
+### Central Parish, door leaves and roof ladders
+
+The content branch supplies `World/eastern_orthodox_church_old.glb`, `World/door-pack-asset-key-pack-one-material.zip` and `World/roof_ladder_slightly_weathered.glb`. The parish uses the cropped upper church above an authored nave. The door variants use the pack's aged timber, glazed and service leaves, with centered bounds for the gameplay hinges. The reference hospital uses the City Sample NYG Triangle hero building.

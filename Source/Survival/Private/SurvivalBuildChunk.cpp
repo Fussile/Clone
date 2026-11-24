@@ -166,8 +166,13 @@ bool ASurvivalBuildChunk::TryInstallDoor(const FHitResult& Hit)
     AddInstanceComponent(Leaf);
     Leaf->SetupAttachment(GetRootComponent());
     Leaf->SetMobility(EComponentMobility::Movable);
-    Leaf->SetStaticMesh(Timber->GetStaticMesh());
-    Leaf->SetMaterial(0, Timber->GetMaterial(0));
+    UStaticMesh* DoorArt = LoadObject<UStaticMesh>(nullptr,
+        TEXT("/Game/Art/Crossroads/World/Parish/SM_TimberLeaf/SM_TimberLeaf.SM_TimberLeaf"));
+    Leaf->SetStaticMesh(DoorArt ? DoorArt : Timber->GetStaticMesh());
+    if (!DoorArt)
+    {
+        Leaf->SetMaterial(0, Timber->GetMaterial(0));
+    }
     Leaf->SetCollisionProfileName(TEXT("BlockAllDynamic"));
     Leaf->SetCanEverAffectNavigation(false);
     Leaf->SetWorldTransform(Transform);
@@ -190,7 +195,7 @@ void ASurvivalBuildChunk::RemoveDoorLeaf(FSurvivalFinishedPiece& Piece)
     Piece.bDoorOpen = false;
 }
 
-bool ASurvivalBuildChunk::TryToggleDoor(const FHitResult& Hit)
+bool ASurvivalBuildChunk::TryToggleDoor(const FHitResult& Hit, const FVector& UserLocation)
 {
     const int32 Index = FindFinishedIndex(Hit);
     if (!Finished.IsValidIndex(Index) || !Finished[Index].Door.IsValid())
@@ -202,17 +207,21 @@ bool ASurvivalBuildChunk::TryToggleDoor(const FHitResult& Hit)
     FCollisionQueryParams Query(SCENE_QUERY_STAT(DoorSwing), false);
     Query.AddIgnoredComponent(Leaf);
     const FCollisionShape Shape = FCollisionShape::MakeBox(FSurvivalBuildPlacement::ClosedDoor().GetExtent() - FVector(0.25));
+    const FTransform Closed = DoorTransform(Piece.Placement, 0.0);
+    const bool bNegative = Piece.bDoorOpen ? Piece.bSwingNegative : Closed.InverseTransformPosition(UserLocation).Y > 0;
+    const double SwingSign = bNegative ? -1.0 : 1.0;
     for (int32 Step = 1; Step <= 18; ++Step)
     {
-        const double Angle = (Piece.bDoorOpen ? 18 - Step : Step) * 5.0;
+        const double Angle = (Piece.bDoorOpen ? 18 - Step : Step) * 5.0 * SwingSign;
         const FTransform Pose = DoorTransform(Piece.Placement, Angle);
         if (GetWorld()->OverlapBlockingTestByChannel(Pose.GetLocation(), Pose.GetRotation(), ECC_Pawn, Shape, Query))
         {
             return false;
         }
     }
+    Piece.bSwingNegative = bNegative;
     Piece.bDoorOpen = !Piece.bDoorOpen;
-    Leaf->SetWorldTransform(DoorTransform(Piece.Placement, Piece.bDoorOpen ? 90.0 : 0.0));
+    Leaf->SetWorldTransform(DoorTransform(Piece.Placement, Piece.bDoorOpen ? SwingSign * 90.0 : 0.0));
     return true;
 }
 

@@ -15,6 +15,7 @@ struct FSurvivalFinishedPiece
     int32 StructureId;
     TWeakObjectPtr<UStaticMeshComponent> Door{};
     bool bDoorOpen = false;
+    bool bSwingNegative = false;
     int32 DoorHealth = 0;
 
     FSurvivalMaterials RepairCost() const
@@ -40,7 +41,7 @@ public:
     FSurvivalPlanTarget GetPlanTarget(const FHitResult& Hit);
     const FSurvivalFinishedPiece* FindFinished(const FHitResult& Hit) const;
     bool TryInstallDoor(const FHitResult& Hit);
-    bool TryToggleDoor(const FHitResult& Hit);
+    bool TryToggleDoor(const FHitResult& Hit, const FVector& UserLocation);
     bool HasReservedCellConflict(const FSurvivalBuildPlacement& Placement, bool bIncludePlans) const;
     bool DamageFinished(const FHitResult& Hit, int32 Amount);
     bool RepairFinished(const FHitResult& Hit, FSurvivalMaterials& Inventory, int32 RepairHealth);

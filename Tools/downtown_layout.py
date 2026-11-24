@@ -196,7 +196,9 @@ def tower_interior(width, depth, levels, style):
     return parts
 
 
-def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, tower, palette):
+def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, tower, church, ladder, palette):
+    church_lot = min((lot for lot in lots if min(lot["w"],lot["d"]) >= 27),
+                     key=lambda lot: math.hypot(lot["x"]-2451,lot["y"]-2069),default=None)
     for lot in lots:
         key = "CrossroadsInfill_"+lot["id"]
         x, y, z, w, d, yaw = (lot[k] for k in ("x", "y", "z", "w", "d", "yaw"))
@@ -224,6 +226,9 @@ def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, tower
                      z-.20, walkway_width, 2.3, .20, "concrete")
         else:
             slab("_walk", "Street sidewalk", 0, -d/2-1.15, z-.20, w+.4, 2.3, .20, "concrete")
+        if lot is church_lot:
+            church(key+"_parish",x,y,z,yaw,w,d)
+            continue
         style = lot["facade"]
         if style == "CornerShop":
             style = "StoneFacade"
@@ -295,7 +300,18 @@ def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, tower
         loot_position = point(-w*.36, d*.43)
         x, y = original_center
         d += 4.8
-        slab("_parapet", "Office roof cap", 0, 0, z+height, w+.36, d+.36, .34, "dark_trim")
+        # A hatch over the rear landing connects the last occupied floor to the roof.
+        hatch_u, hatch_v = -w/2+2.4, d/2-2.4
+        left,right = -w/2-.18,w/2+.18
+        front,back = -d/2-.18,d/2+.18
+        for tag,u0,u1,v0,v1 in (
+            ("front",left,right,front,hatch_v-1),("back",left,right,hatch_v+1,back),
+            ("west",left,hatch_u-1,hatch_v-1,hatch_v+1),
+            ("east",hatch_u+1,right,hatch_v-1,hatch_v+1)):
+            slab("_roof_"+tag,"Roof slab",(u0+u1)/2,(v0+v1)/2,z+height,
+                 u1-u0,v1-v0,.34,"dark_trim")
+        last_floor = z+3.24+(lot["levels"]-2)*3.65
+        ladder(key+"_ladder",*point(hatch_u,hatch_v),last_floor,z+height+.34,yaw)
         facade(key+"_panels", style, x, y, z, w, d, height, yaw, 3.24, 1.75)
         cache(key+"_lobby_cache", reward, *loot_position, z,
               profile=profile, chance=82)

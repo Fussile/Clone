@@ -109,6 +109,8 @@ def prepare_if_needed():
     ))
     required += tuple(f"/Game/Art/Crossroads/World/Rail/{name}/SM_{name}"
                       for name in ("FreightTrack", "TramTrack", "SovietLocomotive", "CrossroadsTram"))
+    required += tuple(f"/Game/Art/Crossroads/World/Parish/SM_{name}/SM_{name}"
+                      for name in ("TimberLeaf", "GlazedLeaf", "ServiceLeaf", "RoofLadder", "ParishUpperChurch"))
     prop_materials = runpy.run_path(str(project / "Tools" / "world_prop_materials.py"))
     required += tuple(prop_materials["required_packages"](project / "SourceArt" / "Crossroads" / "World"))
     if medicine_sheet.is_file():

@@ -127,6 +127,8 @@ private:
     void Interact();
 
     UFUNCTION(Server, Reliable)
+    void ServerUseRoofLadder(AActor* Ladder, FVector_NetQuantize10 ImpactPoint);
+    UFUNCTION(Server, Reliable)
     void ServerToggleWorldDoor(ASurvivalWorldDoor* Door, FVector_NetQuantize10 ImpactPoint);
     UFUNCTION(Server, Reliable)
     void ServerScavenge(ASurvivalSupplyCrate* Crate, FVector_NetQuantize10 ImpactPoint);

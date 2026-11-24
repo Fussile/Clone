@@ -106,6 +106,15 @@ def place():
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Props/{name}", unreal.StaticMesh)
         for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler")
     }
+    parish_art = {}
+    for name in ("TimberLeaf", "GlazedLeaf", "ServiceLeaf", "ParishUpperChurch", "RoofLadder"):
+        asset = import_asset(source_art / "Parish" / f"SM_{name}.glb",
+                             f"{world_art}/Parish/SM_{name}", unreal.StaticMesh)
+        if name.endswith("Leaf") or name == "RoofLadder":
+            if not unreal.CrossroadsWorldBake.set_static_mesh_collision(asset):
+                raise RuntimeError(f"Could not prepare {name} collision")
+        parish_art[name] = asset
+
     district_solids = {
         "CornerShop", "SubstationHouse", "SubstationSwitchgear", "TransmissionPylon",
         "BurnedSedan", "BurnedCompact", "RustedTruck", "AbandonedVan",
@@ -629,7 +638,12 @@ def place():
             actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
             actor.configure_door(width*100, height*100, roll_up, reverse,
                                  style_materials[finish], style_materials["dark_trim"])
-        spawn(door_class, key, label, x, y, floor, configure)
+            if not roll_up:
+                kind = "TimberLeaf" if finish == "timber" else "ServiceLeaf"
+                if any(word in label.lower() for word in ("lobby", "triage", "clinic", "entrance", "ward")):
+                    kind = "GlazedLeaf"
+                actor.set_leaf_art(parish_art[kind])
+        spawn(door_class, key, label, x, y, floor, configure, reconfigure=True)
 
     def treatment_bed(key, label, x, y, floor):
         def configure(actor):
@@ -944,6 +958,53 @@ def place():
             spawn(facade_class,key+"_interior_"+name,"Tower "+name,x,y,floor,configure,
                   relocate=True,reconfigure=True)
 
+    def roof_ladder(key, x, y, floor, roof, yaw):
+        span = roof-floor+1
+        def configure(actor):
+            component = fitted_mesh(actor,parish_art["RoofLadder"],(.75,.18,span),yaw)
+            component.set_collision_profile_name("OverlapAllDynamic")
+            component.set_collision_response_to_channel(unreal.CollisionChannel.ECC_VISIBILITY,
+                                                        unreal.CollisionResponse.ECR_BLOCK)
+        spawn(unreal.StaticMeshActor,key,"Roof ladder",x,y,floor+span/2,configure,
+              tags=("CrossroadsRoofLadder",),relocate=True,reconfigure=True)
+
+    def church(key, x, y, floor, yaw, width, depth):
+        angle = math.radians(yaw)
+        def xy(u,v):
+            return x+u*math.cos(angle)+v*math.sin(angle), y-u*math.sin(angle)+v*math.cos(angle)
+        def part(tag,label,u,v,z,w,d,h,finish):
+            box(key+tag,label,*xy(u,v),floor+z,w,d,h,material=style_materials[finish],rotation=(0,yaw))
+        front = -depth/2
+        stone = "classical_civic"
+        for side in (-1,1):
+            part(f"_side_{side}","Nave side wall",side*(width/2-.25),0,0,.5,depth,6.8,stone)
+            part(f"_entrywall_{side}","Narthex entrance",side*(width+3.2)/4,front+.25,0,
+                 (width-3.2)/2,.5,6.8,stone)
+            door(f"{key}_leaf_{side}","Parish oak door",*xy(side*.8,front),floor,1.6,2.65,
+                 yaw=yaw,reverse=side>0)
+            for i in range(6):
+                v=depth*(-.30+i*.095)
+                u=side*width*.245
+                part(f"_pew_{side}_{i}","Oak pew",u,v,0,width*.28,.65,.46,"timber")
+                part(f"_back_{side}_{i}","Pew back",u,v-.29,.45,width*.28,.10,.52,"timber")
+            for i in range(3):
+                part(f"_pier_{side}_{i}","Nave pier",side*width*.405,depth*(i-1)*.29,
+                     0,.75,.75,6.8,stone)
+        part("_lintel","Entrance lintel",0,front+.25,2.65,3.2,.5,4.15,stone)
+        part("_apse","Sanctuary wall",0,depth/2-.25,0,width,.5,6.8,stone)
+        part("_ceiling","Nave ceiling",0,0,6.8,width,depth,.28,"timber")
+        part("_altar","Stone altar",0,depth*.34,0,3.4,1.3,1.1,stone)
+        part("_lectern","Oak lectern",-width*.22,depth*.33,0,.85,.72,1.18,"timber")
+        # Keep the textured scan above the occupied nave and both entrance leaves.
+        def roof(actor):
+            component=fitted_mesh(actor,parish_art["ParishUpperChurch"],(width+.6,depth+.6,21),yaw)
+            component.set_collision_profile_name("NoCollision")
+        spawn(unreal.StaticMeshActor,key+"_upper","Orthodox church upper exterior",x,y,floor+7+10.5,
+              roof,relocate=True,reconfigure=True)
+        cache(key+"_vestry","Vestry supplies",*xy(width*.35,depth*.40),floor,profile="GENERAL")
+        sign(key+"_name","CENTRAL PARISH",*xy(0,front-.13),floor+3.4,yaw=yaw+90)
+        encounter(key+"_walker","Parish walker",*xy(-width*.38,depth*.28),floor,relocate=True)
+
     def furnishing(key, label, mesh_name, x, y, floor, size, yaw):
         def configure(actor):
             fitted_mesh(actor, interior_meshes[mesh_name], size, yaw, align_long_axis=True)
@@ -1215,7 +1276,7 @@ def place():
                                              transmission["poles"][b]["phases"], strict=True)):
             cable(f"CrossroadsCable_{a}_{b}_{index}",start,end)
     downtown["stamp_city"](plan["city_lots"],plan["city_barriers"],box,facade,
-                           communications_art,door,cache,furnishing,tower,style_materials)
+                           communications_art,door,cache,furnishing,tower,church,roof_ladder,style_materials)
     remove_generated(*(previous_infill - touched_infill))
     for car in plan["wrecks"]:
         wreck("CrossroadsWreck_"+car["id"],car["x"],car["y"],car["z"],car["yaw"],car["model"])

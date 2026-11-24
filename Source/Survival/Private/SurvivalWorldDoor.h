@@ -6,6 +6,7 @@
 class UBoxComponent;
 class UMaterialInterface;
 class USceneComponent;
+class UStaticMesh;
 class UStaticMeshComponent;
 
 UCLASS()
@@ -20,9 +21,12 @@ public:
     void ConfigureDoor(double OpeningWidth, double OpeningHeight, bool bRollUpDoor, bool bReverseDoor,
         UMaterialInterface* Finish, UMaterialInterface* Hardware);
 
+    UFUNCTION(BlueprintCallable, Category = "World Door")
+    void SetLeafArt(UStaticMesh* Mesh);
+
     bool IsOpen() const { return bOpen; }
     bool IsBroken() const { return bBroken; }
-    bool TryToggle();
+    bool TryToggle(const FVector& UserLocation);
     void TakeBreachDamage(int32 Amount);
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -32,7 +36,7 @@ protected:
     virtual void BeginPlay() override;
 
 private:
-    FTransform LeafPose(double Fraction) const;
+    FTransform LeafPose(double Fraction, bool bNegativeSwing) const;
     void ApplySize();
     UFUNCTION()
     void ApplyDoorState();
@@ -61,11 +65,17 @@ private:
     UPROPERTY(EditAnywhere, Category = "World Door")
     bool bReverse = false;
 
+    UPROPERTY()
+    bool bHasLeafArt = false;
+
     UPROPERTY(ReplicatedUsing = ApplyDoorState)
     bool bOpen = false;
 
     UPROPERTY(ReplicatedUsing = ApplyDoorState)
     bool bBroken = false;
+
+    UPROPERTY(ReplicatedUsing = ApplyDoorState)
+    bool bSwingNegative = false;
 
     int32 Durability = 0;
 };

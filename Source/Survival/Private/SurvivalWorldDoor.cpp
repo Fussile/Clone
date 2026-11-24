@@ -63,6 +63,17 @@ void ASurvivalWorldDoor::ConfigureDoor(double OpeningWidth, double OpeningHeight
     ApplySize();
 }
 
+void ASurvivalWorldDoor::SetLeafArt(UStaticMesh* Mesh)
+{
+    if (Mesh && !bRollUp)
+    {
+        Leaf->SetStaticMesh(Mesh);
+        Leaf->EmptyOverrideMaterials();
+        bHasLeafArt = true;
+        ApplyDoorState();
+    }
+}
+
 void ASurvivalWorldDoor::OnConstruction(const FTransform& Transform)
 {
     Super::OnConstruction(Transform);
@@ -82,11 +93,12 @@ void ASurvivalWorldDoor::BeginPlay()
 void ASurvivalWorldDoor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+    DOREPLIFETIME(ASurvivalWorldDoor, bSwingNegative);
     DOREPLIFETIME(ASurvivalWorldDoor, bOpen);
     DOREPLIFETIME(ASurvivalWorldDoor, bBroken);
 }
 
-FTransform ASurvivalWorldDoor::LeafPose(double Fraction) const
+FTransform ASurvivalWorldDoor::LeafPose(double Fraction, bool bNegativeSwing) const
 {
     const double LeafWidth = Width - 4.0;
     if (bRollUp)
@@ -97,7 +109,7 @@ FTransform ASurvivalWorldDoor::LeafPose(double Fraction) const
     }
     const double Side = bReverse ? 1.0 : -1.0;
     const FVector Center(0.0, 0.0, Height / 2.0);
-    const FQuat Swing = FRotator(0, -Side * Fraction * 90.0, 0).Quaternion();
+    const FQuat Swing = FRotator(0, -Side * Fraction * (bNegativeSwing ? -90.0 : 90.0), 0).Quaternion();
     const FVector Hinge(Side * LeafWidth / 2.0, 0.0, Center.Z);
     return FTransform(Swing, Hinge + Swing.RotateVector(Center - Hinge),
         FVector(LeafWidth, 5.0, Height - 4.0) / 100.0);
@@ -121,35 +133,37 @@ void ASurvivalWorldDoor::ApplyDoorState()
         return;
     }
 
-    const FTransform Pose = LeafPose(bOpen ? 1.0 : 0.0);
+    const FTransform Pose = LeafPose(bOpen ? 1.0 : 0.0, bSwingNegative);
     Leaf->SetRelativeTransform(Pose);
-    Handle->SetVisibility(!bRollUp || !bOpen);
+    Handle->SetVisibility(!bHasLeafArt && (!bRollUp || !bOpen));
     const double HandleX = bRollUp ? 0.0 : (bReverse ? -1.0 : 1.0) * (Width / 2.0 - 13.0);
     const FVector HandleOffset(HandleX, 0.0, FMath::Min(105.0, Height / 2.0) - Height / 2.0);
     Handle->SetRelativeTransform(FTransform(Pose.GetRotation(),
         Pose.TransformPositionNoScale(HandleOffset), FVector(.13, .15, .035)));
 }
 
-bool ASurvivalWorldDoor::TryToggle()
+bool ASurvivalWorldDoor::TryToggle(const FVector& UserLocation)
 {
     if (!HasAuthority() || bBroken || !Leaf->GetStaticMesh())
     {
         return false;
     }
 
+    const bool bNegative = bOpen ? bSwingNegative : GetActorTransform().InverseTransformPosition(UserLocation).Y > 0;
     const FCollisionQueryParams Query(SCENE_QUERY_STAT(WorldDoorClearance), false, this);
     const FCollisionObjectQueryParams Pawns(ECC_Pawn);
     const int32 Steps = FMath::Max(18, FMath::CeilToInt((bRollUp ? Height : Width) / 8.0));
     for (int32 Step = 1; Step <= Steps; ++Step)
     {
         const double Fraction = static_cast<double>(Step) / Steps;
-        const FTransform Pose = LeafPose(bOpen ? 1.0 - Fraction : Fraction) * GetActorTransform();
+        const FTransform Pose = LeafPose(bOpen ? 1.0 - Fraction : Fraction, bNegative) * GetActorTransform();
         const FCollisionShape Shape = FCollisionShape::MakeBox(Pose.GetScale3D().GetAbs() * 50.0);
         if (GetWorld()->OverlapAnyTestByObjectType(Pose.GetLocation(), Pose.GetRotation(), Pawns, Shape, Query))
         {
             return false;
         }
     }
+    bSwingNegative = bNegative;
     bOpen = !bOpen;
     ApplyDoorState();
     ForceNetUpdate();

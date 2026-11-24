@@ -6,7 +6,7 @@ HEROES = {
     "civic": ("Bldg_Hero_Mid_NYG_Triangle_B01", True),
     "library": ("Bldg_Hero_SFB", False),
     "academic": ("Bldg_Hero_Low_SFD_Long", True),
-    "hospital": ("Bldg_Hero_NYG_Modern_Square_A01", True),
+    "hospital": ("Bldg_Hero_Mid_NYG_Triangle_B01", True),
     "science": ("Bldg_Hero_NYG_Modern_Square_A01", True),
 }
 CAMPUS_SIZE = (116, 144)

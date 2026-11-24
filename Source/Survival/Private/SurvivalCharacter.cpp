@@ -411,7 +411,7 @@ void ASurvivalCharacter::ServerToggleWorldDoor_Implementation(ASurvivalWorldDoor
     {
         return;
     }
-    if (!Door->TryToggle())
+    if (!Door->TryToggle(GetActorLocation()))
     {
         if (APlayerController* Player = Cast<APlayerController>(GetController()))
         {
@@ -518,10 +518,58 @@ FSurvivalMaterials ASurvivalCharacter::GetPlannedCost() const
     return GameMode ? GameMode->GetPlannedCost() : FSurvivalMaterials{};
 }
 
+void ASurvivalCharacter::ServerUseRoofLadder_Implementation(AActor* Ladder, FVector_NetQuantize10 ImpactPoint)
+{
+    if (!IsValid(Ladder) || !Ladder->ActorHasTag(TEXT("CrossroadsRoofLadder")) || HealthPoints <= 0 || bInventoryOpen)
+    {
+        return;
+    }
+    const FVector Eyes = FirstPersonCamera->GetComponentLocation();
+    const FVector Ray = ImpactPoint - Eyes;
+    FHitResult Hit;
+    FCollisionQueryParams Query(SCENE_QUERY_STAT(RoofLadder), false, this);
+    if (ImpactPoint.ContainsNaN() || Ray.Size() > InteractReach + 1 ||
+        !GetWorld()->LineTraceSingleByChannel(Hit, Eyes, ImpactPoint + Ray.GetSafeNormal()*3, ECC_Visibility, Query)
+        || Hit.GetActor() != Ladder)
+    {
+        return;
+    }
+    FVector Center, Extent;
+    Ladder->GetActorBounds(false, Center, Extent);
+    const double Half = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+    const double Roof = Center.Z + Extent.Z - 100;
+    const bool bDescending = GetActorLocation().Z - Half > Roof - 35;
+    FVector Bottom(Center.X, Center.Y, Center.Z - Extent.Z + Half + 3);
+    FVector Top(Center.X, Center.Y, Roof + Half + 3);
+    const FVector Landing = Top + Ladder->GetActorForwardVector()*160;
+    const FVector Path[] = {GetActorLocation(), bDescending ? Top : Bottom,
+        bDescending ? Bottom : Top, bDescending ? Bottom : Landing};
+    Query.AddIgnoredActor(Ladder);
+    const FCollisionShape Capsule = FCollisionShape::MakeCapsule(GetCapsuleComponent()->GetScaledCapsuleRadius(), Half);
+    for (int32 Step = 1; Step < UE_ARRAY_COUNT(Path); ++Step)
+    {
+        if (GetWorld()->SweepTestByProfile(Path[Step-1], Path[Step], FQuat::Identity,
+                GetCapsuleComponent()->GetCollisionProfileName(), Capsule, Query))
+        {
+            return;
+        }
+    }
+    GetCharacterMovement()->StopMovementImmediately();
+    SetActorLocation(Path[3], false, nullptr, ETeleportType::TeleportPhysics);
+    ForceNetUpdate();
+}
+
 void ASurvivalCharacter::Interact()
 {
     if (HealthPoints <= 0 || bInventoryOpen)
     {
+        return;
+    }
+    FHitResult LadderHit;
+    if (FindWorldAimHit(InteractReach, LadderHit) && IsValid(LadderHit.GetActor()) &&
+        LadderHit.GetActor()->ActorHasTag(TEXT("CrossroadsRoofLadder")))
+    {
+        ServerUseRoofLadder(LadderHit.GetActor(), FVector_NetQuantize10(LadderHit.ImpactPoint));
         return;
     }
     FVector InteractionPoint;
@@ -559,7 +607,7 @@ void ASurvivalCharacter::Interact()
                 {
                     if (Piece->Door.IsValid())
                     {
-                        if (Chunk->TryToggleDoor(Hit))
+                        if (Chunk->TryToggleDoor(Hit, GetActorLocation()))
                         {
                             return;
                         }
