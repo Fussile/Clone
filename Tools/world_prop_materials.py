@@ -34,15 +34,16 @@ def package_base(source, model, binary):
 
 
 def required_packages(source_directory):
-    for name in NAMES:
-        source = source_directory / f"SM_{name}.glb"
+    sources = [source_directory / f"SM_{name}.glb" for name in NAMES]
+    sources.append(source_directory / "Parish" / "SM_ParishUpperChurch.glb")
+    for source in sources:
         model, binary = read_glb(source)
         package = package_base(source, model, binary)
         for index, _, _, roles in surfaces(model):
             yield f"{package}/M_Surface_{index}"
             for role in roles:
                 yield f"{package}/T_Surface_{index}_{role}"
-        if name == "ScavengeCrate":
+        if source.stem == "SM_ScavengeCrate":
             yield f"{package}/M_SecurityCrate"
 
 

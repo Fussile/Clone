@@ -7,6 +7,7 @@ HEROES = {
     "library": ("Bldg_Hero_SFB", False),
     "academic": ("Bldg_Hero_Low_SFD_Long", True),
     "hospital": ("Bldg_Hero_Mid_NYG_Triangle_B01", True),
+    "tower": ("Bldg_Hero_NYG_Modern_Square_A01", True),
     "science": ("Bldg_Hero_NYG_Modern_Square_A01", True),
 }
 CAMPUS_SIZE = (116, 144)
@@ -17,9 +18,10 @@ def hall(key, x, y, floor, width, depth, levels, yaw, role, title, box, door, ca
          sign, art, palette):
     story = 4.0 if role in {"library", "civic"} else 3.65
     height = levels*story
+    exterior_height = height + {"hospital": 5, "tower": 3}.get(role, 0)*story
     entry = 3.2 if role != "academic" else 2.6
     front = -depth/2
-    skinned = art(key, "science" if role == "academic" and levels >= 3 else role, x, y, floor, width, depth, height, story, yaw, entry)
+    skinned = art(key, "science" if role == "academic" and levels >= 3 else role, x, y, floor, width, depth, exterior_height, story, yaw, entry)
     cs, sn = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
 
     def xy(u, v):
@@ -49,7 +51,7 @@ def hall(key, x, y, floor, width, depth, levels, yaw, role, title, box, door, ca
         part("trim_header", "Entrance surround", 0, front-.03, 2.65, entry+.42, .4, .28)
     part("back", "Hall rear wall", 0, depth/2-.28, 0, width-.30, .26, height, hidden=skinned)
     part("roof", "Ceiling slab", 0, 0, height, width-.25, depth-.25, .25, "dark_trim",
-         hidden=skinned and levels>1)
+         hidden=skinned, collision=not skinned)
     # Sample trim, terraces and the roof silhouette are layered outside this playable core.
     if not skinned:
         for n in range(levels):
@@ -61,6 +63,18 @@ def hall(key, x, y, floor, width, depth, levels, yaw, role, title, box, door, ca
             part(f"pilaster_{side}", "Entry stone pilaster", side*(entry/2+.48), front-.34,
                  0, .58, .56, story)
     sign(key+"_sign", title.upper(), *xy(0, front-.24), floor+3.05, yaw=yaw+90)
+
+    # Bounds include spires, roof furniture and setbacks. Reserve the upper
+    # silhouette for the pack art and build stairs only inside the occupied core.
+    if skinned:
+        width_scale, depth_scale, playable_levels = {
+            "library": (.60, .60, 3), "civic": (.43, .52, 6),
+            "hospital": (.43, .52, 12), "tower": (.66, .70, 22),
+            "police": (.60, .65, 3), "academic": (.72, .72, levels),
+        }[role]
+        width *= width_scale
+        depth *= depth_scale
+        levels = min(levels, playable_levels)
 
     shaft = 4.8
     shaft_u = width/2-shaft/2-.44

@@ -139,6 +139,8 @@ def place():
     for name, mesh in {"WarehouseDoorwayShell": warehouse_mesh, "WeatheredShelf": shelf_mesh,
                        "FuelPumpSolid": pump_mesh, **office_meshes}.items():
         prop_art["apply"](source_art / f"SM_{name}.glb", mesh, scratch, prepare_art, assets)
+    prop_art["apply"](source_art / "Parish" / "SM_ParishUpperChurch.glb", parish_art["ParishUpperChurch"],
+                      scratch, prepare_art, assets)
     military_crate = prop_art["apply"](source_art / "SM_ScavengeCrate.glb", crate_mesh, scratch, prepare_art, assets)
     unreal.log("Crossroads: restored embedded textures for pumps, crates, shelving and office props.")
     for mesh in (warehouse_mesh, shelf_mesh, desk_mesh, bed_mesh, crate_mesh, pump_mesh,
@@ -200,9 +202,12 @@ def place():
     touched_infill = set()
     # Geometry and dependent doors, furnishings and loot share the same rebake.
     resized_site = None
+    site_keys = set()
 
     def spawn(kind, key, label, x, y, z, configure, tags=(), always_loaded=False, relocate=False,
               reconfigure=False):
+        if key.startswith("CrossroadsRegion_"):
+            site_keys.add(key)
         if key.startswith("CrossroadsInfill_"):
             touched_infill.add(key)
             relocate = reconfigure = True
@@ -332,17 +337,17 @@ def place():
     unreal.log("Crossroads Overgrown Factory meshes: " +
                (", ".join(f"{role}={mesh.get_name()}" for role, mesh in factory.items()) or "none"))
 
-    def facade(key, style, x, y, z, width, depth, height, yaw, ground_height, entrance_width):
+    def facade(key, style, x, y, z, width, depth, height, yaw, ground_height, entrance_width, *, bundled=False):
         def configure(actor):
             actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
-            panel = random.Random(key).choice(city_panels) if city_panels else district_meshes[style]
+            panel = random.Random(key).choice(city_panels) if city_panels and not bundled else district_meshes[style]
             name = panel.get_path_name()
             if name not in panel_materials:
                 fallback = style_materials["classical_civic" if style == "StoneFacade" else "modern"]
                 slots = panel.get_editor_property("static_materials")
                 original = [slot.get_editor_property("material_interface") for slot in slots]
                 panel_materials[name] = ([unpowered(material) or fallback for material in original]
-                                         if city_panels else original)
+                                         if city_panels and not bundled else original)
             actor.fit_panels(panel, width*100, depth*100, height*100,
                              ground_height*100, entrance_width*100, panel_materials[name])
         spawn(facade_class, key, "City facade panels", x, y, z, configure)
@@ -854,24 +859,24 @@ def place():
         for level, department in enumerate(departments):
             z = floor+level*3.65
             sign(f"{tower}_directory_{level}", f"{level+1:02}  {department.upper()}",
-                 x+13, y+4.7, z+2.25)
+                 x+2, y+2.6, z+2.25)
             if department in {"Imaging", "Surgery", "Intensive Care"}:
                 furnishing(f"{tower}_station_{level}", department+" console", "desk",
-                           x+4, y-8, z, (3.1,1.1,1.35), 180)
+                           x-2, y-4, z, (3.1,1.1,1.35), 180)
                 furnishing(f"{tower}_storage_{level}", "Clinical equipment cabinet", "files",
-                           x+9, y-8, z, (1.5,.75,1.9), 90)
+                           x+1.5, y-5, z, (1.5,.75,1.9), 90)
             elif department in {"Emergency", "Rehabilitation"}:
                 for i in range(3):
                     box(f"{tower}_seats_{level}_{i}", "Patient waiting bench",
-                        x-17+i*4, y-14, z, 2.6,.62,.46,material=style_materials["timber"])
+                        x-8+i*3.2, y-7, z, 2.6,.62,.46,material=style_materials["timber"])
             else:
                 furnishing(f"{tower}_linen_{level}", "Ward linen shelves", "shelf",
-                           x-19, y+2, z, (3.2,.8,1.8), 0)
-            for i, dx in enumerate((-19,-8,4)):
-                treatment_bed(f"{tower}_bed_{level}_{i}", department+" treatment bay", x+dx, y+12, z)
-                box(f"{tower}_screen_{level}_{i}", "Privacy screen", x+dx+2, y+12,
+                           x-9, y+2, z, (3.2,.8,1.8), 0)
+            for i, dx in enumerate((-9,-5,-1)):
+                treatment_bed(f"{tower}_bed_{level}_{i}", department+" treatment bay", x+dx, y+6, z)
+                box(f"{tower}_screen_{level}_{i}", "Privacy screen", x+dx+2, y+6,
                     z, .12, 3, 1.8, material=style_materials["petrol"])
-        cache(tower+"_triage_supplies", "Hospital dressing supplies", x+5, y-10, floor,
+        cache(tower+"_triage_supplies", "Hospital dressing supplies", x+2, y-7, floor,
               cloth_amount=5, dressing_schematic_amount=1)
         migrate_landmark(key, tower, (key+"_slab",))
 
@@ -991,6 +996,12 @@ def place():
                 part(f"_pier_{side}_{i}","Nave pier",side*width*.405,depth*(i-1)*.29,
                      0,.75,.75,6.8,stone)
         part("_lintel","Entrance lintel",0,front+.25,2.65,3.2,.5,4.15,stone)
+        facade(key+"_masonry", "StoneFacade", x, y, floor, width, depth, 6.8, yaw, 3.15, 3.6,
+               bundled=True)
+        for side in (-1, 1):
+            part(f"_portal_{side}", "Parish entrance pier", side*2.35, front-.72,
+                 0, .72, 1.4, 3.8, stone)
+        part("_portico", "Parish entrance canopy", 0, front-.75, 3.8, 5.8, 2.1, .38, stone)
         part("_apse","Sanctuary wall",0,depth/2-.25,0,width,.5,6.8,stone)
         part("_ceiling","Nave ceiling",0,0,6.8,width,depth,.28,"timber")
         part("_altar","Stone altar",0,depth*.34,0,3.4,1.3,1.1,stone)
@@ -1146,6 +1157,21 @@ def place():
                 civic["place_landmark"](new_key, role, x, y, z+.2, box, door, cache, encounter,
                                         sign, hero_art, style_materials)
             migrate_landmark(key, new_key)
+        elif site["id"] == "city-towers":
+            tower_key = key+"_landmark"
+            def tower_art(tag, role, tx, ty, base, width, depth, height, story, yaw, opening):
+                if hero_art(tag, role, tx, ty, base, width, depth, height, story, yaw, opening):
+                    remove_generated(tag+"_office_panels")
+                else:
+                    facade(tag+"_office_panels", "OfficeFacade", tx, ty, base, width, depth,
+                           height, yaw, story, opening, bundled=True)
+                return True
+            civic["hall"](tower_key, x-4.4, y, z+.2, w*.83, d*.86, 22, 0, "tower",
+                         name, box, door, cache, encounter, sign, tower_art, style_materials)
+            for level in range(22):
+                scatter_caches(f"{tower_key}_office_{level}", x-4.4, y, z+.2+level*3.65,
+                               ((-9,-6), (-4,-7), (-1,8), (3,7)), (17,9,9,4,47,14), 96)
+            encounter(tower_key+"_upper_walker", "Upper office walker", x-11, y-5, z+.2+21*3.65)
         elif site["id"] == "city-hospital":
             resized_site = key
             place_hospital(key, x, y, z+.2)
@@ -1212,9 +1238,27 @@ def place():
                            (72, 8, 7, 2, 3, 8), 90)
             remove_blockout(key)
         else:
+            shop_x, shop_w = x, w
+            if site["id"] in {"car-lot", "dock-strip"}:
+                shop_x, shop_w = x-w*.19, w*.58
+                yard_x = x+w*.29
+                if site["id"] == "car-lot":
+                    for i, vehicle in enumerate(("BurnedSedan", "BurnedCompact", "AbandonedVan")):
+                        wreck(f"{key}_display_car_{i}", yard_x, y+(i-1)*5, z+.2, 12, vehicle)
+                else:
+                    wreck(key+"_delivery", yard_x, y-4.5, z+.2, 90, "RustedTruck")
+                    for i in range(3):
+                        box(f"{key}_cargo_{i}", "Weathered cargo crate", yard_x+(i-1)*2.1, y+4,
+                            z+.2, 1.4, 1.15, 1.1)
             interiors["place_site"](box, door, ramp, cache, encounter, sign, storefront_window,
                 treatment_bed, furniture, site_tools["building_shell"], site_tools["double_door"], key,
-                site, x, y, z+.2, w, d, style_materials, scatter_caches)
+                site, shop_x, y, z+.2, shop_w, d, style_materials, scatter_caches)
+            if site["kind"] == "shops":
+                facade(key+"_shopfront", "Storefront", shop_x, y, z+.2, shop_w*.92, d*.90, 3.65,
+                       0, 2.5, 2.9, bundled=True)
+            elif site["kind"] in {"clinic", "civic", "hospital"}:
+                facade(key+"_masonry", "StoneFacade", x, y, z+.2, w*.88, d*.84, 4.25,
+                       0, 3.15, 3.3, bundled=True)
             remove_generated(key+"_shell", key+"_trim", key+"_portico_roof",
                              *(f"{key}_portico_{i}" for i in range(4)))
         if site["kind"] == "industry" and site["id"] != "hangars":
@@ -1237,6 +1281,8 @@ def place():
             positions, weights = city_cache_layouts[site["id"]]
             scatter_caches(key+"_district", x, y, z+.2, positions, weights, 95)
 
+        if site["id"] in {"city-towers", "city-hospital", "city-hall", "university", "city-police"}:
+            remove_generated(*(tag for tag in actor_tags if tag.startswith(key+"_") and tag not in site_keys))
         if site["id"] in {"winter-village", "hill-town", "north-lowlands"}:
             landmark_mesh(key+"_bus_stop", "Weathered roadside bus shelter", "WeatheredBusStop",
                           x+7.6, y-d/2-2.8, z+.05, collision=True)
