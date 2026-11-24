@@ -168,7 +168,8 @@ bool ASurvivalBuildChunk::TryInstallDoor(const FHitResult& Hit)
     Leaf->SetMobility(EComponentMobility::Movable);
     UStaticMesh* DoorArt = LoadObject<UStaticMesh>(nullptr,
         TEXT("/Game/Art/Crossroads/World/Parish/SM_TimberLeaf/SM_TimberLeaf.SM_TimberLeaf"));
-    Leaf->SetStaticMesh(DoorArt ? DoorArt : Timber->GetStaticMesh());
+    UStaticMesh* LeafMesh = Timber->GetStaticMesh();
+    Leaf->SetStaticMesh(DoorArt ? DoorArt : LeafMesh);
     if (!DoorArt)
     {
         Leaf->SetMaterial(0, Timber->GetMaterial(0));
