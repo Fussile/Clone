@@ -1,0 +1,180 @@
+Warehouse by VertexForge (https://sketchfab.com/prankscare99)
+Source: https://sketchfab.com/3d-models/warehouse-02097a13aec040068629eacc75dffc5e
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Rescaled and centered at ground level, resized the embedded texture,
+and cut twelve doorways in the single static mesh to fit operable leaves.
+
+Soviet Panel Building by input_render.png
+Source: https://sketchfab.com/3d-models/soviet-panel-building-54501c691e25441ca2894f3c15227a1b
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Joined building and balconies with separate material slots, rescaled
+the exterior, and placed the origin at ground level.
+
+Shelf 01 by Gabriel Radić (Poly Haven)
+Source: https://polyhaven.com/a/Shelf_01
+License: CC0
+Changes: Packed glTF as GLB with 512 px embedded textures.
+
+School Desk 01 by Ethan Place (Poly Haven)
+Source: https://polyhaven.com/a/SchoolDesk_01
+License: CC0
+Changes: Packed glTF as GLB with 512 px embedded textures.
+
+RUNWAY by pranav27 (https://sketchfab.com/pranav27)
+Source: https://sketchfab.com/3d-models/runway-7531233498374cf1beef65075ed2fcee
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Runway threshold and centerline geometry was isolated, flattened and rescaled.
+
+Test 3D Football Field by ust-italia (https://sketchfab.com/ust-italia)
+Source: https://sketchfab.com/3d-models/test-3d-football-field-a8b461b0dc864ca9b16e4b3a327a2da2
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: The scan was oriented upright and leveled, its perimeter relief reduced and its mesh simplified for placement.
+
+Stadium sign by FelixMatveev (https://sketchfab.com/FelixMatveev)
+Source: https://sketchfab.com/3d-models/stadium-sign-1676b1a731ca49749a2bb922d6c46538
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Centered and rescaled for the soccer site.
+
+Hangar by thetrady (https://sketchfab.com/thetrady)
+Source: https://sketchfab.com/3d-models/hangar-e6886422f7094c4592834f1c34b6cd0f
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Removed the ground display and parked door geometry, normalized dimensions, simplified the mesh and added tiling UVs.
+
+Donetsk Int'l Airport Terminal by Matthew Schroyer (https://sketchfab.com/mschroyer)
+Source: https://sketchfab.com/3d-models/donetsk-intl-airport-terminal-268bc119d57b45dabaead5ad1a7f91e5
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Normalized the scan to the airport lot, simplified the mesh and resized the embedded texture.
+
+Ruined Donetsk Airport "METRO" Store (Winter) by Blenderust (https://sketchfab.com/narighillya)
+Source: https://sketchfab.com/3d-models/ruined-donetsk-airport-metro-store-winter-06def9b6dced4b6f9fbaeb7d9e1ec57f
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Extracted the structure and sign from the base scene, rescaled and resized embedded textures.
+
+Old Russian bus stop by halkiridze (https://sketchfab.com/halkiridze)
+Source: https://sketchfab.com/3d-models/old-russian-bus-stop-074e11d7adb9420a83bc862e81579a9f
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Centered at ground level and resized the embedded textures.
+
+Transformers by rhcreations (https://sketchfab.com/rhcreations)
+Source: https://sketchfab.com/3d-models/transformers-dc8b41f6657b42209b63d88d293b26dc
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Extracted one transformer, rescaled and packed the textures.
+
+Radiation Sign Dirty Destroyed by seba0456 (https://sketchfab.com/sebaonlline)
+Source: https://sketchfab.com/3d-models/radiation-sign-dirty-destroyed-e483a3a18aa344a8808ee8656dec9e1b
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Centered at ground level and rescaled.
+
+Crate box by KloWorks (https://sketchfab.com/kloworks)
+Source: https://sketchfab.com/3d-models/crate-box-e1a6856037c54d0d9019aedf61315569
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Imported from the content branch and fit to the regional loot slots.
+
+Gas Station low - USSR fuel pump by Milionna (https://sketchfab.com/milionna)
+Source: https://sketchfab.com/3d-models/gas-station-low-ussr-29c6e42636834359afd50f76dfe5196e
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Retained the original pump geometry and textures, made the body material opaque and fit the pump to the forecourt.
+
+Repeater Radio Tower (updated) by Veterock (https://sketchfab.com/windofglass)
+Source: https://sketchfab.com/3d-models/repeater-radio-tower-updated-f17b20e7e13546efac44aff1f097ef25
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Extracted the mast from the FBX compound, simplified the mesh,
+centered it at its footing, and packed resized textures.
+
+Cell Tower Skalka concrete tower by panfoto (https://sketchfab.com/panfoto)
+Source: https://sketchfab.com/3d-models/cell-tower-skalka-concrete-tower-b61436f067654e8282fd32a251980550
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Combined the triangular scan sections, preserved source normals and UV seams during simplification, and packed a 2K color atlas.
+
+Concrete wall protection by Mehdi Shahsavan (https://sketchfab.com/ahmagh2e)
+Source: https://sketchfab.com/3d-models/concrete-wall-protection-47c3c48fac3a4f0c8ca0fe61d34daff2
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Isolated the concrete panel and repacked its textures.
+
+Wooden barbed wire protection by Mehdi Shahsavan (https://sketchfab.com/ahmagh2e)
+Source: https://sketchfab.com/3d-models/barrier---wooden--barbed--wire-protection-13-mb-a99f8daa113a4439b24869e41643ecb4
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Fit to checkpoint and compound placements in the map bake.
+
+Wooden spike barricade by iGauravRajput (https://sketchfab.com/igauravrajput)
+Source: https://sketchfab.com/3d-models/wooden--spike--barricad-3d-model-free-0a61ae606efb493f94b9f126d2273d1e
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Fit to roadside placements in the map bake.
+
+
+Laitse Radio Station by 3Di
+Source: https://sketchfab.com/3d-models/laitse-radio-station-adb7c2ef2a7e47318b688af5f739f930
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Converted the USDZ exterior scan to a GLB, retained UV seams and the four original 1K color/normal pairs, and aligned it to the plot.
+
+Office Props Pack by seenoise
+Source: https://sketchfab.com/3d-models/office-props-pack-260ff7a37a674505903708a0dc513e7e
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Reassembled the USDZ meshes into workstation, filing cabinet, drawer and water cooler props. Resized embedded textures and packed material channels.
+
+Station brick and shop tile finishes incorporate the ambientCG Concrete034 color texture (CC0).
+
+Soviet Electrical Substation Old by MrUnity
+Source: https://sketchfab.com/3d-models/soviet-electrical-substation-old-687f2d25e1e24d1386b4cbd3f7986eb6
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Converted the USDZ scan to GLB, simplified the geometry, and retained the color and normal textures.
+
+Substation by One80 Solar
+Source: https://sketchfab.com/3d-models/substation-8f4e54879b664104bece03d8e7236c15
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Cropped a section of switchgear, simplified the geometry, and resized the color texture.
+
+Power Lines High voltage electricity by Mehdi Shahsavan
+Source: https://sketchfab.com/3d-models/power-lines-high-voltage-electricity-1e59aeb1068144d1baba87d7cc97023b
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Extracted one freestanding pylon and replaced the bundled wires with fitted conductors.
+
+Gas station by Elbolillo
+Source: https://sketchfab.com/3d-models/gas-station-eeb913b90b4344ddbd7852f82a7ef160
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Extracted the furnished 6twelve shop and canopy from the FBX and relinked the materials.
+The gameplay map supplies the pumps, loot, and working doors.
+
+Burned-out Cars by Renafox
+Source: https://sketchfab.com/3d-models/burned-out-cars-701066df6b914fd08318524c7ccd96a7
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Split into two standalone collision-ready vehicles with resized maps.
+
+Truck Cargo Destroyed erosion rust by meng5142
+Source: https://sketchfab.com/3d-models/truck-cargo-destroyed-erosion-rust-9fd34db7ef3b425982d05275a1fd3621
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Centered and resized for placement in the region.
+
+Corner Shop Block, Office Facade Module, Stone Facade Module, and Storefront Base Module by tevy
+Sources:
+https://tevy.dev/models/corner-shop-block
+https://tevy.dev/models/facade-office-module
+https://tevy.dev/models/facade-stone-module
+https://tevy.dev/models/storefront-module
+License: CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)
+Changes: Decoded the geometry and textures and joined the pieces for direct editor import.
+
+Moldering Minivan (Free Raw Scan) by Renafox
+Source: https://sketchfab.com/3d-models/moldering-minivan-free-raw-scan-14acd80b35004d8b932cb6ee94dca468
+License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+Changes: Simplified and centered the scan, smoothed the display normals across UV seams, and packed a 2K color atlas from the original 8K image.
+
+Regional bake modification: Cut ground-level pedestrian openings in Laitse Radio Station, Skalka tower and the Soviet substation building. The prepared meshes retain their original materials and attribution above.
+
+Rail assets are licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+
+Abandoned railroad by gav (https://sketchfab.com/gav11)
+Source: https://sketchfab.com/3d-models/abandoned-railroad-4c2803efa7eb4a21bc66df35e7cbd24a
+Changes: Centered the track tile, embedded resized maps, and instanced it along the freight grade.
+
+Tram rails by Ivan-Kanaev (https://sketchfab.com/Ivan-Kanaev)
+Source: https://sketchfab.com/3d-models/tram-rails-5c6fd4b652d94def9c8b8d735507300f
+Changes: Isolated a straight pair of rails, clipped a four-meter tile, and repacked the maps.
+
+[Free] Soviet tram x-series by Net Med (https://sketchfab.com/net_3d)
+Source: https://sketchfab.com/3d-models/free-soviet-tram-x-series-dd4aeab12b4b4c3891156d7662b79cc2
+Changes: Normalized size and pivot, resized textures, and disabled emissive lighting.
+
+Soviet Train 3d Model By Ajay | High Poly Train by AJ_AY (https://sketchfab.com/AJAY.K)
+Source: https://sketchfab.com/3d-models/soviet-train-3d-model-by-ajay-high-poly-train-6a4518dd6bd4472083834bac4d905c70
+Changes: Repacked the USDZ as a static GLB, simplified repetitive hardware, resized the base-color textures, and fit the model to the rail gauge.

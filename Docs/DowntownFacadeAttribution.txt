@@ -1,0 +1,5 @@
+Modular Urban Apartments Facade by James Ray Cock, published by Poly Haven.
+Source: https://polyhaven.com/a/modular_urban_apartments_facade
+License: CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/)
+Changes: Assembled a single 3 m window bay with trim, centered the pivot at
+the base, and embedded the resized texture maps in a GLB.
