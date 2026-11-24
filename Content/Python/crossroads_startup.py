@@ -109,6 +109,8 @@ def prepare_if_needed():
     ))
     required += tuple(f"/Game/Art/Crossroads/World/Rail/{name}/SM_{name}"
                       for name in ("FreightTrack", "TramTrack", "SovietLocomotive", "CrossroadsTram"))
+    prop_materials = runpy.run_path(str(project / "Tools" / "world_prop_materials.py"))
+    required += tuple(prop_materials["required_packages"](project / "SourceArt" / "Crossroads" / "World"))
     if medicine_sheet.is_file():
         required += ("/Game/Art/Crossroads/Local/MedicineSheet",)
     if (stamp.is_file() and stamp.read_text(encoding="utf-8") == revision

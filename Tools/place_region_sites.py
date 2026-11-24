@@ -26,23 +26,24 @@ def station_layout(box, door, key, x, y, floor, palette):
     box(key+"_fascia", "Station fascia", x, y-8, floor+2.9, 12, .24, .58, material=trim)
 
 
-def warehouse_yard(box, key, x, y, floor, palette):
+def warehouse_yard(box, key, x, y, floor, palette, depth_scale):
     steel, wood, paint = (palette[name] for name in ("dark_trim", "timber", "traffic"))
+    approach = 3.16 * (depth_scale-1)
     for side in (-1, 1):
         for index in range(4):
-            px, py = x + side * (6.5 + index * 2.8), y - 5.7
+            px, py = x + side * (6.5 + index * 2.8), y - 5.7 - approach
             box(f"{key}_bollard_{side}_{index}", "Loading yard bollard",
                 px, py, floor, .22, .22, 1, material=paint)
         for index in range(3):
-            px, py = x + side * 8.2, y - 8.2 - index * 1.5
+            px, py = x + side * 8.2, y - 8.2 - approach - index * 1.5
             box(f"{key}_pallet_{side}_{index}", "Shipping pallet",
                 px, py, floor, 1.25, 1.05, .16, material=wood)
             if index < 2:
                 box(f"{key}_cargo_{side}_{index}", "Weathered cargo crate",
                     px, py, floor+.16, .95, .85, .58 + .36 * index, material=wood)
-        box(f"{key}_lane_{side}", "Loading lane stripe", x+side*2.2, y-10.5,
+        box(f"{key}_lane_{side}", "Loading lane stripe", x+side*2.2, y-10.5-approach,
             floor+.015, .12, 10.5, .02, material=paint, collision=False)
-        box(f"{key}_rack_{side}", "Warehouse shelving", x+side*9.7, y+2.25,
+        box(f"{key}_rack_{side}", "Warehouse shelving", x+side*9.7, y+2.25*depth_scale,
             floor, .65, 1.28, 1.8, material=steel)
 
 

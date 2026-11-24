@@ -24,6 +24,7 @@ def place():
     landmarks = runpy.run_path(str(root / "Tools" / "place_region_landmarks.py"))
     local_art = runpy.run_path(str(root / "Tools" / "local_world_art.py"))
     airfield_dimensions = runpy.run_path(str(root / "Tools" / "airfield_layout.py"))
+    warehouse_depth_scale = 1.85
     warehouse_doors = json.loads((root / "Tools" / "warehouse_doors.json").read_text(encoding="utf-8"))
     editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
@@ -54,7 +55,8 @@ def place():
     actor_tags = {str(tag): actor for actor in existing for tag in actor.get_editor_property("tags")}
     prepare_art = runpy.run_path(str(root / "Tools" / "prepare_crossroads.py"))
     import_asset = prepare_art["import_asset"]
-    world_art = "/Game/Art/Crossroads/World"
+    prop_art = runpy.run_path(str(root / "Tools" / "world_prop_materials.py"))
+    world_art = prop_art["WORLD"]
     source_art = root / "SourceArt" / "Crossroads" / "World"
     bed_mesh, bay_mesh, warehouse_mesh, shelf_mesh, desk_mesh = (
         import_asset(source_art / f"SM_{name}.glb", world_art, unreal.StaticMesh)
@@ -123,6 +125,12 @@ def place():
     if not crate_class or not zombie_class or not door_class:
         raise RuntimeError("Build SurvivalEditor before placing structures and loot.")
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    scratch = root / "Saved" / "WorldBake" / "PropTextures"
+    for name, mesh in {"WarehouseDoorwayShell": warehouse_mesh, "WeatheredShelf": shelf_mesh,
+                       "FuelPumpSolid": pump_mesh, **office_meshes}.items():
+        prop_art["apply"](source_art / f"SM_{name}.glb", mesh, scratch, prepare_art, assets)
+    military_crate = prop_art["apply"](source_art / "SM_ScavengeCrate.glb", crate_mesh, scratch, prepare_art, assets)
+    unreal.log("Crossroads: restored embedded textures for pumps, crates, shelving and office props.")
     for mesh in (warehouse_mesh, shelf_mesh, desk_mesh, bed_mesh, crate_mesh, pump_mesh,
                  *communications_meshes.values(), *office_meshes.values(),
                  *(landmark_meshes[name] for name in sorted(landmark_collision)),
@@ -308,7 +316,7 @@ def place():
                 if len(city_panels) == 16:
                     break
         unreal.log(f"Crossroads selected {len(city_panels)} City Sample wall modules.")
-    unpowered = local_art["dark_materials"](assets)
+    unpowered = local_art["dark_materials"](prepare_art, style_materials)
     panel_materials = {}
     factory = local_art["factory_props"](local_art["pack_meshes"](root, "OvergrownFactoryENV"))
     unreal.log("Crossroads Overgrown Factory meshes: " +
@@ -321,16 +329,10 @@ def place():
             name = panel.get_path_name()
             if name not in panel_materials:
                 fallback = style_materials["classical_civic" if style == "StoneFacade" else "modern"]
-                materials = []
-                for slot in panel.get_editor_property("static_materials"):
-                    material = slot.get_editor_property("material_interface")
-                    try:
-                        dark = unpowered(material)
-                    except (RuntimeError, TypeError) as error:
-                        unreal.log_warning(f"Crossroads cannot prepare a dark variant: {error}")
-                        dark = None
-                    materials.append(dark or fallback)
-                panel_materials[name] = materials
+                slots = panel.get_editor_property("static_materials")
+                original = [slot.get_editor_property("material_interface") for slot in slots]
+                panel_materials[name] = ([unpowered(material) or fallback for material in original]
+                                         if city_panels else original)
             actor.fit_panels(panel, width*100, depth*100, height*100,
                              ground_height*100, entrance_width*100, panel_materials[name])
         spawn(facade_class, key, "City facade panels", x, y, z, configure)
@@ -362,8 +364,11 @@ def place():
         sources = [(suffix, hero_class(asset_name), h, bottom, opening)
                    for suffix, asset_name, h, bottom, opening in pieces]
         existing_skins = (key+"_sample_main", key+"_sample_ground")
+        def clear_skin():
+            remove_generated(*existing_skins, *(tag for tag in actor_tags if tag.startswith(key+"_trim_")))
+
         if any(source_class is None for _, source_class, *_ in sources):
-            remove_generated(*existing_skins)
+            clear_skin()
             unreal.log_warning(f"Crossroads retained the playable {role} blockout. Missing City Sample {name}.")
             return False
 
@@ -373,28 +378,22 @@ def place():
             tag = f"{key}_sample_{suffix}"
             probe = actors.spawn_actor_from_class(source_class, unreal.Vector(), transient=True)
             if not probe:
-                remove_generated(*existing_skins)
+                clear_skin()
                 return False
             try:
                 def install(actor):
                     actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
                     dimensions = unreal.Vector(width*100, depth*100, h*100)
+                    finishes = {source: unpowered(source)
+                                for source in unreal.CrossroadsWorldBake.get_landmark_materials(probe)}
                     if not unreal.CrossroadsWorldBake.copy_landmark_skin(
-                            actor, probe, dimensions, opening*100, 293):
+                            actor, probe, dimensions, opening*100, 293, finishes, style_materials["classical_civic"]):
                         raise ValueError(f"Empty City Sample exterior {name}")
-                    for component in actor.get_components_by_class(unreal.InstancedStaticMeshComponent):
-                        for slot in range(component.get_num_materials()):
-                            try:
-                                dark = unpowered(component.get_material(slot))
-                            except (RuntimeError, TypeError) as error:
-                                unreal.log_warning(f"Crossroads could not darken {name}: {error}")
-                                dark = None
-                            component.set_material(slot, dark or style_materials["classical_civic"])
 
                 spawn(facade_class, tag, "City Sample "+role+" exterior", x, y, bottom,
                       install, relocate=True, reconfigure=True)
             except ValueError as error:
-                remove_generated(*existing_skins)
+                clear_skin()
                 unreal.log_warning(str(error))
                 return False
             finally:
@@ -509,8 +508,9 @@ def place():
                         ("OfficeFiles", (.73, .54, 1.45))),
         "Bedroom dresser": ("OfficeDrawer", (.81, .44, 1.03)),
         "Water cooler": ("OfficeCooler", (.38, .40, 1.58)),
+        "Water dispenser": ("OfficeCooler", (.38, .40, 1.58)),
     }
-    prop_profiles["Water cooler"] = (45, "FOOD")
+    prop_profiles.update(dict.fromkeys(("Water cooler", "Water dispenser"), (45, "FOOD")))
 
     def box(key, label, x, y, z, w, d, h, ground=False, material=None, hidden=False,
             collision=True, rotation=None):
@@ -522,19 +522,26 @@ def place():
             if rotation:
                 pitch, yaw = rotation
                 actor.set_actor_rotation(unreal.Rotator(pitch=pitch, yaw=yaw), False)
-            actor.set_actor_hidden_in_game(hidden)
+            actor.set_actor_hidden_in_game(False)
+            mesh.set_visibility(not hidden)
 
         if label in prop_profiles and collision and not ground and not hidden:
             health, profile = prop_profiles[label]
             asset = {"Weathered cargo crate": crate_mesh, "Crated cargo": crate_mesh,
-                     "Fuel dispenser": pump_mesh}.get(label)
+                     "Fuel dispenser": pump_mesh, "Warehouse shelving": factory.get("rack", shelf_mesh),
+                     "Industrial storage": factory.get("rack", shelf_mesh),
+                     "Shipping pallet": factory.get("pallet")}.get(label)
             dimensions = (w, d, h)
             if label in furniture_slots:
                 name, dimensions = furniture_slots[label]
                 asset = office_meshes[name]
             if asset:
                 def configure_mesh(actor):
-                    fitted_mesh(actor, asset, dimensions, align_long_axis=label in furniture_slots)
+                    if label == "Warehouse shelving":
+                        fitted_mesh(actor, asset, (d, w, h), yaw=90, align_long_axis=True)
+                    else:
+                        fitted_mesh(actor, asset, dimensions,
+                                    align_long_axis=label in furniture_slots or label in {"Industrial storage", "Shipping pallet"})
                 prop_kind(key, label, health, profile, x, y, z+dimensions[2]/2, configure_mesh)
             else:
                 actor = prop_kind(key, label, health, profile, x, y, z+h/2, configure)
@@ -662,8 +669,9 @@ def place():
                 actor.set_editor_property(prop, amount)
             actor.set_editor_property("loot_profile", getattr(unreal.SurvivalLootProfile, profile))
             actor.set_editor_property("spawn_chance_percent", chance)
-            if not (loot.get("contains_sidearm") or loot.get("contains_rifle")):
-                fitted_mesh(actor, crate_mesh, (.82, .61, .58))
+            component = fitted_mesh(actor, crate_mesh, (.82, .61, .58))
+            if profile == "SECURITY" or loot.get("contains_sidearm") or loot.get("contains_rifle"):
+                component.set_material(0, military_crate)
 
         # Rebase both existing and new actors before centering the imported mesh.
         spawn(crate_class, key, label, x, y, floor+.30, configure, relocate=True, reconfigure=True)
@@ -887,20 +895,27 @@ def place():
         def configure(actor):
             component = actor.get_component_by_class(unreal.StaticMeshComponent)
             component.set_static_mesh(warehouse_mesh)
+            component.set_material(0, warehouse_mesh.get_material(0))
             component.set_collision_profile_name("BlockAll")
+            scale = (warehouse_depth_scale, 1, 1) if yaw % 180 else (1, warehouse_depth_scale, 1)
+            actor.set_actor_scale3d(unreal.Vector(*scale))
             actor.set_actor_rotation(unreal.Rotator(yaw=yaw), False)
 
-        spawn(unreal.StaticMeshActor, key+"_doorway_shell", "Warehouse loading hall", x, y, floor, configure)
+        spawn(unreal.StaticMeshActor, key+"_doorway_shell", "Warehouse loading hall", x, y, floor, configure,
+              relocate=True, reconfigure=True)
         remove_generated(key+"_warehouse", key+"_static")
         for opening in warehouse_doors:
-            door(f"{key}_door_{opening['id']}", opening["label"], x+opening["x"], y+opening["y"],
-                 floor, opening["width"], opening["height"], yaw=opening["yaw"],
+            side_opening = opening["yaw"] % 180 != 0
+            door_width = opening["width"] * (warehouse_depth_scale if side_opening else 1)
+            door(f"{key}_door_{opening['id']}", opening["label"],
+                 x+opening["x"], y+opening["y"]*warehouse_depth_scale,
+                 floor, door_width, opening["height"], yaw=opening["yaw"],
                  roll_up=opening.get("roll_up", False), reverse=opening.get("reverse", False),
                  finish="petrol")
-        site_tools["warehouse_yard"](box, key, x, y, floor, style_materials)
-        box(key+"_signboard", "Warehouse signboard", x, y-3.54, floor+3.26, 5.2, .1, .6,
+        site_tools["warehouse_yard"](box, key, x, y, floor, style_materials, warehouse_depth_scale)
+        box(key+"_signboard", "Warehouse signboard", x, y-3.54*warehouse_depth_scale, floor+3.26, 5.2, .1, .6,
             material=style_materials["dark_trim"])
-        sign(key+"_sign", "LOADING 04", x, y-3.61, floor+3.69)
+        sign(key+"_sign", "LOADING 04", x, y-3.61*warehouse_depth_scale, floor+3.69)
         cache(key+"_materials", "Warehouse repair materials", x-8, y+1.5, floor,
               stone_amount=30, timber_amount=24)
         cache(key+"_supplies", "Warehouse storage crate", x+8, y+1.5, floor,
@@ -910,21 +925,43 @@ def place():
 
     def dress_industrial(key, x, y, floor, width, depth, warehouse=False):
         desired = set()
-        if "wall" in factory and not warehouse:
+        if "wall" in factory:
             skin = factory["wall"]
             bounds = skin.get_bounding_box()
             span = max(bounds.max.x-bounds.min.x, bounds.max.y-bounds.min.y)/100
-            count = max(1, round(width/span))
-            bay = width/count
-            for i in range(count):
-                def wall(actor):
-                    component = fitted_mesh(actor, skin, (bay, .28, 8.4), align_long_axis=True)
-                    component.set_collision_profile_name("NoCollision")
-                tag = f"{key}_fab_rear_{i}"
-                desired.add(tag)
-                spawn(unreal.StaticMeshActor, tag, "Factory rear wall cladding",
-                      x-width/2+(i+.5)*bay, y+depth/2+.14, floor+4.2, wall,
-                      relocate=True, reconfigure=True)
+
+            def clad(name, cx, cy, length, base, height, yaw=0):
+                along_x = yaw % 180 == 0
+                count = max(1, round(length/span))
+                bay = length/count
+                for i in range(count):
+                    offset = (i+.5)*bay - length/2
+                    tag = f"{key}_fab_{name}_{i}"
+                    desired.add(tag)
+
+                    def wall(actor):
+                        component = fitted_mesh(actor, skin, (bay, .12, height), yaw, align_long_axis=True)
+                        component.set_collision_profile_name("NoCollision")
+
+                    spawn(unreal.StaticMeshActor, tag, "Industrial wall cladding",
+                          cx + (offset if along_x else 0), cy + (0 if along_x else offset),
+                          floor+base+height/2, wall, relocate=True, reconfigure=True)
+
+            if not warehouse:
+                opening = 4.5
+                clad("rear", x, y+depth/2+.055, width, 0, 5.66, 180)
+                clad("front_upper", x, y-depth/2-.055, width, 7.32, 1.08)
+                clad("rear_upper", x, y+depth/2+.055, width, 7.32, 1.08, 180)
+                clad("door_head", x, y-depth/2-.055, opening, 3.1, 2.56)
+                for side in (-1, 1):
+                    clad(f"front_{side}", x+side*(width+opening)/4, y-depth/2-.055,
+                         (width-opening)/2, 0, 5.66)
+                    clad(f"side_{side}", x+side*(width/2+.055), y, depth, 0, 8.4, side*90)
+            else:
+                # The source shell and its collision define all twelve shutter and staff openings.
+                for side in (-1, 1):
+                    clad(f"canopy_fascia_{side}", x, y+side*3.67*warehouse_depth_scale, 27.6, 3.39, .36,
+                         0 if side<0 else 180)
 
         for kind, dx, dy, dimensions, health in (
             ("rack", -6, .45, (1.8, .90, 1.95), 110),
@@ -998,6 +1035,7 @@ def place():
         elif site["id"] == "city-hospital":
             place_hospital(key, x, y, z+.2)
         elif site["id"] == "warehouses":
+            resized_site = key
             place_warehouse(key, x, y, z+.2)
             remove_blockout(key)
         elif site["id"] == "city-nightlife":

@@ -45,14 +45,14 @@ def import_asset(source, directory, asset_type, options=None, *, replace_existin
         if asset.get_path_name().split(".")[0] != path:
             if not assets.rename_loaded_asset(asset, path):
                 raise RuntimeError(f"Could not save {source} as {path}.")
-        if not assets.save_directory(directory, only_if_is_dirty=True, recursive=False):
+        if not assets.save_directory(directory, only_if_is_dirty=True, recursive=True):
             raise RuntimeError(f"Could not save imported assets in {directory}.")
     if not isinstance(asset, asset_type):
         raise RuntimeError(f"{path} has an unexpected asset type.")
     return asset
 
 
-def make_material(directory, name, textures, tint=None, world_repeat_cm=None):
+def make_material(directory, name, textures, tint=None, world_repeat_cm=None, *, scalars=()):
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     path = f"{directory}/{name}"
     editing = unreal.MaterialEditingLibrary
@@ -118,6 +118,13 @@ def make_material(directory, name, textures, tint=None, world_repeat_cm=None):
             output = ""
         if not editing.connect_material_property(expression, output, prop):
             raise RuntimeError(f"Could not connect {texture.get_name()} to {path}.")
+    for index, (value, target) in enumerate(scalars):
+        constant = editing.create_material_expression(
+            material, unreal.MaterialExpressionConstant, -320, (len(textures) + index) * 240
+        )
+        constant.set_editor_property("r", value)
+        if not editing.connect_material_property(constant, "", target):
+            raise RuntimeError(f"Could not set {target} for {path}.")
     editing.recompile_material(material)
     if world_repeat_cm is not None:
         assets.set_metadata_tag(material, "CrossroadsProjection", "1")

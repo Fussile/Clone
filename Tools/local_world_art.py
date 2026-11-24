@@ -16,9 +16,28 @@ def pack_meshes(root, folder):
                   key=lambda entry: str(entry.package_name))
 
 
-def dark_materials(assets):
+def dark_materials(prepare_art, palette):
     editing = unreal.MaterialEditingLibrary
+    sampler = unreal.MaterialSamplerType
+    prop = unreal.MaterialProperty
     made = {}
+
+    def color_texture(source):
+        if isinstance(source, unreal.MaterialInstanceConstant):
+            for name in editing.get_texture_parameter_names(source):
+                if re.search(r"base.?color|albedo|diffuse|^colou?r$|^bc$", str(name), re.I):
+                    texture = editing.get_material_instance_texture_parameter_value(source, name)
+                    if is_color(texture):
+                        return texture
+        textures = editing.get_material_used_textures(source)
+        return next((texture for texture in textures if is_color(texture)
+                     and re.search(r"base.?color|albedo|diffuse|_(?:d|bc|colou?r)(?:_|$)",
+                                   texture.get_name(), re.I)), None)
+
+    def is_color(texture):
+        return (isinstance(texture, unreal.Texture2D) and texture.get_editor_property("srgb")
+                and not re.search(r"emiss|interior|room|light.?map|mask|default|normal",
+                                  texture.get_name(), re.I))
 
     def without_emission(source):
         if source is None:
@@ -26,31 +45,34 @@ def dark_materials(assets):
         path = source.get_path_name()
         if path in made:
             return made[path]
-        digest = hashlib.sha1(path.encode()).hexdigest()[:12]
-        target = f"/Game/Art/Crossroads/World/Unpowered/{source.get_name()}_{digest}"
-        variant = assets.load_asset(target) if assets.does_asset_exist(target) else None
-        if variant is None:
-            variant = assets.duplicate_loaded_asset(source, target)
-        if variant is None:
-            raise RuntimeError(f"Could not copy {path}")
-        if assets.get_metadata_tag(variant, "CrossroadsUnpowered") != "1":
-            if isinstance(variant, unreal.Material):
-                unreal.CrossroadsWorldBake.disable_material_emission(variant)
-            elif isinstance(variant, unreal.MaterialInstanceConstant):
-                parent = without_emission(source.get_editor_property("parent"))
-                editing.set_material_instance_parent(variant, parent)
-                # Also reset emissive intensities exposed by any nested material functions.
-                for name in editing.get_scalar_parameter_names(variant):
-                    if re.search(r"emiss|light.?intensity|window.?light", str(name), re.I):
-                        editing.set_material_instance_scalar_parameter_value(variant, name, 0.0)
-                editing.update_material_instance(variant)
+        # Keep separate glazing slots dark. Simplify the pack's block and
+        # baked façade shaders so an unpowered copy stays within SM5 limits.
+        names = []
+        parent = source
+        while parent:
+            names.append(parent.get_name().lower())
+            parent = (parent.get_editor_property("parent")
+                      if isinstance(parent, unreal.MaterialInstanceConstant) else None)
+        names = " ".join(names)
+        if re.search(r"glass|glazing|window|emiss", names):
+            material = palette["glazing"]
+        else:
+            texture = color_texture(source)
+            if texture:
+                digest = hashlib.sha1(texture.get_path_name().encode()).hexdigest()[:12]
+                sample_type = (sampler.SAMPLERTYPE_VIRTUAL_COLOR
+                               if texture.get_editor_property("virtual_texture_streaming")
+                               else sampler.SAMPLERTYPE_COLOR)
+                material = prepare_art["make_material"](
+                    "/Game/Art/Crossroads/World/LandmarkFinishes", f"M_SampleColor_{digest}", (
+                        (texture, sample_type, "RGB", prop.MP_BASE_COLOR),
+                    ))
+            elif re.search(r"roof|metal|iron", names):
+                material = palette["dark_trim"]
             else:
-                raise RuntimeError(f"Could not make an unpowered material from {path}")
-            assets.set_metadata_tag(variant, "CrossroadsUnpowered", "1")
-            if not assets.save_loaded_asset(variant):
-                raise RuntimeError(f"Could not save {target}")
-        made[path] = variant
-        return variant
+                material = palette["classical_civic"]
+        made[path] = material
+        return material
     return without_emission
 
 

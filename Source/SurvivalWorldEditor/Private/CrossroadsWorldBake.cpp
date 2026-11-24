@@ -8,10 +8,7 @@
 #include "GameFramework/Actor.h"
 #include "Landscape.h"
 #include "LandscapeSubsystem.h"
-#include "Materials/Material.h"
-#include "Materials/MaterialAttributeDefinitionMap.h"
-#include "Materials/MaterialExpressionConstant.h"
-#include "Materials/MaterialExpressionSetMaterialAttributes.h"
+#include "Materials/MaterialInterface.h"
 #include "MeshDescription.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
@@ -120,36 +117,6 @@ bool UCrossroadsWorldBake::SetStaticMeshCollision(UStaticMesh* Mesh)
     return true;
 }
 
-void UCrossroadsWorldBake::DisableMaterialEmission(UMaterial* Material)
-{
-    if (!Material)
-    {
-        return;
-    }
-
-    Material->Modify();
-    UMaterialEditorOnlyData* Data = Material->GetEditorOnlyData();
-    auto* Zero = NewObject<UMaterialExpressionConstant>(Material);
-    Zero->R = 0.0f;
-    Data->ExpressionCollection.AddExpression(Zero);
-    if (Material->bUseMaterialAttributes && Data->MaterialAttributes.IsConnected())
-    {
-        auto* Attributes = NewObject<UMaterialExpressionSetMaterialAttributes>(Material);
-        Attributes->AttributeSetTypes.Add(FMaterialAttributeDefinitionMap::GetID(MP_EmissiveColor));
-        Attributes->Inputs.SetNum(2);
-        Attributes->Inputs[0] = static_cast<const FExpressionInput&>(Data->MaterialAttributes);
-        Attributes->Inputs[1].Connect(0, Zero);
-        Data->ExpressionCollection.AddExpression(Attributes);
-        Data->MaterialAttributes.Connect(0, Attributes);
-    }
-    else
-    {
-        Data->EmissiveColor.Connect(0, Zero);
-    }
-    Material->PostEditChange();
-    Material->MarkPackageDirty();
-}
-
 UStaticMesh* UCrossroadsWorldBake::CreateRoadMesh(const FString& PackagePath,
     const TArray<FVector>& Positions, const TArray<FVector2D>& UVs, const TArray<int32>& Indices,
     UMaterialInterface* Material)
@@ -227,8 +194,36 @@ UStaticMesh* UCrossroadsWorldBake::CreateRoadMesh(const FString& PackagePath,
     return Mesh;
 }
 
+TArray<UMaterialInterface*> UCrossroadsWorldBake::GetLandmarkMaterials(AActor* Source)
+{
+    if (!Source)
+    {
+        return {};
+    }
+
+    TSet<UMaterialInterface*> Materials;
+    TArray<UStaticMeshComponent*> Components;
+    Source->GetComponents(Components, true);
+    for (const UStaticMeshComponent* Component : Components)
+    {
+        if (!Component->GetStaticMesh())
+        {
+            continue;
+        }
+        for (int32 Slot = 0; Slot < Component->GetNumMaterials(); ++Slot)
+        {
+            if (UMaterialInterface* Material = Component->GetMaterial(Slot))
+            {
+                Materials.Add(Material);
+            }
+        }
+    }
+    return Materials.Array();
+}
+
 bool UCrossroadsWorldBake::CopyLandmarkSkin(AActor* Target, AActor* Source, FVector Dimensions,
-    double EntryWidth, double EntryHeight)
+    double EntryWidth, double EntryHeight,
+    const TMap<UMaterialInterface*, UMaterialInterface*>& Finishes, UMaterialInterface* DefaultFinish)
 {
     if (!Target || !Target->GetRootComponent() || !Source)
     {
@@ -328,7 +323,8 @@ bool UCrossroadsWorldBake::CopyLandmarkSkin(AActor* Target, AActor* Source, FVec
         Skin->SetCanEverAffectNavigation(false);
         for (int32 Slot = 0; Slot < Group.Component->GetNumMaterials(); ++Slot)
         {
-            Skin->SetMaterial(Slot, Group.Component->GetMaterial(Slot));
+            UMaterialInterface* const* Finish = Finishes.Find(Group.Component->GetMaterial(Slot));
+            Skin->SetMaterial(Slot, Finish ? *Finish : DefaultFinish);
         }
         Skin->AddInstances(Visible, false, false, false);
         Skin->RegisterComponent();

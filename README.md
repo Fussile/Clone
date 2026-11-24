@@ -36,4 +36,6 @@ The script builds the editor target, imports the starter art, bakes and saves th
 
 For editor-only work, build and open `Survival.uproject`. The first editor launch prepares and opens the region. Wait for `Crossroads: region ready. You can press Play.` in the Output Log on the first launch. Subsequent launches open the saved region. If preparation fails, the editor displays the error and writes the traceback to `Saved/Logs/Survival.log`. The full region retries the next time you open the editor. See the [region guide](Docs/StandardWorld.md) for the route and the [blockout guide](Docs/CrossroadsBlockout.md) for the original defense test map.
 
+To update an existing checkout from a GitHub source ZIP, close Unreal Editor and merge the ZIP into the project root, overwriting matching files. Keep `Content/CitySampleBuildings`, `Content/OvergrownFactoryENV`, and the existing generated content. Rebuild the **Development Editor** target and reopen the project. Crossroads detects the changed bake scripts and refreshes the existing map.
+
 See [architecture](ARCHITECTURE.md), [decisions](DECISIONS.md), [asset manifest](ASSETS.md), and [M0 checklist](Docs/M0.md). Proposed choices remain provisional until confirmed by the developer.

@@ -4,7 +4,6 @@
 #include "CrossroadsWorldBake.generated.h"
 
 class AActor;
-class UMaterial;
 class UMaterialInterface;
 class UStaticMesh;
 
@@ -21,10 +20,12 @@ public:
     static bool SetStaticMeshCollision(UStaticMesh* Mesh);
 
     UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
-    static void DisableMaterialEmission(UMaterial* Material);
+    static TArray<UMaterialInterface*> GetLandmarkMaterials(AActor* Source);
 
     UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
-    static bool CopyLandmarkSkin(AActor* Target, AActor* Source, FVector Dimensions, double EntryWidth, double EntryHeight);
+    static bool CopyLandmarkSkin(AActor* Target, AActor* Source, FVector Dimensions,
+        double EntryWidth, double EntryHeight,
+        const TMap<UMaterialInterface*, UMaterialInterface*>& Finishes, UMaterialInterface* DefaultFinish);
 
     UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
     static UStaticMesh* CreateRoadMesh(const FString& PackagePath, const TArray<FVector>& Positions,
