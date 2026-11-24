@@ -951,7 +951,9 @@ def place():
             def configure(actor):
                 actor.set_actor_rotation(unreal.Rotator(yaw=yaw),False)
                 actor.set_static_instances(meshes[name],transforms)
-                component = actor.get_root_component()
+                component = actor.get_component_by_class(unreal.InstancedStaticMeshComponent)
+                if component is None:
+                    raise RuntimeError(f"Tower {key} has no instanced mesh component for {name}.")
                 component.set_collision_profile_name("BlockAll")
                 if name in {"slab","wall"}:
                     component.set_material(0,style_materials["concrete" if name=="slab" else finish])
