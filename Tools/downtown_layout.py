@@ -150,7 +150,7 @@ def bake_traffic(routes, sites, blockers, seed):
     return parked
 
 
-def stamp_city(lots, blockers, box, facade, prop, door, cache, palette):
+def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, palette):
     for lot in lots:
         key = "CrossroadsInfill_"+lot["id"]
         x, y, z, w, d, yaw = (lot[k] for k in ("x", "y", "z", "w", "d", "yaw"))
@@ -185,22 +185,66 @@ def stamp_city(lots, blockers, box, facade, prop, door, cache, palette):
         height = lot["levels"]*3.65
         wall = "classical_civic" if style == "StoneFacade" else "modern"
         # Make the street-level recessed foyer reachable through a real door.
-        lobby_depth = d * .47
         for side in (-1, 1):
-            slab(f"_foyer_{side}", "Foyer side wall", side*(w/2-.13), -d/2+lobby_depth/2,
-                 z, .26, lobby_depth, 3.24, wall)
+            slab(f"_foyer_{side}", "Foyer side wall", side*(w/2-.13), 0,
+                 z, .26, d, 3.24, wall)
             u = side*(w+1.75)/4
             slab(f"_front_{side}", "Retail display backing", u, -d/2+.22,
                  z, (w-1.75)/2, .42, 3.24, wall)
         door(key+"_foyer_door", "Lobby door", *point(0,-d/2), z, 1.75, 2.35, yaw=yaw)
         slab("_lintel", "Lobby door lintel", 0, -d/2+.22, z+2.35, 1.75, .42, .89, wall)
-        slab("_foyer_back", "Foyer rear wall", 0, -d/2+lobby_depth, z, w, .32, 3.24, wall)
+        slab("_rear_wall", "Service wall", 0, d/2-.14, z, w, .28, 3.24, wall)
         slab("_structure", "Upper office block", 0, 0, z+3.24, w, d, height-3.24, wall)
-        slab("_rear_base", "Rear service block", 0, lobby_depth/2, z, w, d-lobby_depth, 3.24, wall)
+
+        def furnish(suffix, label, mesh, u, v, size, facing=0):
+            furnishing(key+"_"+suffix, label, mesh, *point(u, v), z, size, yaw+facing)
+
+        def partition(suffix, v, left, right, opening):
+            # Two jambs leave a 1.8 m opening onto the next room.
+            for side, (start, end) in enumerate(((left, opening-.9), (opening+.9, right))):
+                slab(f"_{suffix}_{side}", "Interior partition", (start+end)/2, v, z,
+                     end-start, .18, 3.24, wall)
+
+        if lot["facade"] == "CornerShop":
+            partition("stockroom", d*.18, -w/2, w/2, w*.23)
+            for side in (-1, 1):
+                furnish(f"aisle_{side}", "Market shelving", "shelf", side*w*.23, -d*.12,
+                        (d*.30, .86, 1.75), 90)
+            furnish("till", "Checkout desk", "desk", -w*.29, -d*.37, (2.2,.85,1.05))
+            furnish("delivery", "Stockroom shelving", "shelf", -w*.24, d*.34, (w*.33,1,2))
+            furnish("packing", "Receiving bench", "desk", w*.33, d*.36, (2.1,.9,1.1))
+            reward, profile = "Stockroom provisions", "FOOD"
+        elif style == "StoneFacade":
+            partition("waiting", -d*.05, -w/2, w/2, 0)
+            for side in (-1, 1):
+                # Both exam suites open onto the central passage from the waiting room.
+                for section, (start, end) in enumerate(((-d*.05, d*.14), (d*.14+1.8, d/2))):
+                    slab(f"_exam_{side}_{section}", "Exam room wall", side*1.6,
+                         (start+end)/2, z, .18, end-start, 3.24, wall)
+                furnish(f"bed_{side}", "Examination bed", "bed", side*w*.30, d*.25,
+                        (2.15,1.0,.85), 90)
+            furnish("reception", "Clinic reception", "desk", -w*.28, -d*.25, (2.5,.9,1))
+            # Keep the reception queue and the exam entrances clear.
+            for i in range(2):
+                slab(f"_waiting_seat_{i}", "Waiting bench", w*.29, -d*(.20+i*.13),
+                     z, 2.3,.62,.45,"timber")
+            furnish("exam_files", "Medical records", "files", w*.35, d*.40, (1.6,.65,1.4))
+            reward, profile = "Clinic supply case", "MEDICAL"
+        else:
+            partition("records", d*.14, -w/2, w/2, -w*.21)
+            slab("_archive_divider", "Archive partition", w*.08, d*.37, z, .18,
+                 d*.26, 3.24, wall)
+            for side in (-1, 1):
+                furnish(f"office_{side}", "Public service desk", "desk", side*w*.24,
+                        -d*.15, (2.8,1.1,1.35), 180)
+            furnish("files", "Record cabinets", "files", w*.27, d*.34, (2.2,.72,1.85))
+            furnish("sorting", "Records sorting desk", "desk", -w*.20, d*.32, (2.4,1,1.1))
+            furnish("public_files", "Intake filing cabinet", "files", -w*.39, -d*.32, (1.5,.65,1.45))
+            reward, profile = "Archive supply case", "OFFICE"
         slab("_parapet", "Office roof cap", 0, 0, z+height, w+.36, d+.36, .34, "dark_trim")
         facade(key+"_panels", style, x, y, z, w, d, height, yaw, 3.24, 1.75)
-        cache(key+"_lobby_cache", "Lobby scavenging cache", *point(-w*.28, -d/2+3.5), z,
-              profile="OFFICE", chance=82)
+        cache(key+"_lobby_cache", reward, *point(-w*.36, d*.43), z,
+              profile=profile, chance=82)
 
     for barrier in blockers:
         key = "CrossroadsStreetBarrier_"+barrier["id"]

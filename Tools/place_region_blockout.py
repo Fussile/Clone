@@ -928,7 +928,42 @@ def place():
         encounter(key+"_runner", "Loading yard runner", x-9.4, y-7.2, floor, runner=True, relocate=True)
         encounter(key+"_walker", "Warehouse walker", x+4, y+.75, floor, relocate=True)
 
+    interior_meshes = {"desk": office_meshes["OfficeWorkstation"], "files": office_meshes["OfficeFiles"],
+                       "shelf": shelf_mesh, "bed": bed_mesh}
+
+    def furnishing(key, label, mesh_name, x, y, floor, size, yaw):
+        def configure(actor):
+            fitted_mesh(actor, interior_meshes[mesh_name], size, yaw, align_long_axis=True)
+        spawn(unreal.StaticMeshActor, key, label, x, y, floor+size[2]/2, configure,
+              relocate=True, reconfigure=True)
+
     def dress_industrial(key, x, y, floor, width, depth, warehouse=False):
+        if warehouse:
+            # Rear dispatch apron, beyond the roll-up doors and within the site slab.
+            wreck(key+"_dispatch_truck", x-9, y+13, floor, 6, "RustedTruck")
+            wreck(key+"_dispatch_van", x+9, y+14, floor, 176, "AbandonedVan")
+            for side in (-1, 1):
+                furnishing(f"{key}_dispatch_shelf_{side}", "Dispatch shelving", "shelf",
+                           x+side*20, y+7, floor, (4.2,1.1,2.1), 90)
+                cache(f"{key}_dispatch_load_{side}", "Outbound freight", x+side*20,
+                      y+10.5, floor, profile="BUILDING")
+        elif key in {"CrossroadsRegion_west-factory", "CrossroadsRegion_east-factory"}:
+            west_works = key.endswith("west-factory")
+            wreck(key+"_shift_car", x-10, y+17.7, floor, 0,
+                  "BurnedSedan" if west_works else "BurnedCompact")
+            for side in (-1, 1):
+                px, py = x+side*width*.21, y-depth*.12
+                machine = factory.get("machine")
+                if machine:
+                    def fit_machine(actor):
+                        fitted_mesh(actor, machine, (3.2,1.65,2.15), 90, align_long_axis=True)
+                    spawn(unreal.StaticMeshActor, f"{key}_machine_{side}", "Workshop machinery",
+                          px, py, floor+1.075, fit_machine, relocate=True, reconfigure=True)
+                else:
+                    district_mesh(f"{key}_machine_{side}", "Electrical switchgear", "SubstationSwitchgear",
+                                  px, py, floor, (3.2,1.65,2.15), yaw=90)
+            cache(key+"_service_parts", "Repair parts", x+width*.18, y+depth*.35,
+                  floor, profile="BUILDING")
         desired = set()
         if "wall" in factory:
             skin = factory["wall"]
@@ -1167,7 +1202,7 @@ def place():
                                              transmission["poles"][b]["phases"], strict=True)):
             cable(f"CrossroadsCable_{a}_{b}_{index}",start,end)
     downtown["stamp_city"](plan["city_lots"],plan["city_barriers"],box,facade,
-                           communications_art,door,cache,style_materials)
+                           communications_art,door,cache,furnishing,style_materials)
     remove_generated(*(previous_infill - touched_infill))
     for car in plan["wrecks"]:
         wreck("CrossroadsWreck_"+car["id"],car["x"],car["y"],car["z"],car["yaw"],car["model"])

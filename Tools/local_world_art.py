@@ -80,6 +80,7 @@ def factory_props(entries):
     patterns = {
         "wall": (r"wall|facade|façade", r"corner|door|wind|roof|pill|decal|broken|hole", (170, 2, 190), (1400, 100, 900)),
         "rack": (r"shel[fv]|shelves|racks?", r"broken|decal", (65, 30, 95), (500, 210, 410)),
+        "machine": (r"lathe|milling|compressor|workshop.?press|industrial.?pump", r"decal|wheel|pipe|hose|lever", (80, 45, 55), (750, 400, 450)),
         "forklift": (r"fork.?lift", r"wheel|seat|forks_|steer", (140, 70, 120), (520, 245, 430)),
         "drum": (r"barrel|drum|oil.?can", r"lid|fire|decal", (30, 24, 35), (190, 170, 170)),
         "pallet": (r"pallet", r"jack|truck|decal|stack", (55, 40, 6), (220, 180, 52)),
