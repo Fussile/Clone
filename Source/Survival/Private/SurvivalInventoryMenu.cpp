@@ -272,7 +272,7 @@ public:
             return FReply::Handled();
         }
         if (Event.GetEffectingButton() != EKeys::LeftMouseButton) { return FReply::Unhandled(); }
-        return FReply::Handled().SetKeyboardFocus(SharedThis(this)).CaptureMouse(SharedThis(this)).DetectDrag(SharedThis(this), EKeys::LeftMouseButton);
+        return FReply::Handled().SetUserFocus(SharedThis(this), EFocusCause::Mouse).CaptureMouse(SharedThis(this)).DetectDrag(SharedThis(this), EKeys::LeftMouseButton);
     }
 
     virtual FReply OnMouseButtonUp(const FGeometry& Geometry, const FPointerEvent& Event) override
