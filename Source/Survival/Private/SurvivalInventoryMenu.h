@@ -30,6 +30,10 @@ private:
     void SelectFirstMatchingRecipe();
     TSharedRef<SWidget> MakeRecipeBrowser();
     TSharedRef<SWidget> MakeSkillsPanel();
+    TSharedRef<SWidget> MakeStatsPanel();
+    TSharedRef<SWidget> MakeLootPanel();
+    TArray<FSlateBrush> GearIcons;
+    ETraining SelectedStat = ETraining::Athletics;
     TSharedRef<SWidget> MakeTrainingDetails();
     bool MatchesTraining(ETraining Entry) const;
     void SelectFirstTraining();
@@ -46,7 +50,7 @@ private:
     FSlateBrush Portrait;
     void SetWorkbench(bool bOpen);
     bool bModifying = false;
-    enum class EPage { Pack, Crafting, Skills, Gear };
+    enum class EPage { Pack, Crafting, Skills, Gear, Stats, Loot };
     EPage Page = EPage::Crafting;
     int32 TrainingTree = 0;
     TSharedPtr<SSearchBox> TrainingFilterBox;

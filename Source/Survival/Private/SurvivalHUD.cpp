@@ -37,7 +37,7 @@ void ASurvivalHUD::BeginPlay()
         TEXT("DressingSchematic"), TEXT("FieldDressing"),
         TEXT("RifleStock"), TEXT("RifleReceiver"), TEXT("RifleBarrel"), TEXT("RifleOptic")
     };
-    static_assert(UE_ARRAY_COUNT(Names) == static_cast<int32>(ESurvivalItem::None));
+    static_assert(UE_ARRAY_COUNT(Names) == static_cast<int32>(ESurvivalItem::SidearmGrip));
     for (const TCHAR* Name : Names)
     {
         const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Inventory/T_Item_%s.T_Item_%s"), Name, Name);
@@ -47,7 +47,7 @@ void ASurvivalHUD::BeginPlay()
 
 UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item) const
 {
-    if (ItemAtlas && Item != ESurvivalItem::None && Item != ESurvivalItem::TimberDoor
+    if (ItemAtlas && Item < ESurvivalItem::SidearmGrip && Item != ESurvivalItem::TimberDoor
         && Item != ESurvivalItem::RifleStock && Item != ESurvivalItem::RifleReceiver && Item != ESurvivalItem::RifleBarrel)
     {
         return ItemAtlas.Get();
@@ -129,7 +129,7 @@ void ASurvivalHUD::DrawHotbar(const ASurvivalCharacter& Character)
         }
         DrawRect(Panel, X, Y, SlotSize, SlotSize);
         const ESurvivalItem Item = Character.GetHotbarItem(Index);
-        const int32 Count = Character.GetItemCount(Item);
+        const int32 Count = Character.GetToolbeltCount(Index);
         if (UTexture2D* Icon = GetItemIcon(Item))
         {
             const FBox2f UV = GetItemIconUV(Item);
@@ -273,7 +273,9 @@ void ASurvivalHUD::DrawHUD()
             const bool bReloading = bRifle ? Character->IsRifleReloading() : Character->IsReloading();
             DrawRect(Panel, Right - 145.0f, Canvas->SizeY - 73.0f, 145.0f, 55.0f);
             DrawText(bRifle ? TEXT("Bolt-action rifle") : TEXT("Sidearm"), Muted, Right - 132.0f, Canvas->SizeY - 66.0f);
-            DrawText(FString::Printf(TEXT("%d / %d%s"), bRifle ? Character->GetRifleAmmo() : Character->GetAmmo(),
+            if (!Character->GetWeaponAssembly(bRifle ? ESurvivalItem::Rifle : ESurvivalItem::Sidearm).IsComplete())
+                DrawText(TEXT("Parts missing"), Muted, Right - 132.0f, Canvas->SizeY - 45.0f);
+            else DrawText(FString::Printf(TEXT("%d / %d%s"), bRifle ? Character->GetRifleAmmo() : Character->GetAmmo(),
                 bRifle ? Character->GetRifleReserve() : Character->GetReserveAmmo(),
                 bReloading ? TEXT("   Reloading") : TEXT("")), FLinearColor::White, Right - 132.0f, Canvas->SizeY - 45.0f);
         }
@@ -383,9 +385,7 @@ void ASurvivalHUD::DrawHUD()
     }
     else if (const ASurvivalSupplyCrate* Crate = Character->FindSupplyCrate())
     {
-        const TCHAR* Prompt = Crate->HasRifle() ? TEXT("[E] Take rifle, ammunition and guide") :
-            Crate->HasSidearm() ? TEXT("[E] Take sidearm and ammo") :
-            (Crate->HasSupplies() ? TEXT("[E] Scavenge supplies") : TEXT("Already searched"));
+        const TCHAR* Prompt = Crate->HasSupplies() ? TEXT("[E] Search container") : TEXT("[E] Check container");
         DrawText(Prompt,
             FLinearColor::White, CenterX + 14.0f, CenterY + 12.0f);
     }

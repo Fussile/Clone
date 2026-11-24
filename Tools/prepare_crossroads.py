@@ -357,6 +357,7 @@ def import_interface():
     import_inventory_icons()
     for icon in sorted((SOURCE / "Interface").glob("T_UI_*.png")):
         import_asset(icon, ART + "/Interface", unreal.Texture2D)
+    import_asset(SOURCE / "Interface" / "T_UI_GearAtlas.jpg", ART + "/Interface", unreal.Texture2D)
     if not os.environ.get("SURVIVAL_PREPARED_MARKER"):
         import_local_medicine_sheet()
 

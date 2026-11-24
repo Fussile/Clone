@@ -23,25 +23,37 @@ const TCHAR* SurvivalItemName(ESurvivalItem Item)
     case ESurvivalItem::RifleReceiver: return TEXT("Rifle receiver");
     case ESurvivalItem::RifleBarrel: return TEXT("Rifle barrel");
     case ESurvivalItem::RifleOptic: return TEXT("Rifle optic");
+    case ESurvivalItem::SidearmGrip: return TEXT("Sidearm grip");
+    case ESurvivalItem::SidearmFrame: return TEXT("Sidearm frame");
+    case ESurvivalItem::SidearmBarrel: return TEXT("Sidearm barrel");
+    case ESurvivalItem::SidearmSlide: return TEXT("Sidearm slide");
     default: return TEXT("Empty");
     }
 }
 
-const TCHAR* FSurvivalRifle::PartName(int32 Slot)
+const TCHAR* FSurvivalWeaponAssembly::PartName(int32 Slot, ESurvivalItem Weapon)
 {
     const TCHAR* Names[] = {TEXT("Stock"), TEXT("Receiver"), TEXT("Barrel"), TEXT("Optic")};
     static_assert(UE_ARRAY_COUNT(Names) == PartCount);
-    return Names[Slot];
+    const TCHAR* SidearmNames[] = {TEXT("Grip"), TEXT("Frame"), TEXT("Barrel"), TEXT("Slide")};
+    return Weapon == ESurvivalItem::Sidearm ? SidearmNames[Slot] : Names[Slot];
 }
 
-int32 FSurvivalRifle::SpareQuality(int32 Slot)
+int32 FSurvivalWeaponAssembly::SpareQuality(int32 Slot)
 {
     constexpr int32 Quality[] = {72, 84, 76, 80};
     static_assert(UE_ARRAY_COUNT(Quality) == PartCount);
     return Quality[Slot];
 }
 
-int32 FSurvivalRifle::GetQuality() const
+bool FSurvivalWeaponAssembly::IsComplete() const
+{
+    for (int32 Part : Parts)
+        if (Part == 0) return false;
+    return true;
+}
+
+int32 FSurvivalWeaponAssembly::GetQuality() const
 {
     int32 Sum = 0;
     for (int32 Part : Parts)
@@ -51,19 +63,19 @@ int32 FSurvivalRifle::GetQuality() const
     return FMath::RoundToInt(static_cast<float>(Sum) / PartCount);
 }
 
-float FSurvivalRifle::GetDamage() const
+float FSurvivalWeaponAssembly::GetDamage() const
 {
-    return 70.0f + (GetQuality() - FactoryQuality) * 0.5f;
+    return IsComplete() ? 70.0f + (GetQuality() - FactoryQuality) * 0.5f : 0.0f;
 }
 
-int32 FSurvivalRifle::SwapPart(int32 Slot, int32 NewQuality)
+int32 FSurvivalWeaponAssembly::SwapPart(int32 Slot, int32 NewQuality)
 {
     if (Slot < 0 || Slot >= PartCount)
     {
         return NewQuality;
     }
     const int32 Replaced = Parts[Slot];
-    Parts[Slot] = FMath::Max(1, NewQuality);
+    Parts[Slot] = FMath::Clamp(NewQuality, 0, 100);
     return Replaced;
 }
 
@@ -114,9 +126,10 @@ void FSurvivalItems::Add(const FSurvivalItems& Other)
     ScavengerNotes += Other.ScavengerNotes;
     DressingSchematics += Other.DressingSchematics;
     FieldDressings += Other.FieldDressings;
-    for (int32 Slot = 0; Slot < FSurvivalRifle::PartCount; ++Slot)
+    for (int32 Slot = 0; Slot < FSurvivalWeaponAssembly::PartCount; ++Slot)
     {
         RifleParts[Slot] += Other.RifleParts[Slot];
+        SidearmParts[Slot] += Other.SidearmParts[Slot];
     }
 }
 

@@ -40,7 +40,6 @@ const FLinearColor Chosen(0.46f, 0.23f, 0.095f);
 
 struct FTrainingTree { const TCHAR* Label; const TCHAR* Category; const TCHAR* Icon; };
 constexpr FTrainingTree TrainingTrees[] = {
-    {TEXT("Practice"), nullptr, TEXT("Athletics")},
     {TEXT("Survival"), TEXT("Survival"), TEXT("Athletics")},
     {TEXT("Scavenging"), TEXT("Scavenging"), TEXT("Scavenging")},
     {TEXT("Construction"), TEXT("Tools and construction"), TEXT("Construction")},
@@ -65,17 +64,23 @@ FLinearColor QualityColor(int32 Quality)
     return FLinearColor(0.55f, 0.56f, 0.55f);
 }
 
+ESurvivalItem AssemblyWeapon(ESurvivalItem Item)
+{
+    return Item == ESurvivalItem::Sidearm || FSurvivalWeaponAssembly::PartIndex(Item, ESurvivalItem::Sidearm) != INDEX_NONE
+        ? ESurvivalItem::Sidearm : ESurvivalItem::Rifle;
+}
+
 bool IsModifiable(ESurvivalItem Item)
 {
     return Item == ESurvivalItem::Sidearm || Item == ESurvivalItem::Rifle || SurvivalItemHasQuality(Item);
 }
 
-int32 CountSpareParts(const ASurvivalCharacter* Character)
+int32 CountSpareParts(const ASurvivalCharacter* Character, ESurvivalItem Weapon)
 {
     int32 Count = 0;
     for (int32 Index = 0; Character && Index < Character->GetPackSlotCount(); ++Index)
     {
-        Count += SurvivalItemHasQuality(Character->GetPackItem(Index)) ? 1 : 0;
+        Count += FSurvivalWeaponAssembly::PartIndex(Character->GetPackItem(Index), Weapon) != INDEX_NONE ? 1 : 0;
     }
     return Count;
 }
@@ -88,15 +93,16 @@ FText DescribeItem(const ASurvivalCharacter* Character, ESurvivalItem Item, int3
     }
     const int32 Carried = Character->GetItemCount(Item);
     FString Text = SurvivalItemName(Item);
-    if (const int32 Slot = FSurvivalRifle::PartIndex(Item); Slot != INDEX_NONE)
+    const auto Weapon = AssemblyWeapon(Item);
+    if (const int32 Slot = FSurvivalWeaponAssembly::PartIndex(Item, Weapon); Slot != INDEX_NONE)
     {
         Text += FString::Printf(TEXT("   quality %d"), Quality);
-        if (Character->HasRifle())
+        if (Character->GetItemCount(Weapon) > 0)
         {
-            const int32 Installed = Character->GetRifle().GetPartQuality(Slot);
+            const int32 Installed = Character->GetWeaponAssembly(Weapon).GetPartQuality(Slot);
             Text += FString::Printf(TEXT("\nInstalled %d   (%+d if swapped in)"), Installed, Quality - Installed);
         }
-        Text += TEXT("\nSelect the rifle and choose Modify, then drag this onto its slot");
+        Text += TEXT("\nOpen the matching weapon in Modify, then drag this onto its slot");
         return FText::FromString(Text);
     }
     Text += StackCount >= 0 && StackCount != Carried
@@ -104,7 +110,7 @@ FText DescribeItem(const ASurvivalCharacter* Character, ESurvivalItem Item, int3
         : FString::Printf(TEXT("   x%d"), Carried);
     if (Item == ESurvivalItem::Rifle && Character->HasRifle())
     {
-        const FSurvivalRifle& Rifle = Character->GetRifle();
+        const FSurvivalWeaponAssembly& Rifle = Character->GetRifle();
         Text += FString::Printf(TEXT("\nQuality %d   Base damage %d\nSelect it and choose Modify to swap parts"),
             Rifle.GetQuality(), FMath::RoundToInt(Rifle.GetDamage()));
     }
@@ -167,24 +173,67 @@ public:
     }
 };
 
+class SPortraitOrbit : public SCompoundWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SPortraitOrbit) {}
+        SLATE_ARGUMENT(ASurvivalCharacter*, Player)
+        SLATE_ARGUMENT(const FSlateBrush*, Brush)
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& Args)
+    {
+        Player = Args._Player;
+        ChildSlot[SNew(SScaleBox).Stretch(EStretch::ScaleToFit)[SNew(SImage).Image(Args._Brush)]];
+        SetToolTipText(FText::FromString(TEXT("Drag to rotate")));
+    }
+
+    FReply OnMouseButtonDown(const FGeometry&, const FPointerEvent& Event) override
+    {
+        return Event.GetEffectingButton() == EKeys::LeftMouseButton
+            ? FReply::Handled().CaptureMouse(SharedThis(this)) : FReply::Unhandled();
+    }
+
+    FReply OnMouseMove(const FGeometry&, const FPointerEvent& Event) override
+    {
+        if (!HasMouseCapture() || !Player.IsValid()) return FReply::Unhandled();
+        Player->RotateCharacterPortrait(static_cast<float>(Event.GetCursorDelta().X * 0.75));
+        return FReply::Handled();
+    }
+
+    FReply OnMouseButtonUp(const FGeometry&, const FPointerEvent& Event) override
+    {
+        return HasMouseCapture() && Event.GetEffectingButton() == EKeys::LeftMouseButton
+            ? FReply::Handled().ReleaseMouseCapture() : FReply::Unhandled();
+    }
+private:
+    TWeakObjectPtr<ASurvivalCharacter> Player;
+};
+
 class SWearSlot : public SCompoundWidget
 {
 public:
     SLATE_BEGIN_ARGS(SWearSlot) {}
         SLATE_ARGUMENT(ASurvivalCharacter*, Player)
         SLATE_ARGUMENT(FString, WearSlot)
+        SLATE_ARGUMENT(const FSlateBrush*, GearIcons)
     SLATE_END_ARGS()
     void Construct(const FArguments& Args)
     {
         Player = Args._Player;
+        GearIcons = Args._GearIcons;
         Slot = Args._WearSlot;
         ChildSlot[SNew(SButton).ButtonStyle(&MenuButtonStyle()).ButtonColorAndOpacity(Tile)
             .ToolTipText(FText::FromString(TEXT("Drag matching gear here. Click a worn item to return it to the backpack.")))
             .OnClicked_Lambda([this]{ const int32 Id = Worn(); if (Id != INDEX_NONE) Player->ServerSetGearEquipped(Id,false); return FReply::Handled(); })
-            [SNew(STextBlock).AutoWrapText(true).Text_Lambda([this]{
+            [SNew(SHorizontalBox)
+                + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+                [SNew(SImage).Image_Lambda([this]{ const int32 Id = Worn(); return Id != INDEX_NONE && GearIcons[Id].GetResourceObject() ? GearIcons + Id : nullptr; })]
+                + SHorizontalBox::Slot().FillWidth(1).Padding(4,0).VAlign(VAlign_Center)
+                [SNew(STextBlock).AutoWrapText(true).Text_Lambda([this]{
                 const int32 Id = Worn();
                 return FText::FromString(Slot + TEXT("\n") + (Id == INDEX_NONE ? TEXT("Empty") : SurvivalGear[Id].Label));
-            })]];
+            })]]];
     }
     virtual FReply OnDrop(const FGeometry&, const FDragDropEvent& Event) override
     {
@@ -203,6 +252,7 @@ private:
                 if (Slot == SurvivalGear[Id].Slot && Player->IsWearing(Id)) return Id;
         return INDEX_NONE;
     }
+    const FSlateBrush* GearIcons = nullptr;
     TWeakObjectPtr<ASurvivalCharacter> Player;
     FString Slot;
 };
@@ -216,18 +266,21 @@ public:
         SLATE_ARGUMENT(bool, Belt)
         SLATE_ARGUMENT(int32, Index)
         SLATE_ARGUMENT(const FSlateBrush*, Icons)
+        SLATE_ARGUMENT(const FSlateBrush*, GearIcons)
     SLATE_END_ARGS()
 
     void Construct(const FArguments& Args)
     {
         Player = Args._Player;
+        GearIcons = Args._GearIcons;
         bBelt = Args._Belt;
         Index = Args._Index;
         Icons = Args._Icons;
         SetToolTipText(TAttribute<FText>::CreateLambda([this]() {
             const FSurvivalPackCell Cell = bBelt || !Player.IsValid() ? FSurvivalPackCell() : Player->GetPackCell(Index);
             if (Cell.GearIndex != INDEX_NONE) return FText::FromString(FString::Printf(TEXT("%s  ·  %s\nShift-click to equip"), SurvivalGear[Cell.GearIndex].Label, SurvivalGear[Cell.GearIndex].Slot));
-            return DescribeItem(Player.Get(), Item(), Cell.Quality, bBelt ? -1 : Cell.Count);
+            const int32 Count = bBelt && Player.IsValid() ? Player->GetToolbeltCount(Index) : Cell.Count;
+            return DescribeItem(Player.Get(), Item(), Cell.Quality, Count);
         }));
         ChildSlot
         [
@@ -244,8 +297,14 @@ public:
                     + SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
                     [SNew(SImage).DesiredSizeOverride(FVector2D(52,52)).Image_Lambda([this]() { return Icon(); })]
                     + SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
-                    [SNew(STextBlock).AutoWrapText(true).Justification(ETextJustify::Center)
-                        .Text_Lambda([this]{ const int32 Id = Gear(); return Id == INDEX_NONE ? FText::GetEmpty() : FText::FromString(SurvivalGear[Id].Label); })]
+                    [SNew(STextBlock).WrapTextAt(128).Justification(ETextJustify::Center)
+                        .Text_Lambda([this]{
+                            const int32 Id = Gear();
+                            if (Id != INDEX_NONE) return GearIcons[Id].GetResourceObject() ? FText::GetEmpty() : FText::FromString(SurvivalGear[Id].Label);
+                            const auto Value = Item();
+                            return Value != ESurvivalItem::None && !Icons[static_cast<int32>(Value)].GetResourceObject()
+                                ? FText::FromString(SurvivalItemName(Value)) : FText::GetEmpty();
+                        })]
                     + SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Top)
                     [SNew(STextBlock).ColorAndOpacity(Muted).Text(bBelt ? FText::AsNumber(Index + 1) : FText::GetEmpty())]
                     + SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom)
@@ -268,7 +327,8 @@ public:
             if (!Player.IsValid() || Item() == ESurvivalItem::None) { return FReply::Unhandled(); }
             if (bBelt) { Player->SetSelectedInventoryItem(Item()); }
             else { Player->SetSelectedPackSlot(Index); }
-            Player->UseItem(Item());
+            if (bBelt) Player->UseToolbeltSlot(Index);
+            else Player->UseItem(Item());
             return FReply::Handled();
         }
         if (Event.GetEffectingButton() != EKeys::LeftMouseButton) { return FReply::Unhandled(); }
@@ -280,7 +340,7 @@ public:
         if (!HasMouseCapture() || Event.GetEffectingButton() != EKeys::LeftMouseButton) { return FReply::Unhandled(); }
         if (Player.IsValid() && Geometry.IsUnderLocation(Event.GetScreenSpacePosition()))
         {
-            if (bBelt) { Player->ChooseHotbarSlot(Index); }
+            if (bBelt) { Player->SetSelectedInventoryItem(Item()); Player->ChooseHotbarSlot(Index); }
             else if (Gear() != INDEX_NONE)
             {
                 Player->SetSelectedPackSlot(Index);
@@ -326,17 +386,17 @@ private:
     {
         if (!Player.IsValid() || Item() == ESurvivalItem::None || SurvivalItemHasQuality(Item())) { return; }
         const ESurvivalItem Value = Item();
-        int32 Target = INDEX_NONE;
-        for (int32 Slot = 0; Slot < ASurvivalCharacter::HotbarSize && Target == INDEX_NONE; ++Slot)
+        if (!ASurvivalCharacter::CanQuickSlot(Value)) return;
+        int32 Target = Player->GetActiveHotbarSlot();
+        for (int32 Slot = 0; Slot < ASurvivalCharacter::HotbarSize; ++Slot)
         {
-            if (Player->GetHotbarItem(Slot) == Value) { Target = Slot; }
+            if (Player->GetHotbarItem(Slot) == ESurvivalItem::None)
+            {
+                Target = Slot;
+                break;
+            }
         }
-        for (int32 Slot = 0; Slot < ASurvivalCharacter::HotbarSize && Target == INDEX_NONE; ++Slot)
-        {
-            if (Player->GetHotbarItem(Slot) == ESurvivalItem::None) { Target = Slot; }
-        }
-        Player->SetSelectedPackSlot(Index);
-        Player->ChooseHotbarSlot(Target == INDEX_NONE ? Player->GetActiveHotbarSlot() : Target);
+        Player->MoveMenuItem(false, Index, true, Target);
     }
 
     int32 Gear() const { return !bBelt && Player.IsValid() ? Player->GetPackCell(Index).GearIndex : INDEX_NONE; }
@@ -357,16 +417,19 @@ private:
         const ESurvivalItem Value = Item();
         if (Value == ESurvivalItem::None) { return FText::GetEmpty(); }
         if (SurvivalItemHasQuality(Value)) { return FText::AsNumber(Quality()); }
-        if (bBelt) { return FText::AsNumber(Player->GetItemCount(Value)); }
+        if (bBelt) { return FText::AsNumber(Player->GetToolbeltCount(Index)); }
         const int32 Amount = Player->GetPackCell(Index).Count;
         return Amount > 1 ? FText::AsNumber(Amount) : FText::GetEmpty();
     }
     const FSlateBrush* Icon() const
     {
+        const int32 Id = Gear();
+        if (Id != INDEX_NONE) return GearIcons[Id].GetResourceObject() ? GearIcons + Id : nullptr;
         const auto Value = Item();
         return Value == ESurvivalItem::None ? nullptr : Icons + static_cast<int32>(Value);
     }
 
+    const FSlateBrush* GearIcons = nullptr;
     TWeakObjectPtr<ASurvivalCharacter> Player;
     const FSlateBrush* Icons = nullptr;
     bool bBelt = false;
@@ -387,7 +450,7 @@ public:
     {
         Player = Args._Player;
         Slot = Args._PartSlot;
-        const FSlateBrush* PartIcon = Args._Icons + static_cast<int32>(ESurvivalItem::RifleStock) + Slot;
+        Icons = Args._Icons;
         ChildSlot
         [
             SNew(SBorder).BorderImage(WhiteBrush()).Padding(2)
@@ -400,18 +463,28 @@ public:
                     [
                         SNew(SHorizontalBox)
                         + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 10, 0)
-                        [SNew(SImage).DesiredSizeOverride(FVector2D(34, 34)).Image(PartIcon)]
+                        [SNew(SImage).DesiredSizeOverride(FVector2D(34, 34)).Image_Lambda([this]{
+                            return Icons + static_cast<int32>(FSurvivalWeaponAssembly::FirstPart(Weapon())) + Slot;
+                        })]
                         + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center)
                         [
                             SNew(STextBlock).ColorAndOpacity(FSlateColor(Ink))
-                            .Text(FText::FromString(FSurvivalRifle::PartName(Slot)))
+                            .Text_Lambda([this]{ return FText::FromString(FSurvivalWeaponAssembly::PartName(Slot, Weapon())); })
                         ]
                         + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
                         [
                             SNew(STextBlock).Font(FCoreStyle::GetDefaultFontStyle("Bold", 12))
                             .ColorAndOpacity_Lambda([this]() { return FSlateColor(QualityColor(Installed())); })
-                            .Text_Lambda([this]() { return FText::AsNumber(Installed()); })
+                            .Text_Lambda([this]() { return Installed() > 0 ? FText::AsNumber(Installed()) :
+                                FText::FromString(TEXT("Missing")); })
                         ]
+                    ]
+                    + SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right)
+                    [
+                        SNew(SButton).Text(FText::FromString(TEXT("Remove to backpack")))
+                        .Visibility_Lambda([this]{ return Installed() > 0 ? EVisibility::Visible : EVisibility::Collapsed; })
+                        .IsEnabled_Lambda([this]{ return Player.IsValid() && Player->CanInspectWeapon(Weapon()); })
+                        .OnClicked_Lambda([this]{ if (Player.IsValid()) Player->RemoveWeaponPart(Slot); return FReply::Handled(); })
                     ]
                     + SVerticalBox::Slot().AutoHeight().Padding(0, 6, 0, 0)
                     [
@@ -437,17 +510,19 @@ public:
     {
         bDragOver = false;
         const auto Op = Event.GetOperationAs<FPackDrag>();
-        return Op && Accepts(Event) && Player->SwapRiflePart(Op->Slot) ? FReply::Handled() : FReply::Unhandled();
+        return Op && Accepts(Event) && Player->SwapWeaponPart(Op->Slot) ? FReply::Handled() : FReply::Unhandled();
     }
 
 private:
     bool Accepts(const FDragDropEvent& Event) const
     {
         const auto Op = Event.GetOperationAs<FPackDrag>();
-        return Op && !Op->bBelt && Player.IsValid() && Player->CanModifyRifle()
-            && FSurvivalRifle::PartIndex(Player->GetPackItem(Op->Slot)) == Slot;
+        return Op && !Op->bBelt && Player.IsValid() && Player->CanInspectWeapon(Weapon())
+            && FSurvivalWeaponAssembly::PartIndex(Player->GetPackItem(Op->Slot), Weapon()) == Slot;
     }
-    int32 Installed() const { return Player.IsValid() ? Player->GetRifle().GetPartQuality(Slot) : 0; }
+    ESurvivalItem Weapon() const { return Player.IsValid() ? Player->InspectedWeapon : ESurvivalItem::None; }
+    int32 Installed() const { return Player.IsValid() ? Player->GetWeaponAssembly(Weapon()).GetPartQuality(Slot) : 0; }
+    const FSlateBrush* Icons = nullptr;
 
     TWeakObjectPtr<ASurvivalCharacter> Player;
     int32 Slot = 0;
@@ -539,7 +614,8 @@ public:
 private:
     int32 CellIndex() const
     {
-        return Player.IsValid() && SurvivalItemHasQuality(Player->GetPackItem(PackSlot)) ? PackSlot : INDEX_NONE;
+        return Player.IsValid() && FSurvivalWeaponAssembly::PartIndex(Player->GetPackItem(PackSlot), Player->InspectedWeapon) != INDEX_NONE
+            ? PackSlot : INDEX_NONE;
     }
     FSurvivalPackCell Cell() const { return Player.IsValid() ? Player->GetPackCell(CellIndex()) : FSurvivalPackCell(); }
     const FSlateBrush* PartIcon() const
@@ -550,8 +626,10 @@ private:
     int32 Delta() const
     {
         const FSurvivalPackCell Value = Cell();
-        const int32 Slot = FSurvivalRifle::PartIndex(Value.Item);
-        return Slot == INDEX_NONE || !Player.IsValid() ? 0 : Value.Quality - Player->GetRifle().GetPartQuality(Slot);
+        if (!Player.IsValid()) return 0;
+        const auto Weapon = Player->InspectedWeapon;
+        const int32 Slot = FSurvivalWeaponAssembly::PartIndex(Value.Item, Weapon);
+        return Slot == INDEX_NONE ? 0 : Value.Quality - Player->GetWeaponAssembly(Weapon).GetPartQuality(Slot);
     }
 
     TWeakObjectPtr<ASurvivalCharacter> Player;
@@ -576,6 +654,35 @@ const FSlateBrush* SSurvivalInventoryMenu::FindThemeIcon(const TCHAR* Name) cons
 void SSurvivalInventoryMenu::Construct(const FArguments& Args)
 {
     Player = Args._Player;
+    Page = Player.IsValid() && Player->HasOpenContainer() ? EPage::Loot : EPage::Crafting;
+    GearIcons.SetNum(UE_ARRAY_COUNT(SurvivalGear));
+    if (UTexture2D* Atlas = LoadObject<UTexture2D>(nullptr,
+        TEXT("/Game/Art/Crossroads/Interface/T_UI_GearAtlas.T_UI_GearAtlas"), nullptr, LOAD_NoWarn))
+    {
+        ThemeTextures.Emplace(Atlas);
+        // The supplied sheet has uneven rows and labels under the artwork. Keep those labels outside the UVs.
+        constexpr int32 Edges[][2] = {{4,143}, {167,302}, {325,451}, {496,638},
+            {661,778}, {795,903}, {919,1009}, {1031,1142}};
+        constexpr int32 Starts[][6] = {{0,153,331,635,800,800}, {0,153,328,603,800,800},
+            {0,153,329,475,639,800}, {0,151,326,477,637,800}, {0,151,340,482,641,800},
+            {0,152,322,480,639,800}, {0,155,327,478,637,800}, {0,153,327,476,635,800}};
+        constexpr int32 Cells[] = { 0,1,3,10,11,12,13,20,21,22,23,-1,-1,-1,33,30,31,32,34,
+            40,41,42,43,50,51,52,53,60,61,62,64,70,71,73,74 };
+        static_assert(UE_ARRAY_COUNT(Cells) == UE_ARRAY_COUNT(SurvivalGear));
+        for (int32 Index = 0; Index < UE_ARRAY_COUNT(Cells); ++Index)
+        {
+            if (Cells[Index] < 0) continue;
+            const int32 Row = Cells[Index] / 10;
+            const int32 Column = Cells[Index] % 10;
+            FSlateBrush& Brush = GearIcons[Index];
+            Brush.DrawAs = ESlateBrushDrawType::Image;
+            Brush.SetResourceObject(Atlas);
+            Brush.SetImageSize(FVector2D(44,44));
+            Brush.SetUVRegion(FBox2f(
+                FVector2f((Starts[Row][Column] + 2) / 800.0f, Edges[Row][0] / 1303.0f),
+                FVector2f((Starts[Row][Column + 1] - 2) / 800.0f, Edges[Row][1] / 1303.0f)));
+        }
+    }
     for (const TCHAR* Name : {TEXT("Combat"), TEXT("Construction"), TEXT("Athletics"),
          TEXT("Workshop"), TEXT("Backpack"), TEXT("Skills"), TEXT("Scavenging")})
     {
@@ -608,19 +715,19 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
             {
                 return Player.IsValid() && Index < Player->GetPackSlotCount() ? EVisibility::Visible : EVisibility::Collapsed;
             })
-            [SNew(SPackCell).Player(Player.Get()).Index(Index).Belt(false).Icons(Icons)]
+            [SNew(SPackCell).Player(Player.Get()).Index(Index).Belt(false).Icons(Icons).GearIcons(GearIcons.GetData())]
         ];
     }
     TSharedRef<SHorizontalBox> Slots = SNew(SHorizontalBox);
     for (int32 Slot = 0; Slot < ASurvivalCharacter::HotbarSize; ++Slot)
     {
         Slots->AddSlot().FillWidth(1).Padding(2)
-        [SNew(SPackCell).Player(Player.Get()).Index(Slot).Belt(true).Icons(Icons)];
+        [SNew(SPackCell).Player(Player.Get()).Index(Slot).Belt(true).Icons(Icons).GearIcons(GearIcons.GetData())];
     }
 
     TSharedRef<SHorizontalBox> Tabs = SNew(SHorizontalBox);
-    const TCHAR* PageNames[] = {TEXT("Inspect"), TEXT("Crafting"), TEXT("Skills"), TEXT("Character")};
-    const TCHAR* PageIcons[] = {TEXT("Backpack"), TEXT("Workshop"), TEXT("Skills"), TEXT("Survivor")};
+    const TCHAR* PageNames[] = {TEXT("Backpack"), TEXT("Crafting"), TEXT("Skills"), TEXT("Character"), TEXT("Stats")};
+    const TCHAR* PageIcons[] = {TEXT("Backpack"), TEXT("Workshop"), TEXT("Skills"), TEXT("Survivor"), TEXT("Athletics")};
     for (int32 Index = 0; Index < UE_ARRAY_COUNT(PageNames); ++Index)
     {
         const auto Tab = static_cast<EPage>(Index);
@@ -642,6 +749,15 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
         ];
     }
 
+    Tabs->AddSlot().AutoWidth().Padding(0, 0, 5, 0)
+    [
+        SNew(SButton).ButtonStyle(&MenuButtonStyle()).Text(FText::FromString(TEXT("Loot")))
+        .Visibility_Lambda([this]{ return Player.IsValid() && (Player->HasOpenContainer() || Page == EPage::Loot)
+            ? EVisibility::Visible : EVisibility::Collapsed; })
+        .ButtonColorAndOpacity_Lambda([this]{ return FSlateColor(Page == EPage::Loot ? Chosen : Tile); })
+        .OnClicked_Lambda([this]{ Page = EPage::Loot; SetWorkbench(false); return FReply::Handled(); })
+    ];
+
     TSharedRef<SVerticalBox> Profile = SNew(SVerticalBox);
     Portrait.SetResourceObject(Player->GetInventoryPortrait());
     Portrait.DrawAs = ESlateBrushDrawType::Image;
@@ -653,7 +769,7 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
     for (int32 I = 0; I < UE_ARRAY_COUNT(WearSlots); ++I)
     {
         auto Column = I < 5 ? LeftSlots : RightSlots;
-        Column->AddSlot().FillHeight(1).Padding(2)[SNew(SWearSlot).Player(Player.Get()).WearSlot(FString(WearSlots[I]))];
+        Column->AddSlot().FillHeight(1).Padding(2)[SNew(SWearSlot).Player(Player.Get()).WearSlot(FString(WearSlots[I])).GearIcons(GearIcons.GetData())];
     }
     Profile->AddSlot().AutoHeight().Padding(0,0,0,12)[SectionLabel(TEXT("STATUS"))];
     const TCHAR* VitalNames[] = {TEXT("Health"), TEXT("Stamina"), TEXT("Food"), TEXT("Water")};
@@ -697,60 +813,9 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
         if (Vitals.Thirst <= 0) Conditions.Add(TEXT("Dehydrated"));
         return FText::FromString(Conditions.IsEmpty() ? FString(TEXT("No active conditions")) : FString::Join(Conditions, TEXT("\n")));
     })];
-    // Rifle assembly: one bar per part. Overall quality is the average of these parts.
-    TSharedRef<SVerticalBox> PartRows = SNew(SVerticalBox)
-        .Visibility_Lambda([this]()
-        {
-            const ASurvivalCharacter* Character = Player.Get();
-            if (!Character || !Character->HasRifle()) { return EVisibility::Collapsed; }
-            const ESurvivalItem Item = Character->GetSelectedInventoryItem();
-            return Item == ESurvivalItem::Rifle || FSurvivalRifle::PartIndex(Item) != INDEX_NONE
-                ? EVisibility::Visible : EVisibility::Collapsed;
-        });
-    for (int32 Slot = 0; Slot < FSurvivalRifle::PartCount; ++Slot)
-    {
-        const auto Installed = [this, Slot]() -> int32
-        {
-            return Player.IsValid() ? Player->GetRifle().GetPartQuality(Slot) : 0;
-        };
-        PartRows->AddSlot().AutoHeight().Padding(0, 0, 0, 9)
-        [
-            SNew(SVerticalBox)
-            + SVerticalBox::Slot().AutoHeight()
-            [
-                SNew(SHorizontalBox)
-                + SHorizontalBox::Slot().FillWidth(1)
-                [
-                    SNew(STextBlock).Text(FText::FromString(FSurvivalRifle::PartName(Slot)))
-                    .ColorAndOpacity_Lambda([this, Slot]()
-                    {
-                        const bool bPicked = Player.IsValid()
-                            && FSurvivalRifle::PartIndex(Player->GetSelectedInventoryItem()) == Slot;
-                        return FSlateColor(bPicked ? Accent : Ink);
-                    })
-                ]
-                + SHorizontalBox::Slot().AutoWidth()
-                [SNew(STextBlock).Text_Lambda([Installed]() { return FText::AsNumber(Installed()); })]
-            ]
-            + SVerticalBox::Slot().AutoHeight().Padding(0, 3, 0, 0)
-            [
-                SNew(SBox).HeightOverride(5)
-                [
-                    SNew(SProgressBar)
-                    .FillColorAndOpacity_Lambda([Installed]() { return FSlateColor(QualityColor(Installed())); })
-                    .Percent_Lambda([Installed]() -> TOptional<float>
-                    {
-                        return FMath::Clamp(static_cast<float>(Installed()) / 100.0f, 0.0f, 1.0f);
-                    })
-                ]
-            ]
-        ];
-    }
-
-    // Modify panel: the rifle's part slots on top, spare parts from the pack below. Swap by dragging a spare onto its slot.
     const auto ModifyOpen = [this]() { return bModifying && Player.IsValid(); };
     TSharedRef<SVerticalBox> ModifySlots = SNew(SVerticalBox);
-    for (int32 PartSlot = 0; PartSlot < FSurvivalRifle::PartCount; ++PartSlot)
+    for (int32 PartSlot = 0; PartSlot < FSurvivalWeaponAssembly::PartCount; ++PartSlot)
     {
         ModifySlots->AddSlot().AutoHeight().Padding(0, 0, 0, 6)
         [SNew(SPartSlot).Player(Player.Get()).PartSlot(PartSlot).Icons(Icons)];
@@ -761,9 +826,6 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
         SpareRows->AddSlot().AutoHeight().Padding(0, 0, 0, 4)
         [SNew(SSpareRow).Player(Player.Get()).PackSlot(Slot).Icons(Icons)];
     }
-    const auto RifleOnly = [this]{ return Player.IsValid() && Player->InspectedWeapon == ESurvivalItem::Rifle ? EVisibility::Visible : EVisibility::Collapsed; };
-    ModifySlots->SetVisibility(TAttribute<EVisibility>::CreateLambda(RifleOnly));
-    SpareRows->SetVisibility(TAttribute<EVisibility>::CreateLambda(RifleOnly));
     TSharedRef<SVerticalBox> Mounts = SNew(SVerticalBox);
     for (int32 Mod = 0; Mod < UE_ARRAY_COUNT(WeaponMods); ++Mod)
     {
@@ -781,26 +843,32 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
         [
             SNew(SVerticalBox)
             + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 4)[SectionLabel(TEXT("WEAPON WORKBENCH"))]
-            + SVerticalBox::Slot().AutoHeight()[Mounts]
+
             + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 12)
             [
                 SNew(STextBlock).ColorAndOpacity(FSlateColor(Ink)).AutoWrapText(true).Text_Lambda([this]()
                 {
                     if (!Player.IsValid()) return FText::GetEmpty();
-                    if (Player->InspectedWeapon == ESurvivalItem::Sidearm) return FText::FromString(TEXT("Sidearm"));
-                    const FSurvivalRifle& Rifle = Player->GetRifle();
-                    return FText::FromString(FString::Printf(TEXT("Quality %d   /   Base damage %d"),
-                        Rifle.GetQuality(), FMath::RoundToInt(Rifle.GetDamage())));
+                    const auto Weapon = Player->InspectedWeapon;
+                    const auto& Assembly = Player->GetWeaponAssembly(Weapon);
+                    return FText::FromString(Assembly.IsComplete()
+                        ? FString::Printf(TEXT("%s   ·   Quality %d"), SurvivalItemName(Weapon), Assembly.GetQuality())
+                        : FString::Printf(TEXT("%s   ·   Incomplete. Install all four parts to fire or reload."), SurvivalItemName(Weapon)));
                 })
             ]
-            + SVerticalBox::Slot().AutoHeight()[ModifySlots]
-            + SVerticalBox::Slot().AutoHeight().Padding(0, 10, 0, 6)[SNew(SBox).Visibility_Lambda(RifleOnly)[SectionLabel(TEXT("SPARE PARTS IN PACK"))]]
-            + SVerticalBox::Slot().FillHeight(1)[SNew(SScrollBox) + SScrollBox::Slot()[SpareRows]]
+            + SVerticalBox::Slot().FillHeight(1)
+            [
+                SNew(SScrollBox)
+                + SScrollBox::Slot()[ModifySlots]
+                + SScrollBox::Slot().Padding(0, 8)[Mounts]
+                + SScrollBox::Slot()[SectionLabel(TEXT("SPARE PARTS"))]
+                + SScrollBox::Slot()[SpareRows]
+            ]
             + SVerticalBox::Slot().AutoHeight()
             [
                 SNew(STextBlock).ColorAndOpacity(FSlateColor(Muted)).AutoWrapText(true)
                 .Text(FText::FromString(TEXT("No spare parts in your pack. Scavenge for more.")))
-                .Visibility_Lambda([this]() { return Player.IsValid() && Player->InspectedWeapon == ESurvivalItem::Rifle && CountSpareParts(Player.Get()) == 0 ? EVisibility::Visible : EVisibility::Collapsed; })
+                .Visibility_Lambda([this]() { return Player.IsValid() && CountSpareParts(Player.Get(), Player->InspectedWeapon) == 0 ? EVisibility::Visible : EVisibility::Collapsed; })
             ]
             + SVerticalBox::Slot().AutoHeight()
             [
@@ -808,14 +876,14 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                 .Text(FText::FromString(TEXT("Finish reloading to change parts.")))
                 .Visibility_Lambda([this]()
                 {
-                    return Player.IsValid() && Player->HasRifle() && !Player->CanModifyRifle()
+                    return Player.IsValid() && !Player->CanInspectWeapon(Player->InspectedWeapon)
                         ? EVisibility::Visible : EVisibility::Collapsed;
                 })
             ]
             + SVerticalBox::Slot().AutoHeight().Padding(0, 8, 0, 10)
             [
                 SNew(STextBlock).ColorAndOpacity(FSlateColor(Muted)).AutoWrapText(true)
-                .Text(FText::FromString(TEXT("Drag a spare part onto its matching slot to swap it in. The part you replace goes back to your pack.")))
+                .Text(FText::FromString(TEXT("Drag a compatible part onto its slot. Removed or replaced parts return to the backpack.")))
             ]
             + SVerticalBox::Slot().AutoHeight()
             [
@@ -868,20 +936,31 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                         + SHorizontalBox::Slot().FillWidth(1)
                         [SNew(SVerticalBox)
                             + SVerticalBox::Slot().FillHeight(2)
-                            [SNew(SOverlay)
+                            [SNew(SOverlay).Clipping(EWidgetClipping::ClipToBounds)
                                 + SOverlay::Slot()[SNew(SHorizontalBox).Visibility_Lambda([this]{return Page == EPage::Crafting ? EVisibility::Visible : EVisibility::Collapsed;})
                                     + SHorizontalBox::Slot().FillWidth(.45f).Padding(4)[MakeRecipeBrowser()]
                                     + SHorizontalBox::Slot().FillWidth(.55f).Padding(4)[MakeRecipeDetails()]]
                                 + SOverlay::Slot()[MakeSkillsPanel()]
+                                + SOverlay::Slot()[MakeStatsPanel()]
+                                + SOverlay::Slot()[MakeLootPanel()]
                                 + SOverlay::Slot()[SNew(SHorizontalBox).Visibility_Lambda([this]{return Page == EPage::Gear ? EVisibility::Visible : EVisibility::Collapsed;})
                                     + SHorizontalBox::Slot().FillWidth(1)[LeftSlots]
-                                    + SHorizontalBox::Slot().FillWidth(1.4f)[SNew(SScaleBox).Stretch(EStretch::ScaleToFit)[SNew(SImage).Image(&Portrait)]]
+                                    + SHorizontalBox::Slot().FillWidth(1.4f)[SNew(SPortraitOrbit).Player(Player.Get()).Brush(&Portrait)]
                                     + SHorizontalBox::Slot().FillWidth(1)[RightSlots]]
-                                + SOverlay::Slot()[SNew(SHorizontalBox).Visibility_Lambda([this]{return Page == EPage::Pack ? EVisibility::Visible : EVisibility::Collapsed;})
-                                    + SHorizontalBox::Slot().AutoWidth()[SNew(SBox).WidthOverride(230).Visibility_Lambda([ModifyOpen]{return ModifyOpen() ? EVisibility::Visible : EVisibility::Collapsed;})[SNew(SScaleBox)[SNew(SImage).Image(&Portrait)]]]
-                                    + SHorizontalBox::Slot().FillWidth(1)[SNew(SOverlay)
-                                        + SOverlay::Slot()[ModifyPanel]
-                                        + SOverlay::Slot()[SNew(SScrollBox).Visibility_Lambda([ModifyOpen]{return ModifyOpen()? EVisibility::Collapsed:EVisibility::Visible;}) + SScrollBox::Slot()[
+                                + SOverlay::Slot()
+                                [
+                                    SNew(SScaleBox).Stretch(EStretch::ScaleToFit)
+                                    .Visibility_Lambda([ModifyOpen]{return ModifyOpen() ? EVisibility::Visible : EVisibility::Collapsed;})
+                                    [SNew(SImage).Image(&Portrait)]
+                                ]
+                                + SOverlay::Slot()
+                                [
+                                    SNew(SScrollBox)
+                                    .Visibility_Lambda([this, ModifyOpen]{
+                                        return Page == EPage::Pack && !ModifyOpen() ? EVisibility::Visible : EVisibility::Collapsed;
+                                    })
+                                    + SScrollBox::Slot()
+                                    [
                             SNew(SBorder).Visibility_Lambda([ModifyOpen]() { return ModifyOpen() ? EVisibility::Collapsed : EVisibility::Visible; })
                             .BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(FMargin(20))
                             [
@@ -928,26 +1007,18 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                     {
                                         const ASurvivalCharacter* Character = Player.Get();
                                         if (!Character) { return FText::GetEmpty(); }
-                                        const FSurvivalRifle& Rifle = Character->GetRifle();
-                                        const ESurvivalItem Item = Character->GetSelectedInventoryItem();
-                                        if (Item == ESurvivalItem::Rifle && Character->HasRifle())
+                                        const auto Item = Character->GetSelectedInventoryItem();
+                                        const auto Weapon = AssemblyWeapon(Item);
+                                        if (IsModifiable(Item) && Character->GetItemCount(Weapon) > 0)
                                         {
-                                            return FText::FromString(FString::Printf(
-                                                TEXT("Quality %d   /   Base damage %d\nQuality is the average of the installed parts."),
-                                                Rifle.GetQuality(), FMath::RoundToInt(Rifle.GetDamage())));
-                                        }
-                                        if (const int32 Slot = FSurvivalRifle::PartIndex(Item); Slot != INDEX_NONE)
-                                        {
-                                            const FSurvivalPackCell Cell = Character->GetPackCell(Character->GetSelectedPackSlot());
-                                            const int32 Spare = Cell.IsEmpty() ? FSurvivalRifle::SpareQuality(Slot) : Cell.Quality;
-                                            return FText::FromString(Character->HasRifle()
-                                                ? FString::Printf(TEXT("Installed   %d\nThis part   %d\nChoose Modify to swap it in."), Rifle.GetPartQuality(Slot), Spare)
-                                                : FString::Printf(TEXT("Quality   %d\nRequires a bolt-action rifle"), Spare));
+                                            const auto& Assembly = Character->GetWeaponAssembly(Weapon);
+                                            return FText::FromString(Assembly.IsComplete()
+                                                ? FString::Printf(TEXT("%s assembly quality %d"), SurvivalItemName(Weapon), Assembly.GetQuality())
+                                                : FString::Printf(TEXT("%s is missing parts"), SurvivalItemName(Weapon)));
                                         }
                                         return FText::GetEmpty();
                                     })
                                 ]
-                                + SVerticalBox::Slot().AutoHeight().Padding(0, 16, 0, 0)[PartRows]
                                 + SVerticalBox::Slot().AutoHeight()
                                 [SNew(SButton).Text(FText::FromString(TEXT("Drop one garment")))
                                     .Visibility_Lambda([this]{ return Player.IsValid() && Player->GetPackCell(Player->GetSelectedPackSlot()).GearIndex != INDEX_NONE ? EVisibility::Visible : EVisibility::Collapsed; })
@@ -993,9 +1064,9 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                 + SVerticalBox::Slot().AutoHeight()
                                 [
                                     SNew(STextBlock).AutoWrapText(true).ColorAndOpacity(FSlateColor(Muted))
-                                    .Text(FText::FromString(TEXT("Drag to move or merge. Ctrl-drag splits a stack. Shift-click assigns a usable item to a quick slot. Press M to inspect a weapon.")))
+                                    .Text(FText::FromString(TEXT("Drag to move or merge. Ctrl-drag splits a stack. Shift-click moves a usable stack to the toolbelt. Press M to inspect a weapon.")))
                                 ]
-                            ]]]]]
+                            ]]]
                             ]
                             + SVerticalBox::Slot().FillHeight(1).Padding(4)
                             [SNew(SBorder).BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(6)
@@ -1003,8 +1074,13 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                     + SVerticalBox::Slot().AutoHeight()[SectionLabel(TEXT("BACKPACK   ·   SELECT GEAR + E TO EQUIP"))]
                                     + SVerticalBox::Slot().FillHeight(1)[SNew(SScrollBox) + SScrollBox::Slot()[Items]]
                                 ]]
+                            + SVerticalBox::Slot().AutoHeight()[SectionLabel(TEXT("TOOLBELT"))]
                             + SVerticalBox::Slot().AutoHeight()[SNew(SBox).HeightOverride(48)[Slots]]
                         ]
+                        + SHorizontalBox::Slot().AutoWidth().Padding(8,0,0,0)
+                        [SNew(SBox).WidthOverride(360)
+                            .Visibility_Lambda([ModifyOpen]{ return ModifyOpen() ? EVisibility::Visible : EVisibility::Collapsed; })
+                            [ModifyPanel]]
                         + SHorizontalBox::Slot().AutoWidth()
                         [SNew(SBox).WidthOverride(150).Padding(8).Visibility_Lambda([this]{return Page == EPage::Gear ? EVisibility::Visible : EVisibility::Collapsed;})[Profile]]
                     ]
@@ -1018,7 +1094,7 @@ bool SSurvivalInventoryMenu::MatchesTraining(ETraining Entry) const
 {
     const FTrainingInfo& Info = GetTrainingInfo(Entry);
     const TCHAR* Tree = TrainingTrees[TrainingTree].Category;
-    const bool bInTree = Tree ? !Info.IsPractice() && FCString::Strcmp(Tree, Info.Category) == 0 : Info.IsPractice();
+    const bool bInTree = !Info.IsPractice() && FCString::Strcmp(Tree, Info.Category) == 0;
     return bInTree && (TrainingSearch.IsEmpty() || FString(Info.Name).Contains(TrainingSearch)
         || FString(Info.Description).Contains(TrainingSearch));
 }
@@ -1093,12 +1169,112 @@ FText SSurvivalInventoryMenu::TrainingRequirements() const
     return FText::FromString(Text);
 }
 
+TSharedRef<SWidget> SSurvivalInventoryMenu::MakeLootPanel()
+{
+    auto Rows = SNew(SScrollBox);
+    for (int32 Index = 0; Index <= static_cast<int32>(ESurvivalItem::None); ++Index)
+    {
+        const auto Item = static_cast<ESurvivalItem>(Index);
+        Rows->AddSlot().Padding(0, 2)
+        [
+            SNew(SHorizontalBox)
+            .Visibility_Lambda([this, Item]{ return Player.IsValid() && Player->HasOpenContainer() && Player->GetContainerLoot().Count(Item) > 0
+                ? EVisibility::Visible : EVisibility::Collapsed; })
+            + SHorizontalBox::Slot().AutoWidth().Padding(4,0)
+            [
+                SNew(SImage).DesiredSizeOverride(FVector2D(32,32)).Image_Lambda([this, Item]() -> const FSlateBrush* {
+                    if (Item != ESurvivalItem::None) return FindIcon(Item);
+                    const int32 Gear = Player.IsValid() ? Player->GetContainerLoot().GearIndex : INDEX_NONE;
+                    return GearIcons.IsValidIndex(Gear) && GearIcons[Gear].GetResourceObject() ? &GearIcons[Gear] : nullptr;
+                })
+            ]
+            + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center).Padding(4,0)
+            [
+                SNew(STextBlock).Text_Lambda([this, Item]{
+                    if (!Player.IsValid()) return FText::GetEmpty();
+                    const auto& Loot = Player->GetContainerLoot();
+                    const TCHAR* Label = Item == ESurvivalItem::None && GearIcons.IsValidIndex(Loot.GearIndex)
+                        ? SurvivalGear[Loot.GearIndex].Label : SurvivalItemName(Item);
+                    return FText::FromString(FString::Printf(TEXT("%s  ×%d"), Label, Loot.Count(Item)));
+                })
+            ]
+            + SHorizontalBox::Slot().AutoWidth()
+            [
+                SNew(SButton).ButtonStyle(&MenuButtonStyle()).Text(FText::FromString(TEXT("Take")))
+                .OnClicked_Lambda([this, Item]{ if (Player.IsValid()) Player->TakeContainerLoot(false, Item); return FReply::Handled(); })
+            ]
+        ];
+    }
+
+    return SNew(SBorder).Padding(12).BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor)
+        .Visibility_Lambda([this]{ return Page == EPage::Loot ? EVisibility::Visible : EVisibility::Collapsed; })
+        [SNew(SVerticalBox)
+            + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,8)
+            [SNew(SHorizontalBox)
+                + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center)[SectionLabel(TEXT("CONTAINER"))]
+                + SHorizontalBox::Slot().AutoWidth()
+                [SNew(SButton).ButtonStyle(&MenuButtonStyle()).ButtonColorAndOpacity(Chosen).Text(FText::FromString(TEXT("Take all")))
+                    .IsEnabled_Lambda([this]{ return Player.IsValid() && Player->HasOpenContainer() && !Player->GetContainerLoot().IsEmpty(); })
+                    .OnClicked_Lambda([this]{ if (Player.IsValid()) Player->TakeContainerLoot(true); return FReply::Handled(); })]]
+            + SVerticalBox::Slot().AutoHeight()
+            [SNew(STextBlock).Text_Lambda([this]{
+                if (!Player.IsValid() || !Player->HasOpenContainer()) return FText::FromString(TEXT("Container no longer available"));
+                return Player->GetContainerLoot().IsEmpty() ? FText::FromString(TEXT("Container is empty")) : FText::GetEmpty();
+            })]
+            + SVerticalBox::Slot().FillHeight(1)[Rows]];
+}
+
+TSharedRef<SWidget> SSurvivalInventoryMenu::MakeStatsPanel()
+{
+    auto PracticeGrid = SNew(SUniformGridPanel).SlotPadding(FMargin(2));
+    int32 Cell = 0;
+    for (int32 Index = 0; Index < FSurvivalProgression::EntryCount; ++Index)
+    {
+        const ETraining Entry = static_cast<ETraining>(Index);
+        const auto& Info = GetTrainingInfo(Entry);
+        if (!Info.IsPractice()) continue;
+        PracticeGrid->AddSlot(Cell % 3, Cell / 3)
+        [
+            SNew(SButton).ButtonStyle(&MenuButtonStyle()).ContentPadding(FMargin(5, 2))
+            .ButtonColorAndOpacity_Lambda([this, Entry]{ return FSlateColor(Entry == SelectedStat ? Chosen : Tile); })
+            .Text_Lambda([this, Entry]{
+                const auto& Stat = GetTrainingInfo(Entry);
+                if (!Stat.bAvailable) return FText::FromString(FString::Printf(TEXT("%s  ·  Planned"), Stat.Name));
+                return FText::FromString(FString::Printf(TEXT("%s  ·  %d"), Stat.Name,
+                    Player.IsValid() ? Player->GetProgression().Rank(Entry) : 0));
+            })
+            .OnClicked_Lambda([this, Entry]{ SelectedStat = Entry; return FReply::Handled(); })
+        ];
+        ++Cell;
+    }
+
+    return SNew(SHorizontalBox)
+        .Visibility_Lambda([this]{ return Page == EPage::Stats ? EVisibility::Visible : EVisibility::Collapsed; })
+        + SHorizontalBox::Slot().FillWidth(.70f).Padding(4)
+        [SNew(SScaleBox).Stretch(EStretch::ScaleToFit).StretchDirection(EStretchDirection::DownOnly)[PracticeGrid]]
+        + SHorizontalBox::Slot().FillWidth(.30f).Padding(4)
+        [
+            SNew(SBorder).BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(14)
+            [SNew(SVerticalBox)
+                + SVerticalBox::Slot().AutoHeight()[SectionLabel(TEXT("LEARN BY DOING"))]
+                + SVerticalBox::Slot().AutoHeight().Padding(0, 8)
+                [SNew(STextBlock).AutoWrapText(true).Text_Lambda([this]{
+                    const auto& Stat = GetTrainingInfo(SelectedStat);
+                    if (!Player.IsValid()) return FText::GetEmpty();
+                    const auto& Progress = Player->GetProgression();
+                    return FText::FromString(FString::Printf(TEXT("%s\nRank %d / %d\n\n%s\n\n%s"), Stat.Name,
+                        Progress.Rank(SelectedStat), Stat.MaxRank, Stat.Description,
+                        *(Stat.bAvailable ? FString::Printf(TEXT("%d / %d practice XP"), Progress.Practice(SelectedStat), Progress.PracticeRequired(SelectedStat)) : FString(TEXT("Planned")))));
+                })]]
+        ];
+}
+
 TSharedRef<SWidget> SSurvivalInventoryMenu::MakeSkillsPanel()
 {
     TSharedRef<SVerticalBox> Navigation = SNew(SVerticalBox);
     for (int32 Index = 0; Index < UE_ARRAY_COUNT(TrainingTrees); ++Index)
     {
-        if (Index == 1)
+        if (Index == 0)
         {
             Navigation->AddSlot().AutoHeight().Padding(10, 18, 0, 8)
             [
@@ -1429,10 +1605,7 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeBrowser()
             })
         ]
         + SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 5)[Categories]
-        + SVerticalBox::Slot().AutoHeight()
-        [
-            SNew(SBox).HeightOverride(335.0f)[Rows]
-        ];
+        + SVerticalBox::Slot().FillHeight(1)[Rows];
 }
 
 FText SSurvivalInventoryMenu::GetIngredientText() const
@@ -1586,7 +1759,7 @@ void SSurvivalInventoryMenu::SetWorkbench(bool bOpen)
     if (Player.IsValid())
     {
         Player->InspectedWeapon = !bOpen ? ESurvivalItem::None :
-            Player->GetSelectedInventoryItem() == ESurvivalItem::Sidearm ? ESurvivalItem::Sidearm : ESurvivalItem::Rifle;
+            AssemblyWeapon(Player->GetSelectedInventoryItem());
         Player->ShowWeaponPortrait(bOpen, Page == EPage::Gear);
         Portrait.SetResourceObject(Player->GetInventoryPortrait());
     }
