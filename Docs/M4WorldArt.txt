@@ -160,3 +160,21 @@ License: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 Changes: Simplified and centered the scan, smoothed the display normals across UV seams, and packed a 2K color atlas from the original 8K image.
 
 Regional bake modification: Cut ground-level pedestrian openings in Laitse Radio Station, Skalka tower and the Soviet substation building. The prepared meshes retain their original materials and attribution above.
+
+Rail assets are licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+
+Abandoned railroad by gav (https://sketchfab.com/gav11)
+Source: https://sketchfab.com/3d-models/abandoned-railroad-4c2803efa7eb4a21bc66df35e7cbd24a
+Changes: Centered the track tile, embedded resized maps, and instanced it along the freight grade.
+
+Tram rails by Ivan-Kanaev (https://sketchfab.com/Ivan-Kanaev)
+Source: https://sketchfab.com/3d-models/tram-rails-5c6fd4b652d94def9c8b8d735507300f
+Changes: Isolated a straight pair of rails, clipped a four-meter tile, and repacked the maps.
+
+[Free] Soviet tram x-series by Net Med (https://sketchfab.com/net_3d)
+Source: https://sketchfab.com/3d-models/free-soviet-tram-x-series-dd4aeab12b4b4c3891156d7662b79cc2
+Changes: Normalized size and pivot, resized textures, and disabled emissive lighting.
+
+Soviet Train 3d Model By Ajay | High Poly Train by AJ_AY (https://sketchfab.com/AJAY.K)
+Source: https://sketchfab.com/3d-models/soviet-train-3d-model-by-ajay-high-poly-train-6a4518dd6bd4472083834bac4d905c70
+Changes: Repacked the USDZ as a static GLB, simplified repetitive hardware, resized the base-color textures, and fit the model to the rail gauge.

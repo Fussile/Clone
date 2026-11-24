@@ -82,3 +82,15 @@ void ASurvivalFacade::FitPanels(UStaticMesh* PanelMesh, double WidthCm, double D
     }
     Panels->AddInstances(Instances, false, false, false);
 }
+
+void ASurvivalFacade::SetStaticInstances(UStaticMesh* InstanceMesh, const TArray<FTransform>& Transforms)
+{
+#if WITH_EDITOR
+    Modify();
+    Panels->Modify();
+#endif
+    Panels->ClearInstances();
+    Panels->EmptyOverrideMaterials();
+    Panels->SetStaticMesh(InstanceMesh);
+    Panels->AddInstances(Transforms, false, false, false);
+}

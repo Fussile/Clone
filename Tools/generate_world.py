@@ -11,6 +11,7 @@ from airfield_layout import facilities
 from civic_landmarks import CAMPUS_SIZE
 from communications_layout import bake_checkpoints, bake_communications
 from region_route import bake_route
+from rail_layout import bake_rail
 from downtown_layout import bake_city, bake_traffic, streets
 from utility_layout import bake_grid
 
@@ -186,8 +187,22 @@ def generate(seed):
     road_segments.extend((s["start"][:2], s["end"][:2], route["width_m"])
                          for route in plan["m4_route"] if route["id"].endswith("_access")
                          for s in route["segments"])
+    plan["rail"] = bake_rail(plan["m4_route"], ground_height, height, water_distance)
+    rail_segments = [(s["start"][:2], s["end"][:2], track["width_m"]/2+1)
+                     for track in plan["rail"]["tracks"] for s in track["segments"]]
+    rail_cells = {}
+    for a,b,radius in rail_segments:
+        for cx in range(int(min(a[0],b[0])//64),int(max(a[0],b[0])//64)+1):
+            for cy in range(int(min(a[1],b[1])//64),int(max(a[1],b[1])//64)+1):
+                rail_cells.setdefault((cx,cy),[]).append((a,b,radius))
+
     def district_available(x, y, clearance):
         return available(x, y, clearance) and all(
+            segment_distance(x,y,a,b)>clearance+radius
+            for cx in range(int((x-clearance-5)//64),int((x+clearance+5)//64)+1)
+            for cy in range(int((y-clearance-5)//64),int((y+clearance+5)//64)+1)
+            for a,b,radius in rail_cells.get((cx,cy),())
+        ) and all(
             math.hypot(x-site["plot_xy_m"][0], y-site["plot_xy_m"][1]) >
             clearance + math.hypot(*site["footprint_m"])/2+1 for site in compounds
         )
@@ -295,6 +310,13 @@ def write_map(path, plan):
         color = "#ed956d" if "overpass" in route["id"] else "#ebf78b"
         for line in runs:
             lines.append(f'<polyline points="{points(line)}" fill="none" stroke="{color}" stroke-width="2.8" stroke-linejoin="round"/>')
+    for track in plan["rail"]["tracks"]:
+        line = [track["segments"][0]["start"], *(s["end"] for s in track["segments"])]
+        color = "#b987fd" if track["kind"] == "freight" else "#ff91c6"
+        lines.append(f'<polyline points="{points(line)}" fill="none" stroke="{color}" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>')
+    for stop in plan["rail"]["stops"]:
+        x,y = svg_xy(stop["position"][:2])
+        lines.append(f'<circle cx="{x}" cy="{y}" r="3" fill="#341c34" stroke="#ff91c6"><title>{html.escape(stop["label"])}</title></circle>')
     for lot in plan["city_lots"]:
         x, y = svg_xy((lot["x"], lot["y"]))
         lines.append(f'<rect x="{x-1.6:.1f}" y="{y-1.6:.1f}" width="3.2" height="3.2" fill="#f0e2c3"/>')
@@ -321,7 +343,7 @@ def write_map(path, plan):
     lines += ['<g fill="#e1e8dc" font-family="sans-serif" font-size="14">',
               '<text x="925" y="39">N ↑</text><text x="0" y="907">20 km²  ·  5 km east–west  ·  4 km north–south  ·  Teal transmission lines</text>',
               '<text x="0" y="936">Gold highway  ·  Grey regional roads  ·  Squares mark candidate bridges  ·  Salmon marks fissures</text>',
-              '<text x="0" y="959">Lime approaches  ·  Orange elevated decks  ·  Purple communications sites  ·  Crosses checkpoints</text></g></svg>']
+              '<text x="0" y="959">Lime approaches  ·  Orange elevated decks  ·  Purple freight rail  ·  Pink tram and stops</text></g></svg>']
     path.write_text("\n".join(lines)+"\n", encoding="utf-8")
 
 

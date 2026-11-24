@@ -107,6 +107,8 @@ def prepare_if_needed():
         "BurnedSedan", "BurnedCompact", "RustedTruck", "SixTwelveShop", "SixTwelveCanopy",
         "StoneFacade", "OfficeFacade", "Storefront",
     ))
+    required += tuple(f"/Game/Art/Crossroads/World/Rail/{name}/SM_{name}"
+                      for name in ("FreightTrack", "TramTrack", "SovietLocomotive", "CrossroadsTram"))
     if medicine_sheet.is_file():
         required += ("/Game/Art/Crossroads/Local/MedicineSheet",)
     if (stamp.is_file() and stamp.read_text(encoding="utf-8") == revision

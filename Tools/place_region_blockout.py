@@ -17,6 +17,7 @@ def place():
     civic = runpy.run_path(str(root / "Tools" / "civic_landmarks.py"))
     interiors = runpy.run_path(str(root / "Tools" / "place_region_interiors.py"))
     communications = runpy.run_path(str(root / "Tools" / "communications_layout.py"))
+    rail_tools = runpy.run_path(str(root / "Tools" / "place_rail.py"))
     pavement = runpy.run_path(str(root / "Tools" / "city_pavement.py"))
     downtown = runpy.run_path(str(root / "Tools" / "downtown_layout.py"))
     utility = runpy.run_path(str(root / "Tools" / "utility_layout.py"))
@@ -172,7 +173,7 @@ def place():
     style_materials["concrete"] = concrete
     style_materials["asphalt"] = asphalt
 
-    regenerated = ("CrossroadsPavement_", "CrossroadsStreetBarrier_", "CrossroadsWreck_")
+    regenerated = ("CrossroadsPavement_", "CrossroadsStreetBarrier_", "CrossroadsWreck_", "CrossroadsRail_")
     city_route_tags = tuple(f'CrossroadsRoute_{r["id"]}_' for r in plan["m4_route"]
                             if pavement["is_city_route"](r))
     previous_roads = {key for key in actor_tags if key.startswith(regenerated + city_route_tags)}
@@ -683,28 +684,31 @@ def place():
             actor.set_editor_property("is_runner", runner)
         spawn(zombie_class, key, label, x, y, floor+1.03, configure, relocate=relocate)
 
+    def place_ribbon(tag, label, route, surface):
+        for index, (origin, edges, lengths, breaks) in enumerate(pavement["pavement_chunks"](route)):
+            name, positions, uvs, indices = pavement["mesh_data"](origin, edges, lengths, breaks)
+            package = f"{world_art}/Pavement/{name}"
+            deck = assets.load_asset(package) if assets.does_asset_exist(package) else None
+            if deck is None:
+                deck = unreal.CrossroadsWorldBake.create_road_mesh(
+                    package, [unreal.Vector(*p) for p in positions],
+                    [unreal.Vector2D(*uv) for uv in uvs], indices, surface)
+                if not deck or not assets.save_loaded_asset(deck):
+                    raise RuntimeError(f"Could not create {package}")
+
+            def paved(actor):
+                component = actor.get_component_by_class(unreal.StaticMeshComponent)
+                component.set_static_mesh(deck)
+                component.set_collision_profile_name("BlockAll")
+                component.set_material(0, surface)
+
+            spawn(unreal.StaticMeshActor, f'{tag}_{index}', label, *origin, paved, ("StructuralGround",),
+                  relocate=True, reconfigure=True)
+
     def place_route(route):
         continuous = pavement["is_city_route"](route)
         if continuous:
-            for index, (origin, edges, lengths, breaks) in enumerate(pavement["pavement_chunks"](route)):
-                name, positions, uvs, indices = pavement["mesh_data"](origin, edges, lengths, breaks)
-                package = f"{world_art}/Pavement/{name}"
-                deck = assets.load_asset(package) if assets.does_asset_exist(package) else None
-                if deck is None:
-                    deck = unreal.CrossroadsWorldBake.create_road_mesh(
-                        package, [unreal.Vector(*p) for p in positions],
-                        [unreal.Vector2D(*uv) for uv in uvs], indices, asphalt)
-                    if not deck or not assets.save_loaded_asset(deck):
-                        raise RuntimeError(f"Could not create {package}")
-
-                def paved(actor):
-                    component = actor.get_component_by_class(unreal.StaticMeshComponent)
-                    component.set_static_mesh(deck)
-                    component.set_collision_profile_name("BlockAll")
-                    component.set_material(0, asphalt)
-
-                spawn(unreal.StaticMeshActor, f'CrossroadsPavement_{route["id"]}_{index}', "Continuous roadway",
-                      *origin, paved, ("StructuralGround",), relocate=True, reconfigure=True)
+            place_ribbon(f'CrossroadsPavement_{route["id"]}', "Continuous roadway", route, asphalt)
         width = route["width_m"]
         road_surface = gravel if route.get("surface") == "gravel" else asphalt
         for index, segment in enumerate(route["segments"]):
@@ -754,6 +758,66 @@ def place():
                     spawn(unreal.StaticMeshActor, f"{key}_rail_{side}", "Bridge parapet",
                           x-dy/horizontal*offset, y-dx/horizontal*offset, z+.45,
                           lambda actor: road_actor(actor, (length if continuous else length+.5, .24, .90), concrete))
+
+    def place_rail(rail):
+        art_path = source_art / "Rail"
+        rail_meshes = {name: import_asset(art_path / f"SM_{name}.glb", f"{world_art}/Rail/{name}", unreal.StaticMesh)
+                       for name in ("FreightTrack", "TramTrack", "SovietLocomotive", "CrossroadsTram")}
+        for name in ("SovietLocomotive", "CrossroadsTram"):
+            asset = rail_meshes[name]
+            if (not unreal.CrossroadsWorldBake.set_static_mesh_collision(asset)
+                    or not assets.save_loaded_asset(asset, only_if_is_dirty=True)):
+                raise RuntimeError(f"Could not prepare rail vehicle {name}.")
+
+        for track in rail["tracks"]:
+            key = f'CrossroadsRail_{track["id"]}'
+            freight = track["kind"] == "freight"
+            rail_mesh = rail_meshes["FreightTrack" if freight else "TramTrack"]
+            bounds = rail_mesh.get_bounding_box()
+            extent = bounds.max - bounds.min
+            pivot = unreal.Vector((bounds.min.x+bounds.max.x)/2, (bounds.min.y+bounds.max.y)/2, bounds.min.z)
+            along_x = extent.x >= extent.y
+            span = max(extent.x,extent.y)
+            place_ribbon(key+"_ballast", "Rail trackbed and bridge deck", track, gravel)
+            segments = track["segments"]
+            for i in range(0,len(segments),32):
+                ox,oy,oz = segments[i]["start"]
+                tiles = []
+                for section in segments[i:i+32]:
+                    a,b = section["start"],section["end"]
+                    dx,dy,dz = b[0]-a[0],a[1]-b[1],b[2]-a[2]
+                    pitch = math.degrees(math.atan2(dz, math.hypot(dx,dy)))
+                    yaw = math.degrees(math.atan2(dy,dx))
+                    rotation = unreal.Rotator(pitch=pitch,yaw=yaw)
+                    if not along_x:
+                        rotation = unreal.MathLibrary.compose_rotators(unreal.Rotator(yaw=-90),rotation)
+                    factor = (100*math.hypot(dx,dy,dz)+4)/span
+                    scale = unreal.Vector(factor if along_x else 1, 1 if along_x else factor, 1)
+                    center = unreal.Vector(((a[0]+b[0])/2-ox)*100,
+                                           (oy-(a[1]+b[1])/2)*100, ((a[2]+b[2])/2-oz)*100)
+                    placement = unreal.Transform(unreal.Vector(),rotation,scale)
+                    location = center-unreal.MathLibrary.transform_location(placement,pivot)
+                    tiles.append(unreal.Transform(location,rotation,scale))
+                spawn(facade_class, key+f"_rails_{i//32}", "Instanced rail track", ox,oy,oz,
+                      lambda actor: actor.set_static_instances(rail_mesh,tiles), relocate=True,reconfigure=True)
+
+        rail_tools["stamp_infrastructure"](rail,box,sign,style_materials)
+        for item in rail["rolling_stock"]:
+            x,y,z = item["position"]
+            freight = item["kind"]=="freight"
+            mesh = rail_meshes["SovietLocomotive" if freight else "CrossroadsTram"]
+            dimensions = (12.5,2.93,4.18) if freight else (10.39,2.53,4.06)
+
+            def train(actor):
+                fitted_mesh(actor,mesh,dimensions,item["yaw"],align_long_axis=True)
+                yaw = actor.get_actor_rotation().yaw
+                rotated = unreal.MathLibrary.compose_rotators(
+                    unreal.Rotator(yaw=yaw-item["yaw"]),
+                    unreal.Rotator(yaw=item["yaw"],pitch=item["pitch"]))
+                actor.set_actor_rotation(rotated,False)
+            rail_top = .39 if freight else .176
+            spawn(unreal.StaticMeshActor, "CrossroadsRail_stock_"+item["id"], item["label"],
+                  x,y,z+rail_top+dimensions[2]/2,train,relocate=True,reconfigure=True)
 
     def place_hospital(key, x, y, floor):
         def wall(label, dx, dy, w, d):
@@ -1064,6 +1128,7 @@ def place():
     remove_generated(*(previous_infill - touched_infill))
     for car in plan["wrecks"]:
         wreck("CrossroadsWreck_"+car["id"],car["x"],car["y"],car["z"],car["yaw"],car["model"])
+    place_rail(plan["rail"])
     remove_generated(*(previous_roads - touched_roads))
     for checkpoint in plan["checkpoints"]:
         communications["stamp_checkpoint"](checkpoint, communications_art)

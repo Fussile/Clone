@@ -35,8 +35,10 @@ def pavement_chunks(route):
             divisor = max(.6, 1+a[0]*b[0]+a[1]*b[1])
             delta = tuple(width*(v+w)/divisor for v,w in zip(a,b))
             deck = ((i > 0 and run[i-1]["bridge"]) or (i < len(run) and run[i]["bridge"]))
+            depth = .50 if deck else max(run[max(0,i-1)].get("fill",.09),
+                                          run[min(i,len(run)-1)].get("fill",.09))
             edges.append([(pt[0]+side*delta[0], pt[1]+side*delta[1], pt[2])
-                          for side in (-1, 1)] + [.50 if deck else .09])
+                          for side in (-1, 1)] + [depth])
         # Break faces are extended into the missing span at irregular intervals.
         terminal = {}
         for i, broken in ((0, run[0].get("broken_start")), (len(run), run[-1].get("broken_end"))):

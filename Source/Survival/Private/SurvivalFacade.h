@@ -19,6 +19,9 @@ public:
     void FitPanels(UStaticMesh* PanelMesh, double WidthCm, double DepthCm, double HeightCm,
         double GroundHeightCm, double EntranceWidthCm, const TArray<UMaterialInterface*>& Materials);
 
+    UFUNCTION(BlueprintCallable, Category = "City")
+    void SetStaticInstances(UStaticMesh* InstanceMesh, const TArray<FTransform>& Transforms);
+
 private:
     UPROPERTY(VisibleAnywhere, Category = "City")
     TObjectPtr<UInstancedStaticMeshComponent> Panels;
