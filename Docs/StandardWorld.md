@@ -26,11 +26,11 @@ The gas stations share a forecourt kit with pump islands and protective bollards
 
 The northwest downtown access off the city loop leads to Crossroads Police, with a reception area, records room, medical supplies and two encounters. The highway frontage approaches reach two other stops. Freight Bar and Crossroads Diner have separate entrances, dining areas, local loot and walkers. The parking garage has a driveable ramp to the open upper deck and supply cases on both levels.
 
-General Hospital has an accessible triage wing, four treatment rooms, textured beds, furnishings and dressing supplies. Its approach joins the hospital arterial. The downtown venues use James Ray Cock’s CC0 Modular Urban Apartments Facade for window detailing. [Facade credits](DowntownFacadeAttribution.txt)
+Crossroads Central Hospital has twelve stair-connected clinical floors, including emergency, imaging, surgery, inpatient wards and rehabilitation. Triage holds dressing supplies. Its approach joins the hospital arterial. The downtown venues use James Ray Cock’s CC0 Modular Urban Apartments Facade for window detailing. [Facade credits](DowntownFacadeAttribution.txt)
 
 ## Regional buildings and doors
 
-Every site with a building footprint now has an enterable layout. Cabins and farmhouses use split bedrooms and farm storage. Shops have stockrooms and counters. Clinics have treatment rooms, civic buildings have separate wings, and factory and utility sites have service rooms. Office and apartment blocks have usable upper floors and connected stairwell ramps. Three landmarks in the manifest describe terrain and do not receive buildings.
+Every site with a building footprint now has an enterable layout. Cabins and farmhouses use split bedrooms and farm storage. Shops have stockrooms and counters. Clinics have treatment rooms, civic buildings have separate wings, and factory and utility sites have service rooms. Office and apartment blocks have usable upper floors and connected stairwell ramps. Downtown frontage buildings have furnished upper rooms and switchback stairs on every occupied level. The five-stop tram crosses surface streets at pavement height. Freight keeps its grade-separated crossings. Three landmarks in the manifest describe terrain and do not receive buildings.
 
 Aim at a door leaf or its hinge-side jamb and press **E**. Building entrances, interior rooms and utility shutters use the same interaction. A door stays put if a player or enemy is in its path. World doors belong to the fixed environment and their open state is shared by connected players. Player-built doors still use the construction system.
 

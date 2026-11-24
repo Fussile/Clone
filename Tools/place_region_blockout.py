@@ -355,13 +355,11 @@ def place():
             pieces = [("ground", name+"_Level01", ground_height, floor, entrance_width)]
             # Preserve the distinct roofline at civic landmarks and use real one-to-four-storey
             # envelopes for the different teaching blocks.
-            full_height = {"police": 17, "civic": 52}.get(role, height+1.1)
+            full_height = height
             if height > ground_height:
                 pieces.append(("main", name, full_height-ground_height, floor+ground_height, 0))
             else:
                 remove_generated(key+"_sample_main")
-        elif role == "library":
-            pieces = [("main", name, 26, floor, entrance_width)]
         sources = [(suffix, asset_name, hero_class(asset_name), h, bottom, opening)
                    for suffix, asset_name, h, bottom, opening in pieces]
         existing_skins = (key+"_sample_main", key+"_sample_ground")
@@ -791,7 +789,7 @@ def place():
             pivot = unreal.Vector((bounds.min.x+bounds.max.x)/2, (bounds.min.y+bounds.max.y)/2, bounds.min.z)
             along_x = extent.x >= extent.y
             span = max(extent.x,extent.y)
-            place_ribbon(key+"_ballast", "Rail trackbed and bridge deck", track, gravel)
+            place_ribbon(key+"_ballast", "Rail trackbed and bridge deck", dict(track, segments=[s for s in track["segments"] if not s.get("street")]), gravel)
             segments = track["segments"]
             for i in range(0,len(segments),32):
                 ox,oy,oz = segments[i]["start"]
@@ -833,44 +831,35 @@ def place():
                   x,y,z+rail_top+dimensions[2]/2,train,relocate=True,reconfigure=True)
 
     def place_hospital(key, x, y, floor):
-        def wall(label, dx, dy, w, d):
-            box(f"{key}_{label}", f"Hospital {label}", x+dx, y+dy, floor, w, d, 3.2,
-                material=style_materials["stucco_metal"])
-
-        # First wing measures 18 by 14 meters, with a 3 m south entrance.
-        wall("west wall", -8.875, 0, .25, 14)
-        wall("east wall", 8.875, 0, .25, 14)
-        wall("rear wall", 0, 6.875, 17.5, .25)
-        for direction, side in ((-1, "west"), (1, "east")):
-            wall(f"{side} entrance wall", direction*5.125, -6.875, 7.25, .25)
-            for index, (center, length) in enumerate(((-4.75, 4.5), (0, 2), (4.75, 4.5))):
-                wall(f"{side} hall wall {index}", direction*2.1, center, .25, length)
-            wall(f"{side} room divider", direction*5.425, 0, 6.4, .25)
-        box(f"{key}_roof", "Hospital wing roof", x, y, floor+3.2, 18, 14, .3, material=concrete)
-        box(key+"_fascia", "Triage fascia", x, y-7.18, floor+2.65, 7.5, .35, .5,
-            material=style_materials["petrol"])
-        sign(key+"_sign", "TRIAGE", x, y-7.38, floor+3.04)
-        for side in (-1, 1):
-            box(f"{key}_bench_{side}", "Waiting area bench", x+side*4.5, y-6.3,
-                floor, 2.1, .44, .45, material=style_materials["petrol"])
-            box(f"{key}_cabinet_{side}", "Treatment room cabinet", x+side*7.86, y+4.6,
-                floor, .62, 1.5, 1.08, material=style_materials["dark_trim"])
-        box(key+"_reception", "Triage desk", x-.9, y+4.5, floor, 1.64, .66, 1.08,
-            material=style_materials["petrol"])
-
-        site_tools["double_door"](door, key+"_entrance", "Triage entrance",
-                                  x, y-7.04, floor, 3, 2.35, "petrol")
-        for side in (-1, 1):
-            for room in (-1, 1):
-                door(f"{key}_treatment_{side}_{room}", "Treatment room door",
-                     x+side*2.1, y+room*1.75, floor, 1.5, 2.25, yaw=-90*side, finish="petrol")
-
-        for index, (dx, dy) in enumerate(((-5, -3), (5, -3), (-5, 3), (5, 3)), 1):
-            treatment_bed(f"{key}_bed_{index}", f"Hospital bed {index}", x+dx, y+dy, floor)
-
-        cache(f"{key}_supplies", "Hospital dressing supplies", x+5, y+5.6, floor,
+        tower = key+"_medical_tower"
+        civic["hall"](tower, x, y, floor, 54, 38, 12, 0, "hospital", "Crossroads Central Hospital",
+                     box, door, cache, encounter, sign, hero_art, style_materials)
+        departments = ("Emergency", "Imaging", "Surgery", "Recovery", "Intensive Care",
+                       "Cardiology", "Neurology", "Orthopedics", "Pediatrics", "Maternity",
+                       "Inpatient Ward", "Rehabilitation")
+        for level, department in enumerate(departments):
+            z = floor+level*3.65
+            sign(f"{tower}_directory_{level}", f"{level+1:02}  {department.upper()}",
+                 x+13, y+4.7, z+2.25)
+            if department in {"Imaging", "Surgery", "Intensive Care"}:
+                furnishing(f"{tower}_station_{level}", department+" console", "desk",
+                           x+4, y-8, z, (3.1,1.1,1.35), 180)
+                furnishing(f"{tower}_storage_{level}", "Clinical equipment cabinet", "files",
+                           x+9, y-8, z, (1.5,.75,1.9), 90)
+            elif department in {"Emergency", "Rehabilitation"}:
+                for i in range(3):
+                    box(f"{tower}_seats_{level}_{i}", "Patient waiting bench",
+                        x-17+i*4, y-14, z, 2.6,.62,.46,material=style_materials["timber"])
+            else:
+                furnishing(f"{tower}_linen_{level}", "Ward linen shelves", "shelf",
+                           x-19, y+2, z, (3.2,.8,1.8), 0)
+            for i, dx in enumerate((-19,-8,4)):
+                treatment_bed(f"{tower}_bed_{level}_{i}", department+" treatment bay", x+dx, y+12, z)
+                box(f"{tower}_screen_{level}_{i}", "Privacy screen", x+dx+2, y+12,
+                    z, .12, 3, 1.8, material=style_materials["petrol"])
+        cache(tower+"_triage_supplies", "Hospital dressing supplies", x+5, y-10, floor,
               cloth_amount=5, dressing_schematic_amount=1)
-        remove_blockout(key)
+        migrate_landmark(key, tower, (key+"_slab",))
 
     def storefront_window(key, x, y, floor):
         bounds = bay_mesh.get_bounding_box()
@@ -930,6 +919,30 @@ def place():
 
     interior_meshes = {"desk": office_meshes["OfficeWorkstation"], "files": office_meshes["OfficeFiles"],
                        "shelf": shelf_mesh, "bed": bed_mesh}
+
+    def tower(key, x, y, floor, yaw, finish, parts):
+        # Batch repeated floors, walls and furniture by mesh into persistent local instances.
+        batches = {}
+        meshes = dict(interior_meshes, slab=cube, wall=cube)
+        for name, (u,v,h), dimensions, pitch, heading in parts:
+            bounds = meshes[name].get_bounding_box()
+            size = bounds.max-bounds.min
+            scale = unreal.Vector(*(m*100/span for m,span in zip(dimensions,(size.x,size.y,size.z))))
+            rotation = unreal.Rotator(pitch=pitch,yaw=heading)
+            transform = unreal.Transform(unreal.Vector(),rotation,scale)
+            center = unreal.Vector(u*100,-v*100,h*100)
+            offset = unreal.MathLibrary.transform_location(transform,(bounds.min+bounds.max)*.5)
+            batches.setdefault(name,[]).append(unreal.Transform(center-offset,rotation,scale))
+        for name, transforms in batches.items():
+            def configure(actor):
+                actor.set_actor_rotation(unreal.Rotator(yaw=yaw),False)
+                actor.set_static_instances(meshes[name],transforms)
+                component = actor.get_root_component()
+                component.set_collision_profile_name("BlockAll")
+                if name in {"slab","wall"}:
+                    component.set_material(0,style_materials["concrete" if name=="slab" else finish])
+            spawn(facade_class,key+"_interior_"+name,"Tower "+name,x,y,floor,configure,
+                  relocate=True,reconfigure=True)
 
     def furnishing(key, label, mesh_name, x, y, floor, size, yaw):
         def configure(actor):
@@ -1073,6 +1086,7 @@ def place():
                                         sign, hero_art, style_materials)
             migrate_landmark(key, new_key)
         elif site["id"] == "city-hospital":
+            resized_site = key
             place_hospital(key, x, y, z+.2)
         elif site["id"] == "warehouses":
             resized_site = key
@@ -1154,9 +1168,8 @@ def place():
             scatter_caches(key+"_annex", annex_x, y, z+.2,
                            ((-2.1,-5.5), (2.1,-3), (-2.1,2.3), (2,6.1), (-2,7.7)),
                            (51, 9, 9, 4, 10, 17), 95)
-        if site["id"] in {"city-hospital", "city-parking", "city-nightlife"}:
+        if site["id"] in {"city-parking", "city-nightlife"}:
             city_cache_layouts = {
-                "city-hospital": (((-7.6,-1.5), (7.65,-1.5), (-6.65,5.5), (6,2.4)), (5, 4, 78, 3, 6, 4)),
                 "city-parking": (((-7.5,9.4), (2.2,9.4), (8,9.4), (12.1,8.9)), (10, 51, 9, 8, 7, 15)),
                 "city-nightlife": (((-12.8,2.1), (-10.8,-1.4), (2.9,4.4), (4.7,-1.4)), (68, 5, 9, 3, 6, 9)),
             }
@@ -1202,7 +1215,7 @@ def place():
                                              transmission["poles"][b]["phases"], strict=True)):
             cable(f"CrossroadsCable_{a}_{b}_{index}",start,end)
     downtown["stamp_city"](plan["city_lots"],plan["city_barriers"],box,facade,
-                           communications_art,door,cache,furnishing,style_materials)
+                           communications_art,door,cache,furnishing,tower,style_materials)
     remove_generated(*(previous_infill - touched_infill))
     for car in plan["wrecks"]:
         wreck("CrossroadsWreck_"+car["id"],car["x"],car["y"],car["z"],car["yaw"],car["model"])

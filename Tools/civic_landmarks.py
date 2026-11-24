@@ -6,6 +6,7 @@ HEROES = {
     "civic": ("Bldg_Hero_Mid_NYG_Triangle_B01", True),
     "library": ("Bldg_Hero_SFB", False),
     "academic": ("Bldg_Hero_Low_SFD_Long", True),
+    "hospital": ("Bldg_Hero_NYG_Modern_Square_A01", True),
     "science": ("Bldg_Hero_NYG_Modern_Square_A01", True),
 }
 CAMPUS_SIZE = (116, 144)
@@ -89,9 +90,12 @@ def hall(key, x, y, floor, width, depth, levels, yaw, role, title, box, door, ca
         for side,(a,b) in enumerate(((-width/2+.25, room_entry-.8), (room_entry+.8, partition_end))):
             part(f"suite_wall_{n}_{side}", "Room partition", (a+b)/2, depth*.13, z,
                  b-a, .22, story-.23)
-        leaf(f"suite_{n}", "Reading room door" if role == "library" else "Office door",
+        leaf(f"suite_{n}", "Reading room door" if role == "library" else "Ward door" if role == "hospital" else "Office door",
              room_entry, depth*.13, z, 1.6, 2.35)
-        if role in {"library","police"}:
+        if role == "hospital":
+            part(f"nurse_{n}", "Reception desk", -width*.22, -depth*.18, z, 2.8, .9, 1.05)
+            part(f"meds_{n}", "Treatment room cabinet", width*.18, depth*.39, z, 1.5, .65, 1.5)
+        elif role in {"library","police"}:
             for bay in range(3):
                 part(f"shelves_{n}_{bay}", "Archive shelving", -width*.34+bay*width*.14, depth*.34,
                      z, 1.7, .6, 1.85, "timber")
@@ -99,7 +103,7 @@ def hall(key, x, y, floor, width, depth, levels, yaw, role, title, box, door, ca
             for row in (-.12,.31):
                 part(f"tables_{n}_{row}", "Classroom table" if role=="academic" else "Civic work table",
                      -width*.20, depth*row, z, 2.8, .88, .82, "timber")
-        profile = "SECURITY" if role=="police" else "OFFICE"
+        profile = {"hospital": "MEDICAL", "police": "SECURITY"}.get(role, "OFFICE")
         cache(f"{key}_supplies_{n}", "Room supply cabinet", *xy(-width*.27,depth*.34), floor+z,
               profile=profile, chance=85)
     if role in {"police", "civic", "library"}:
@@ -121,8 +125,8 @@ def hall(key, x, y, floor, width, depth, levels, yaw, role, title, box, door, ca
 
 def place_landmark(key, role, x, y, floor, box, door, cache, encounter, sign, art, palette):
     width, depth, levels, title = {
-        "police": (28, 21, 3, "Crossroads Police Headquarters"),
-        "civic": (42, 27, 4, "Crossroads Civic Center"),
+        "police": (28, 21, 5, "Crossroads Police Headquarters"),
+        "civic": (42, 27, 13, "Crossroads Civic Center"),
     }[role]
     box(key+"_plaza", "Public entrance plaza", x, y-depth/2-1.7, floor-.42,
         width*.53, 3.4, .42, material=palette["concrete"], ground=True)
@@ -164,5 +168,5 @@ def campus(key, x, y, floor, box, door, cache, encounter, sign, art, wreck, pale
             floor-1, distance+.18, 3.6, 1, material=concrete, ground=True)
         hall(f"{key}_wing_{i}", x+u, y+v, floor, width, depth, levels, side*90, "academic", title,
              box, door, cache, encounter, sign, art, palette)
-    hall(key+"_library", x, y+53.5, floor, 44, 28, 3, 0, "library", "University Library",
+    hall(key+"_library", x, y+53.5, floor, 44, 28, 7, 0, "library", "University Library",
          box, door, cache, encounter, sign, art, palette)

@@ -150,7 +150,53 @@ def bake_traffic(routes, sites, blockers, seed):
     return parked
 
 
-def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, palette):
+def tower_interior(width, depth, levels, style):
+    """Local mesh placements in metres. The rear stair core has a landing at each end."""
+    core = 4.8
+    run = min(width*.58, 14)
+    landing = (width-run)/2
+    rear = depth/2-core/2
+    height = levels*3.65
+    parts = []
+    def part(mesh, x, y, center_z, w, d, h, pitch=0, yaw=0):
+        parts.append((mesh, (x,y,center_z), (w,d,h), pitch,yaw))
+    for side in (-1,1):
+        part("wall",side*(width/2-.14),0,(height+3.24)/2,.28,depth,height-3.24)
+        part("wall",0,side*(depth/2-.14),(height+3.24)/2,width,.28,height-3.24)
+    for n in range(levels):
+        z = 0 if n==0 else 3.24+(n-1)*3.65
+        if n:
+            part("slab",0,-core/2,z-.12,width,depth-core,.24)
+            for side in (-1,1):
+                part("slab",side*(run+landing)/2,rear,z-.12,landing,core,.24)
+            # Two rooms with independent openings onto the stair-side corridor.
+            for side in (-1,1):
+                for offset in (-1,1):
+                    span = width/4-.95
+                    part("wall",side*width/4+offset*(span/2+.95),-depth*.03,
+                         z+1.57,span,.18,3.14)
+            part("wall",0,-depth*.265,z+1.57,.18,depth*.47,3.14)
+            for side in (-1,1):
+                mesh = ("bed" if style=="StoneFacade" else "shelf" if style=="CornerShop" else "desk")
+                part(mesh,side*width*.29,-depth*.25,z+.6,2.2,1,1.2)
+                if mesh == "bed":
+                    part("desk",side*width*.14,-depth*.36,z+.48,1.4,.75,.96)
+                elif mesh == "desk" and n%3==0:
+                    part("desk",side*width*.14,-depth*.34,z+.58,2,1,1.16)
+                elif mesh == "shelf":
+                    part("shelf",side*width*.13,-depth*.30,z+.8,1.9,.75,1.6)
+                part("files",side*width*.39,depth*.12,z+.75,1.2,.7,1.5)
+        if n+1<levels:
+            rise = 3.24 if n==0 else 3.65
+            direction = 1 if n%2==0 else -1
+            angle = math.atan2(rise,run)
+            part("slab",direction*.12*math.sin(angle),rear-direction*1.15,
+                 z+rise/2-.12*math.cos(angle), math.hypot(run,rise),2.25,.24,
+                 math.degrees(angle),0 if direction==1 else 180)
+    return parts
+
+
+def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, tower, palette):
     for lot in lots:
         key = "CrossroadsInfill_"+lot["id"]
         x, y, z, w, d, yaw = (lot[k] for k in ("x", "y", "z", "w", "d", "yaw"))
@@ -194,7 +240,11 @@ def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, palet
         door(key+"_foyer_door", "Lobby door", *point(0,-d/2), z, 1.75, 2.35, yaw=yaw)
         slab("_lintel", "Lobby door lintel", 0, -d/2+.22, z+2.35, 1.75, .42, .89, wall)
         slab("_rear_wall", "Service wall", 0, d/2-.14, z, w, .28, 3.24, wall)
-        slab("_structure", "Upper office block", 0, 0, z+3.24, w, d, height-3.24, wall)
+        tower(key, x, y, z, yaw, wall, tower_interior(w, d, lot["levels"], lot["facade"]))
+
+        # Fit the ground-floor program ahead of the rear stair landings.
+        d -= 4.8
+        x, y = point(0, -2.4)
 
         def furnish(suffix, label, mesh, u, v, size, facing=0):
             furnishing(key+"_"+suffix, label, mesh, *point(u, v), z, size, yaw+facing)
@@ -241,9 +291,13 @@ def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, palet
             furnish("sorting", "Records sorting desk", "desk", -w*.20, d*.32, (2.4,1,1.1))
             furnish("public_files", "Intake filing cabinet", "files", -w*.39, -d*.32, (1.5,.65,1.45))
             reward, profile = "Archive supply case", "OFFICE"
+        original_center = point(0, 2.4)
+        loot_position = point(-w*.36, d*.43)
+        x, y = original_center
+        d += 4.8
         slab("_parapet", "Office roof cap", 0, 0, z+height, w+.36, d+.36, .34, "dark_trim")
         facade(key+"_panels", style, x, y, z, w, d, height, yaw, 3.24, 1.75)
-        cache(key+"_lobby_cache", reward, *point(-w*.36, d*.43), z,
+        cache(key+"_lobby_cache", reward, *loot_position, z,
               profile=profile, chance=82)
 
     for barrier in blockers:

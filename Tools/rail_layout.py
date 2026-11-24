@@ -78,6 +78,7 @@ def bake_rail(roads, ground, height, water_distance):
         # Keep a clean opening under the rail deck or under an already taller road bridge.
         return targets
 
+    street_levels = {}
     lines = {}
     routes = {**FREIGHT,**TRAM}
     for name, controls in routes.items():
@@ -91,9 +92,14 @@ def bake_rail(roads, ground, height, water_distance):
             wet = water_distance(*point)<5
             base = max(terrain,ground(*point)+1 if wet else terrain)+.11
             nearby = constraints(point,width)
-            # Freight and tram share the same reliable clearance budget.
+            # A sufficiently elevated road can pass over either alignment.
             over = {key:value for key,value in nearby.items() if value-base<5.7}
-            grades.append(max([base,*(road+6.45 for road in over.values())]))
+            if freight:
+                grades.append(max([base,*(road+6.45 for road in over.values())]))
+            else:
+                if over:
+                    street_levels[len(grades)] = min(over.values(), key=lambda level: abs(level-base))+.015
+                grades.append(street_levels.get(len(grades), base))
             ground_z.append(terrain)
             crosses.append(nearby)
         lines[name]=(pts,grades,ground_z,crosses,max_grade,width)
@@ -111,7 +117,8 @@ def bake_rail(roads, ground, height, water_distance):
             level=max(tram_grades[i] for i in indices)
             for i in indices:
                 tram_grades[i]=level
-        for pts,grades,_,crossings,_,_ in lines.values():
+        for name in FREIGHT:
+            pts,grades,_,crossings,_,_ = lines[name]
             for i,targets in enumerate(crossings):
                 for road in targets.values():
                     if road-5.7 < grades[i] < road+6.45:
@@ -127,6 +134,16 @@ def bake_rail(roads, ground, height, water_distance):
                     j=i-direction
                     grades[i]=max(grades[i],grades[j]-limit*math.dist(pts[i],pts[j]))
 
+    # Cap the approaches from both directions so terrain smoothing cannot lift a
+    # street crossing back onto a viaduct. Railheads follow the pavement there.
+    caps = [street_levels.get(i, math.inf) for i in range(len(tram_pts))]
+    for order in (range(1,len(caps)),range(len(caps)-2,-1,-1)):
+        for i in order:
+            j = i-order.step
+            caps[i] = min(caps[i], caps[j]+.077*math.dist(tram_pts[i],tram_pts[j]))
+    for i in range(len(tram_pts)):
+        tram_grades[i] = street_levels.get(i, min(tram_grades[i],caps[i]))
+
     tracks = []
     for name,(pts,grades,terrain,crosses,_,width) in lines.items():
         nodes = [[round(v,3) for v in (*p,z)] for p,z in zip(pts,grades)]
@@ -136,7 +153,12 @@ def bake_rail(roads, ground, height, water_distance):
         walked = 0
         for i,(a,b) in enumerate(zip(nodes,nodes[1:])):
             bridge = min(grades[i]-terrain[i],grades[i+1]-terrain[i+1])>.85 or bool(crosses[i] or crosses[i+1])
+            street = name not in FREIGHT and (i in street_levels or i+1 in street_levels)
+            if name not in FREIGHT:
+                bridge = not street and min(grades[i]-terrain[i],grades[i+1]-terrain[i+1])>.85
             segment = dict(start=a,end=b,bridge=bridge)
+            if street:
+                segment["street"] = True
             if not bridge:
                 segment["fill"] = round(max(.09, grades[i]-terrain[i]+.11, grades[i+1]-terrain[i+1]+.11), 3)
             sections.append(segment)
