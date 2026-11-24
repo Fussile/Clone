@@ -6,6 +6,7 @@
 #include "SurvivalSupplyCrate.generated.h"
 
 class UStaticMeshComponent;
+class ACharacter;
 
 UENUM()
 enum class ESurvivalLootProfile : uint8
@@ -36,6 +37,9 @@ struct FSurvivalLoot
     UPROPERTY()
     bool bRifle = false;
 
+    UPROPERTY()
+    int32 GearIndex = INDEX_NONE;
+
     bool IsEmpty() const;
 };
 
@@ -53,6 +57,7 @@ public:
     ASurvivalSupplyCrate();
 
     FSurvivalLoot TakeLoot();
+    static bool Drop(ACharacter& Owner, const FSurvivalLoot& Loot);
     virtual float TakeDamage(float Damage, const FDamageEvent& Event, AController* InstigatorController,
         AActor* DamageCauser) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -131,6 +136,7 @@ private:
     FSurvivalLoot RollLoot(FRandomStream& Random) const;
     void RememberState();
 
+    bool bDropped = false;
     FSurvivalLoot Contents;
     FSurvivalScavengeState State;
 };

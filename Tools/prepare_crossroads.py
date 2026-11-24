@@ -362,6 +362,9 @@ def build_region():
 
 def prepare():
     failures = []
+    if os.environ.get("SURVIVAL_PREPARED_MARKER"):
+        import equipment_art
+        equipment_art.prepare()
     for label, action in (("sidearm", import_sidearm), ("rifle", import_rifle),
                           ("characters", import_characters), ("interface", import_interface)):
         unreal.log(f"Crossroads: importing {label}.")

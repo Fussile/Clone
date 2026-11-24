@@ -154,6 +154,8 @@ def schedule_preparation():
             return
 
         unreal.unregister_slate_post_tick_callback(handle)
+        import equipment_art
+        equipment_art.prepare()
         prepare_if_needed()
 
     handle = unreal.register_slate_post_tick_callback(prepare_after_editor_load)

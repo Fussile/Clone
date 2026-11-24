@@ -1,10 +1,12 @@
 #include "SurvivalSupplyCrate.h"
+#include "SurvivalGear.h"
 
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "Materials/MaterialInterface.h"
 #include "Net/UnrealNetwork.h"
+#include "GameFramework/Character.h"
 #include "SurvivalGameMode.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -69,6 +71,7 @@ ASurvivalSupplyCrate::ASurvivalSupplyCrate()
 void ASurvivalSupplyCrate::BeginPlay()
 {
     Super::BeginPlay();
+    if (bDropped) return;
     const UStaticMesh* CrateAsset = Mesh->GetStaticMesh();
     if ((bContainsSidearm || bContainsRifle) && CrateAsset &&
         CrateAsset->GetPathName() == TEXT("/Engine/BasicShapes/Cube.Cube"))
@@ -116,7 +119,7 @@ FName ASurvivalSupplyCrate::GetLootId() const
 
 bool FSurvivalLoot::IsEmpty() const
 {
-    if (!Materials.IsEmpty() || bSidearm || bRifle || Items.Food || Items.Water || Items.Cloth
+    if (GearIndex != INDEX_NONE || !Materials.IsEmpty() || bSidearm || bRifle || Items.Food || Items.Water || Items.Cloth
         || Items.Bandages || Items.Rounds || Items.TimberDoors || Items.RifleRounds || Items.BuilderGuides
         || Items.ScavengerNotes || Items.DressingSchematics || Items.FieldDressings)
     {
@@ -194,6 +197,17 @@ FSurvivalLoot ASurvivalSupplyCrate::RollLoot(FRandomStream& Random) const
         ++Loot.Items.RifleParts[RiflePartSlot];
     }
     Loot.Items.RifleRounds += bContainsRifle ? 8 : 0;
+    if ((LootProfile == ESurvivalLootProfile::Security || LootProfile == ESurvivalLootProfile::General)
+        && Random.RandRange(1, 100) <= 35)
+    {
+        Loot.GearIndex = Random.RandRange(0, UE_ARRAY_COUNT(SurvivalGear) - 1);
+    }
+    if (bContainsRifle)
+    {
+        // The station locker introduces the equipment screen on the first supply run.
+        for (int32 Index = 0; Index < UE_ARRAY_COUNT(SurvivalGear); ++Index)
+            if (FCString::Strcmp(SurvivalGear[Index].Id, TEXT("hard_hat")) == 0) Loot.GearIndex = Index;
+    }
     Loot.bSidearm = bContainsSidearm;
     Loot.bRifle = bContainsRifle;
     return Loot;
@@ -234,6 +248,14 @@ FSurvivalLoot ASurvivalSupplyCrate::TakeLoot()
     {
         return {};
     }
+    if (bDropped)
+    {
+        FSurvivalLoot Result = Contents;
+        Contents = {};
+        bLootAvailable = false;
+        Destroy();
+        return Result;
+    }
     State.bSearched = true;
     bLootAvailable = bSidearmAvailable = bRifleAvailable = false;
     RememberState();
@@ -258,4 +280,27 @@ float ASurvivalSupplyCrate::TakeDamage(float Damage, const FDamageEvent&, AContr
     }
     RememberState();
     return Applied;
+}
+
+bool ASurvivalSupplyCrate::Drop(ACharacter& Owner, const FSurvivalLoot& Loot)
+{
+    if (!Owner.HasAuthority() || Loot.IsEmpty()) return false;
+    UWorld* World = Owner.GetWorld();
+    const FVector Start = Owner.GetActorLocation();
+    const FVector Ahead = Start + Owner.GetActorForwardVector() * 85;
+    FHitResult Hit;
+    FCollisionQueryParams Query(SCENE_QUERY_STAT(DropLoot), false, &Owner);
+    if (World->LineTraceTestByChannel(Start, Ahead, ECC_Visibility, Query) ||
+        !World->LineTraceSingleByChannel(Hit, Ahead, Ahead - FVector(0,0,250), ECC_Visibility, Query))
+        return false;
+    const FTransform Pose(FQuat::Identity, Hit.ImpactPoint + FVector(0,0,12), FVector(.3,.3,.24));
+    auto* Crate = World->SpawnActorDeferred<ASurvivalSupplyCrate>(StaticClass(), Pose, nullptr, &Owner,
+        ESpawnActorCollisionHandlingMethod::DontSpawnIfColliding);
+    if (!Crate) return false;
+    Crate->bDropped = true;
+    Crate->Contents = Loot;
+    Crate->bLootAvailable = true;
+    Crate->bWorldPresent = true;
+    Crate->FinishSpawning(Pose);
+    return IsValid(Crate);
 }
