@@ -42,8 +42,10 @@ private:
     FString Category;
     int32 SelectedRecipe = INDEX_NONE;
     int32 Quantity = 1;
+    FSlateBrush Portrait;
+    void SetWorkbench(bool bOpen);
     bool bModifying = false;
-    enum class EPage { Pack, Crafting, Skills };
+    enum class EPage { Pack, Crafting, Skills, Gear };
     EPage Page = EPage::Pack;
     int32 TrainingTree = 0;
     TSharedPtr<SSearchBox> TrainingFilterBox;

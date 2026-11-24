@@ -63,6 +63,47 @@ public:
     bool CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const;
     void CraftRecipe(int32 RecipeIndex, int32 Quantity);
     void ToggleInventory();
+    UTextureRenderTarget2D* GetInventoryPortrait() const { return PortraitTexture; }
+    void ShowWeaponPortrait(bool bWeapon);
+    bool CanInspectWeapon(ESurvivalItem Item) const;
+    bool HasWeaponMod(ESurvivalItem Weapon, int32 Mod) const;
+    bool CanToggleWeaponMod(ESurvivalItem Weapon, int32 Mod) const;
+    void ToggleWeaponMod(ESurvivalItem Weapon, int32 Mod);
+    ESurvivalItem InspectedWeapon = ESurvivalItem::None;
+private:
+    TMap<ESurvivalItem, uint8> InstalledMods;
+    UPROPERTY()
+    TArray<TObjectPtr<UStaticMeshComponent>> AttachmentMeshes;
+    void RefreshAttachments();
+    float WeaponRecoil(ESurvivalItem Weapon) const;
+public:
+    int32 GearCount(int32 Index) const;
+    bool IsWearing(int32 Index) const { return WornGear.Contains(Index); }
+    UFUNCTION(Server, Reliable)
+    void ServerToggleGear(int32 Index);
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out) const override;
+    static bool CanQuickSlot(ESurvivalItem Item);
+    bool SplitSelection();
+    bool CanDropSelection() const;
+    void DropSelection();
+    UFUNCTION(Server, Reliable)
+    void ServerDropGear(int32 Index);
+private:
+    UPROPERTY(Replicated)
+    TArray<int32> OwnedGear;
+    UPROPERTY(ReplicatedUsing=RefreshGear)
+    TArray<int32> WornGear;
+    UFUNCTION()
+    void RefreshGear();
+    UPROPERTY()
+    TArray<TObjectPtr<UStaticMeshComponent>> GearMeshes;
+    UPROPERTY()
+    TObjectPtr<USceneCaptureComponent2D> PortraitCapture;
+    UPROPERTY()
+    TObjectPtr<UTextureRenderTarget2D> PortraitTexture;
+    UPROPERTY()
+    TObjectPtr<UStaticMeshComponent> InspectionWeapon;
+public:
     bool IsInventoryOpen() const { return bInventoryOpen; }
     bool IsDevSpeedActive() const { return bDevSpeedActive; }
     bool IsBuilding() const { return bBuildMode; }

@@ -14,6 +14,7 @@ class ASurvivalSidearm : public AActor
 public:
     ASurvivalSidearm();
     void PlayShotSound();
+    UStaticMeshComponent* GetWeaponMesh() const { return ImportedVisual; }
 
 protected:
     virtual void BeginPlay() override;

@@ -16,3 +16,4 @@
 
 # Small third-party source art is distributed as regular Git blobs.
 SourceArt/Crossroads/** -filter -diff -merge -text
+SourceArt/Equipment/** -filter -diff -merge -text

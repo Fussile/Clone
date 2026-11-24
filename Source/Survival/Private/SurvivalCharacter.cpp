@@ -1,4 +1,8 @@
 #include "SurvivalCharacter.h"
+#include "Algo/Find.h"
+#include "SurvivalGear.h"
+#include "SurvivalWeaponMods.h"
+#include "Net/UnrealNetwork.h"
 
 #include "Animation/AnimSequence.h"
 #include "Camera/CameraComponent.h"
@@ -12,6 +16,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/HitResult.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/TargetPoint.h"
 #include "Engine/World.h"
@@ -112,6 +117,18 @@ ASurvivalCharacter::ASurvivalCharacter()
 
     GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     GetMesh()->SetOwnerNoSee(true);
+    PortraitCapture = CreateDefaultSubobject<USceneCaptureComponent2D>(TEXT("EquipmentPortrait"));
+    PortraitCapture->SetupAttachment(GetRootComponent());
+    PortraitCapture->PrimitiveRenderMode = ESceneCapturePrimitiveRenderMode::PRM_UseShowOnlyList;
+    PortraitCapture->CaptureSource = SCS_FinalColorLDR;
+    PortraitCapture->ShowFlags.SetLighting(false);
+    PortraitCapture->bCaptureEveryFrame = false;
+    PortraitCapture->bCaptureOnMovement = false;
+    InspectionWeapon = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("InspectionWeapon"));
+    InspectionWeapon->SetupAttachment(GetRootComponent());
+    InspectionWeapon->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    InspectionWeapon->SetVisibleInSceneCaptureOnly(true);
+    InspectionWeapon->SetVisibility(false);
 }
 
 void ASurvivalCharacter::BeginPlay()
@@ -348,7 +365,9 @@ void ASurvivalCharacter::ToggleView()
     FirstPersonCamera->SetActive(!bThirdPerson);
     ThirdPersonCamera->SetActive(bThirdPerson);
     GetMesh()->SetOwnerNoSee(!bThirdPerson);
+    for (UStaticMeshComponent* Part : GearMeshes) Part->SetOwnerNoSee(!bThirdPerson);
     UpdateSidearmView();
+    RefreshAttachments();
 }
 
 const UCameraComponent& ASurvivalCharacter::GetAimCamera() const
@@ -456,6 +475,10 @@ void ASurvivalCharacter::ServerScavenge_Implementation(ASurvivalSupplyCrate* Cra
     const FSurvivalLoot Loot = Crate->TakeLoot();
     if (!Loot.IsEmpty())
     {
+        if (Loot.GearIndex != INDEX_NONE)
+        {
+            OwnedGear.Add(Loot.GearIndex);
+        }
         ClientReceiveLoot(Loot);
     }
 }
@@ -974,7 +997,7 @@ void ASurvivalCharacter::PrimaryAction()
     {
         Sidearm->PlayShotSound();
     }
-    AddControllerPitchInput(bAimedShot ? -0.38f : -0.65f);
+    AddControllerPitchInput((bAimedShot ? -0.38f : -0.65f) * WeaponRecoil(ESurvivalItem::Sidearm));
 }
 
 bool ASurvivalCharacter::FireRound(const FVector& Origin, double Range, bool bRifleRound)
@@ -1079,7 +1102,7 @@ void ASurvivalCharacter::FireRifle()
     --RifleAmmo;
     CurrentRifleAnimation = nullptr;
     RifleReadyAt = Now + (RifleFire ? RifleFire->GetPlayLength() : 2.0);
-    AddControllerPitchInput(-1.35f);
+    AddControllerPitchInput(-1.35f * WeaponRecoil(ESurvivalItem::Rifle));
     if (USoundBase* Sound = LoadObject<USoundBase>(nullptr,
         TEXT("/Game/Audio/Weapons/SW_SidearmShot.SW_SidearmShot"), nullptr, LOAD_NoWarn))
     {
@@ -1316,6 +1339,8 @@ void ASurvivalCharacter::SetInventoryOpen(bool bOpen)
         return;
     }
     bInventoryOpen = bOpen;
+    InspectedWeapon = ESurvivalItem::None;
+    ShowWeaponPortrait(false);
     bAimHeld = false;
     bSprintHeld = false;
     if (bOpen)
@@ -1462,7 +1487,7 @@ bool ASurvivalCharacter::MoveMenuItem(bool bFromBelt, int32 From, bool bToBelt, 
         return MovePackStack(From, To, false);
     }
     const ESurvivalItem Item = bFromBelt ? Hotbar[From] : GetPackItem(From);
-    if (Item == ESurvivalItem::None || SurvivalItemHasQuality(Item) || (!bFromBelt && GetItemCount(Item) <= 0))
+    if (Item == ESurvivalItem::None || SurvivalItemHasQuality(Item) || (bToBelt && !CanQuickSlot(Item)) || (!bFromBelt && GetItemCount(Item) <= 0))
     {
         return false;
     }
@@ -1548,6 +1573,7 @@ bool ASurvivalCharacter::SwapRiflePart(int32 PackSlot)
     }
     // The removed part takes the cell the new part came from.
     Cell.Quality = RifleAssembly.SwapPart(Slot, Cell.Quality);
+    RefreshAttachments();
     SetSelectedPackSlot(PackSlot);
     return true;
 }
@@ -1687,7 +1713,7 @@ void ASurvivalCharacter::ChooseHotbarSlot(int32 Slot)
     if (bInventoryOpen)
     {
         if (SelectedInventoryItem != ESurvivalItem::None
-            && (GetItemCount(SelectedInventoryItem) <= 0 || SurvivalItemHasQuality(SelectedInventoryItem)))
+            && (GetItemCount(SelectedInventoryItem) <= 0 || !CanQuickSlot(SelectedInventoryItem)))
         {
             return;
         }
@@ -1703,6 +1729,7 @@ void ASurvivalCharacter::ChooseHotbarSlot(int32 Slot)
     }
     ActiveHotbarSlot = Slot;
     UpdateSidearmView();
+    RefreshAttachments();
 }
 
 bool ASurvivalCharacter::CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const
@@ -1755,6 +1782,10 @@ void ASurvivalCharacter::ChangeItemCount(ESurvivalItem Item, int32 Delta)
     case ESurvivalItem::Stone: Inventory.Stone += Delta; break;
     case ESurvivalItem::Cloth: Items.Cloth += Delta; break;
     case ESurvivalItem::Rounds: Items.Rounds += Delta; break;
+    case ESurvivalItem::RifleRounds: Items.RifleRounds += Delta; break;
+    case ESurvivalItem::BuilderGuide: Items.BuilderGuides += Delta; break;
+    case ESurvivalItem::ScavengerNotes: Items.ScavengerNotes += Delta; break;
+    case ESurvivalItem::DressingSchematic: Items.DressingSchematics += Delta; break;
     case ESurvivalItem::TimberDoor: Items.TimberDoors += Delta; break;
     default: checkNoEntry(); break;
     }
@@ -1943,4 +1974,283 @@ void ASurvivalCharacter::Dismantle()
             Chunk->DamageFinished(Hit, Piece->Health);
         }
     }
+}
+
+void ASurvivalCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out) const
+{
+    Super::GetLifetimeReplicatedProps(Out);
+    DOREPLIFETIME_CONDITION(ASurvivalCharacter, OwnedGear, COND_OwnerOnly);
+    DOREPLIFETIME(ASurvivalCharacter, WornGear);
+}
+
+int32 ASurvivalCharacter::GearCount(int32 Index) const
+{
+    int32 Count = 0;
+    for (int32 Id : OwnedGear) Count += (Id == Index);
+    return Count;
+}
+
+void ASurvivalCharacter::ServerToggleGear_Implementation(int32 Index)
+{
+    if (HealthPoints <= 0 || !OwnedGear.Contains(Index) || Index < 0 || Index >= UE_ARRAY_COUNT(SurvivalGear))
+        return;
+    const bool bRemove = WornGear.Contains(Index);
+    WornGear.RemoveAll([Index](int32 Other) {
+        return FCString::Strcmp(SurvivalGear[Other].Slot, SurvivalGear[Index].Slot) == 0;
+    });
+    if (!bRemove) WornGear.Add(Index);
+    RefreshGear();
+    ForceNetUpdate();
+}
+
+void ASurvivalCharacter::RefreshGear()
+{
+    for (UStaticMeshComponent* Part : GearMeshes)
+        if (Part) Part->DestroyComponent();
+    GearMeshes.Reset();
+    struct FFit { const TCHAR* Slot; const TCHAR* Bone; FVector Size; FVector Offset; };
+    static const FFit Fits[] = {
+        {TEXT("Helmet"), TEXT("Head"), {25,25,20}, {0,0,16}},
+        {TEXT("Face"), TEXT("Head"), {16,21,20}, {7,0,7}},
+        {TEXT("Eyes"), TEXT("Head"), {12,22,9}, {9,0,12}},
+        {TEXT("Torso"), TEXT("Spine1"), {34,52,54}, {0,0,3}},
+        {TEXT("Body"), TEXT("Hips"), {38,54,130}, {0,0,-10}},
+        {TEXT("Vest"), TEXT("Spine1"), {35,47,43}, {0,0,4}},
+        {TEXT("Legs"), TEXT("Hips"), {32,43,85}, {0,0,-36}},
+        {TEXT("Belt"), TEXT("Hips"), {32,42,9}, {0,0,2}},
+        {TEXT("Hands"), TEXT("RightHand"), {14,12,18}, {0,0,0}}
+    };
+    for (int32 Index : WornGear)
+    {
+        if (Index < 0 || Index >= UE_ARRAY_COUNT(SurvivalGear)) continue;
+        const auto& Gear = SurvivalGear[Index];
+        const FFit* Fit = Algo::FindByPredicate(Fits, [&Gear](const FFit& F){ return FCString::Strcmp(F.Slot, Gear.Slot) == 0; });
+        if (!Fit) continue;
+        const TCHAR* MeshId = Gear.MeshOverride ? Gear.MeshOverride : Gear.Id;
+        FString Path = FString::Printf(TEXT("/Game/Art/Equipment/%s/SM_%s.SM_%s"), MeshId, MeshId, MeshId);
+        UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *Path);
+            if (!Mesh) continue;
+        UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(this);
+        Part->SetStaticMesh(Mesh);
+        Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        Part->SetCanEverAffectNavigation(false);
+        Part->RegisterComponent();
+        const FVector Scale = Fit->Size / (Mesh->GetBounds().BoxExtent * 2).ComponentMax(FVector(0.01));
+        const FQuat Rotation = GetActorQuat();
+        Part->SetWorldTransform(FTransform(Rotation, GetMesh()->GetSocketLocation(Fit->Bone)
+            + Rotation.RotateVector(Fit->Offset - Mesh->GetBounds().Origin * Scale), Scale));
+        Part->AttachToComponent(GetMesh(), FAttachmentTransformRules::KeepWorldTransform, Fit->Bone);
+        Part->SetOwnerNoSee(!bThirdPerson && !bInventoryOpen);
+        GearMeshes.Add(Part);
+    }
+    if (bInventoryOpen) ShowWeaponPortrait(InspectedWeapon != ESurvivalItem::None);
+}
+
+void ASurvivalCharacter::ShowWeaponPortrait(bool bWeapon)
+{
+    PortraitCapture->bCaptureEveryFrame = bInventoryOpen;
+    GetMesh()->SetOwnerNoSee(!bThirdPerson && !bInventoryOpen);
+    for (UStaticMeshComponent* Part : GearMeshes) Part->SetOwnerNoSee(!bThirdPerson && !bInventoryOpen);
+    InspectionWeapon->SetVisibility(bInventoryOpen && bWeapon);
+    if (!bInventoryOpen) { RefreshAttachments(); return; }
+    if (!PortraitTexture)
+    {
+        PortraitTexture = NewObject<UTextureRenderTarget2D>(this);
+        PortraitTexture->ClearColor = FLinearColor(0.035f,0.045f,0.05f);
+        PortraitTexture->InitCustomFormat(384, 512, PF_B8G8R8A8, false);
+        PortraitCapture->TextureTarget = PortraitTexture;
+    }
+    PortraitCapture->ClearShowOnlyComponents();
+    FVector Focus = GetMesh()->Bounds.Origin;
+    double Distance = 225;
+    UStaticMeshComponent* WeaponMesh = InspectedWeapon == ESurvivalItem::Sidearm && Sidearm ? Sidearm->GetWeaponMesh() : RifleWorldMesh.Get();
+    if (bWeapon && WeaponMesh && WeaponMesh->GetStaticMesh())
+    {
+        InspectionWeapon->SetStaticMesh(WeaponMesh->GetStaticMesh());
+        InspectionWeapon->SetRelativeRotation(FRotator(0,90,0));
+        PortraitCapture->ShowOnlyComponent(InspectionWeapon);
+        Focus = InspectionWeapon->Bounds.Origin;
+        Distance = FMath::Max(25., InspectionWeapon->Bounds.SphereRadius * 3.5);
+    }
+    else
+    {
+        PortraitCapture->ShowOnlyComponent(GetMesh());
+        for (UStaticMeshComponent* Part : GearMeshes) PortraitCapture->ShowOnlyComponent(Part);
+    }
+    const FVector Direction = (GetActorForwardVector() + .24 * GetActorRightVector()).GetSafeNormal();
+    PortraitCapture->FOVAngle = 45;
+    PortraitCapture->SetWorldLocationAndRotation(Focus + Direction * Distance, (-Direction).Rotation());
+    RefreshAttachments();
+    PortraitCapture->CaptureSceneDeferred();
+}
+
+bool ASurvivalCharacter::CanQuickSlot(ESurvivalItem Item)
+{
+    return Item == ESurvivalItem::Rifle || Item == ESurvivalItem::Sidearm || Item == ESurvivalItem::Food
+        || Item == ESurvivalItem::Water || Item == ESurvivalItem::Bandage || Item == ESurvivalItem::FieldDressing;
+}
+
+bool ASurvivalCharacter::SplitSelection()
+{
+    const int32 From = SelectedPackSlot;
+    if (!bInventoryOpen || !Pack.IsValidIndex(From) || Pack[From].Count < 2) return false;
+    const int32 To = FindFreePackCell();
+    return To != INDEX_NONE && MovePackStack(From, To, true);
+}
+
+void ASurvivalCharacter::ServerDropGear_Implementation(int32 Index)
+{
+    if (HealthPoints <= 0 || !OwnedGear.Contains(Index)) return;
+    FSurvivalLoot Loot;
+    Loot.GearIndex = Index;
+    if (!ASurvivalSupplyCrate::Drop(*this, Loot)) return;
+    OwnedGear.RemoveSingle(Index);
+    if (!OwnedGear.Contains(Index) && WornGear.Remove(Index)) RefreshGear();
+}
+
+namespace
+{
+int32* LooseItemCount(FSurvivalLoot& Loot, ESurvivalItem Item)
+{
+    switch (Item)
+    {
+    case ESurvivalItem::Timber: return &Loot.Materials.Timber;
+    case ESurvivalItem::Stone: return &Loot.Materials.Stone;
+    case ESurvivalItem::Food: return &Loot.Items.Food;
+    case ESurvivalItem::Water: return &Loot.Items.Water;
+    case ESurvivalItem::Cloth: return &Loot.Items.Cloth;
+    case ESurvivalItem::Bandage: return &Loot.Items.Bandages;
+    case ESurvivalItem::FieldDressing: return &Loot.Items.FieldDressings;
+    case ESurvivalItem::Rounds: return &Loot.Items.Rounds;
+    case ESurvivalItem::RifleRounds: return &Loot.Items.RifleRounds;
+    case ESurvivalItem::TimberDoor: return &Loot.Items.TimberDoors;
+    case ESurvivalItem::BuilderGuide: return &Loot.Items.BuilderGuides;
+    case ESurvivalItem::ScavengerNotes: return &Loot.Items.ScavengerNotes;
+    case ESurvivalItem::DressingSchematic: return &Loot.Items.DressingSchematics;
+    default: return nullptr;
+    }
+}
+}
+
+bool ASurvivalCharacter::CanDropSelection() const
+{
+    FSurvivalLoot Loot;
+    return HasAuthority() && bInventoryOpen && Pack.IsValidIndex(SelectedPackSlot)
+        && !Pack[SelectedPackSlot].IsEmpty() && LooseItemCount(Loot, Pack[SelectedPackSlot].Item);
+}
+
+void ASurvivalCharacter::DropSelection()
+{
+    if (!CanDropSelection()) return;
+    const auto Cell = Pack[SelectedPackSlot];
+    FSurvivalLoot Loot;
+    const int32 Amount = FMath::Min(Cell.Count, GetItemCount(Cell.Item));
+    *LooseItemCount(Loot, Cell.Item) = Amount;
+    if (Amount > 0 && ASurvivalSupplyCrate::Drop(*this, Loot))
+    {
+        ChangeItemCount(Cell.Item, -Amount);
+        Pack[SelectedPackSlot] = {};
+        SyncPack();
+        SetSelectedInventoryItem(ESurvivalItem::None);
+    }
+}
+
+bool ASurvivalCharacter::CanInspectWeapon(ESurvivalItem Item) const
+{
+    if (!bInventoryOpen || HealthPoints <= 0) return false;
+    if (Item == ESurvivalItem::Sidearm) return bHasSidearm && !IsReloading();
+    return (Item == ESurvivalItem::Rifle || SurvivalItemHasQuality(Item)) && CanModifyRifle();
+}
+
+bool ASurvivalCharacter::HasWeaponMod(ESurvivalItem Weapon, int32 Mod) const
+{
+    return Mod >= 0 && Mod < UE_ARRAY_COUNT(WeaponMods) && (InstalledMods.FindRef(Weapon) & (1 << Mod));
+}
+
+bool ASurvivalCharacter::CanToggleWeaponMod(ESurvivalItem Weapon, int32 Mod) const
+{
+    if (!CanInspectWeapon(Weapon) || Mod < 0 || Mod >= UE_ARRAY_COUNT(WeaponMods)) return false;
+    const auto Family = Weapon == ESurvivalItem::Sidearm ? EWeaponFamily::Sidearm : EWeaponFamily::Rifle;
+    return (WeaponMods[Mod].Families & static_cast<uint8>(Family)) &&
+        (HasWeaponMod(Weapon, Mod) || GetItemCount(Mod == 0 ? ESurvivalItem::Cloth : ESurvivalItem::Stone) > 0);
+}
+
+void ASurvivalCharacter::ToggleWeaponMod(ESurvivalItem Weapon, int32 Mod)
+{
+    if (!CanToggleWeaponMod(Weapon, Mod)) return;
+    const bool bRemove = HasWeaponMod(Weapon, Mod);
+    ChangeItemCount(Mod == 0 ? ESurvivalItem::Cloth : ESurvivalItem::Stone, bRemove ? 1 : -1);
+    InstalledMods.FindOrAdd(Weapon) ^= 1 << Mod;
+    SyncPack();
+    RefreshAttachments();
+}
+
+float ASurvivalCharacter::WeaponRecoil(ESurvivalItem Weapon) const
+{
+    float Scale = 1;
+    for (int32 Index = 0; Index < UE_ARRAY_COUNT(WeaponMods); ++Index)
+        if (HasWeaponMod(Weapon,Index)) Scale *= WeaponMods[Index].RecoilMultiplier;
+    return Scale;
+}
+
+void ASurvivalCharacter::RefreshAttachments()
+{
+    for (UStaticMeshComponent* Part : AttachmentMeshes)
+        if (Part) Part->DestroyComponent();
+    AttachmentMeshes.Reset();
+    const bool bPreview = bInventoryOpen && InspectedWeapon != ESurvivalItem::None;
+    const ESurvivalItem Weapon = bPreview ? InspectedWeapon : Hotbar[ActiveHotbarSlot];
+    const bool bRifle = Weapon == ESurvivalItem::Rifle;
+    if ((!bRifle && Weapon != ESurvivalItem::Sidearm) || (bInventoryOpen && !bPreview) || bBuildMode || HealthPoints <= 0) return;
+    UStaticMeshComponent* WorldMesh = bRifle ? RifleWorldMesh.Get() : Sidearm ? Sidearm->GetWeaponMesh() : nullptr;
+    UStaticMeshComponent* Model = bPreview ? InspectionWeapon.Get() : WorldMesh;
+    if (!Model || !Model->GetStaticMesh()) return;
+    const FBoxSphereBounds Bounds = Model->GetStaticMesh()->GetBounds();
+    const FVector Axis = Bounds.BoxExtent.X >= Bounds.BoxExtent.Y ? FVector::ForwardVector : FVector::RightVector;
+    const double Half = FMath::Max(Bounds.BoxExtent.X, Bounds.BoxExtent.Y);
+    const double Unit = 2 * Half / (bRifle ? 100.0 : 24.0);
+    auto Mount = [&](const FVector& Size, double Along, double Height)
+    {
+        const bool bViewmodel = !bPreview && !bThirdPerson && (bRifle ? RifleHold != nullptr : bViewmodelReady);
+        USceneComponent* Parent = Model;
+        FName Bone = NAME_None;
+        FVector Location = Bounds.Origin + Axis * (Along*Half) + FVector::UpVector * (Height*Bounds.BoxExtent.Z);
+        FVector Dimensions = Size * Unit;
+        if (bViewmodel)
+        {
+            Parent = bRifle ? RifleViewmodel.Get() : SidearmViewmodel.Get();
+            Bone = bRifle ? SniperMuzzle : ViewmodelGripBone;
+            Location = FVector((Along - (bRifle ? 1.0 : 0.0)) * (bRifle ? 44.3 : 12.0),0, Height*4.0)
+                / FMath::Max(.001, Parent->GetComponentScale().GetAbsMax());
+            Dimensions = Size / FMath::Max(.001, Parent->GetComponentScale().GetAbsMax());
+        }
+        auto* Part = NewObject<UStaticMeshComponent>(this);
+        Part->SetupAttachment(Parent, Bone);
+        Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        Part->SetCanEverAffectNavigation(false);
+        Part->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Engine/BasicShapes/Cube.Cube")));
+        if (UMaterialInterface* Finish = LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Art/Crossroads/Building/M_DefenseSteel.M_DefenseSteel")))
+            Part->SetMaterial(0,Finish);
+        Part->SetRelativeLocation(Location);
+        Part->SetRelativeRotation(bViewmodel ? FRotator::ZeroRotator : Axis.Rotation());
+        Part->SetRelativeScale3D(Dimensions / 100);
+        Part->SetVisibleInSceneCaptureOnly(bPreview);
+        Part->SetOnlyOwnerSee(bViewmodel);
+        Part->RegisterComponent();
+        AttachmentMeshes.Add(Part);
+        if (bPreview) PortraitCapture->ShowOnlyComponent(Part);
+    };
+    for (int32 Index=0; Index<UE_ARRAY_COUNT(WeaponMods); ++Index)
+        if (HasWeaponMod(Weapon,Index))
+        {
+            const auto& Mod = WeaponMods[Index];
+            Mount(Mod.Dimensions, Mod.AlongWeapon, Mod.Height);
+        }
+    if (bRifle)
+        for (int32 Slot=0; Slot<FSurvivalRifle::PartCount; ++Slot)
+        {
+            const int32 Quality = RifleAssembly.GetPartQuality(Slot);
+            if (Quality != FSurvivalRifle::FactoryQuality)
+                Mount(FVector(3 + Quality * .055, 5, 5), -.72 + .43*Slot, .25);
+        }
 }
