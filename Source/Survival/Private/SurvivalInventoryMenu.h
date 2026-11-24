@@ -38,6 +38,7 @@ private:
     TSharedRef<SWidget> MakeRecipeDetails();
     FText GetIngredientText() const;
 
+    TSharedPtr<SSearchBox> RecipeFilterBox;
     FString SearchText;
     FString Category;
     int32 SelectedRecipe = INDEX_NONE;
@@ -46,7 +47,7 @@ private:
     void SetWorkbench(bool bOpen);
     bool bModifying = false;
     enum class EPage { Pack, Crafting, Skills, Gear };
-    EPage Page = EPage::Pack;
+    EPage Page = EPage::Crafting;
     int32 TrainingTree = 0;
     TSharedPtr<SSearchBox> TrainingFilterBox;
     TSharedPtr<SScrollBox> TrainingRows;

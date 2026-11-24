@@ -1519,14 +1519,14 @@ bool ASurvivalCharacter::MovePackStack(int32 From, int32 To, bool bHalf)
     }
     FSurvivalPackCell& Source = Pack[From];
     FSurvivalPackCell& Target = Pack[To];
-    const int32 Limit = SurvivalItemMaxStack(Source.Item);
+    const int32 Limit = Source.GearIndex == INDEX_NONE ? SurvivalItemMaxStack(Source.Item) : MAX_int32;
     int32 Moved = bHalf ? (Source.Count + 1) / 2 : Source.Count;
     if (Target.IsEmpty())
     {
         Target = Source;
         Target.Count = Moved;
     }
-    else if (Target.Item == Source.Item && Limit > 1)
+    else if (Target.Item == Source.Item && Target.GearIndex == Source.GearIndex && Limit > 1)
     {
         Moved = FMath::Min(Moved, Limit - Target.Count);
         if (Moved <= 0)
@@ -1647,6 +1647,33 @@ void ASurvivalCharacter::RemoveFromPack(ESurvivalItem Item, int32 Amount)
 // The pack only decides where those totals sit: new items top up partial stacks first, spending empties the last stack.
 void ASurvivalCharacter::SyncPack()
 {
+    // OwnedGear includes worn garments. Only spare copies occupy backpack cells.
+    int32 Remaining[UE_ARRAY_COUNT(SurvivalGear)]{};
+    for (int32 Id : OwnedGear)
+        if (Id >= 0 && Id < UE_ARRAY_COUNT(SurvivalGear)) ++Remaining[Id];
+    for (int32 Id : WornGear)
+        if (Id >= 0 && Id < UE_ARRAY_COUNT(SurvivalGear) && Remaining[Id] > 0) --Remaining[Id];
+    for (auto& Cell : Pack)
+    {
+        if (Cell.GearIndex == INDEX_NONE) continue;
+        Cell.Count = FMath::Min(Cell.Count, Remaining[Cell.GearIndex]);
+        Remaining[Cell.GearIndex] -= Cell.Count;
+        if (Cell.Count == 0) Cell = {};
+    }
+    for (int32 Id = 0; Id < UE_ARRAY_COUNT(Remaining); ++Id)
+    {
+        if (Remaining[Id] == 0) continue;
+        FSurvivalPackCell* Existing = Pack.FindByPredicate([Id](const auto& Cell){ return Cell.GearIndex == Id; });
+        if (Existing) Existing->Count += Remaining[Id];
+        else
+        {
+            const int32 Slot = FindFreePackCell();
+            if (Slot == INDEX_NONE) break;
+            Pack[Slot].GearIndex = Id;
+            Pack[Slot].Count = Remaining[Id];
+        }
+    }
+
     for (int32 Slot = 0; Slot < FSurvivalRifle::PartCount; ++Slot)
     {
         const ESurvivalItem Part = static_cast<ESurvivalItem>(static_cast<int32>(ESurvivalItem::RifleStock) + Slot);
@@ -1990,15 +2017,15 @@ int32 ASurvivalCharacter::GearCount(int32 Index) const
     return Count;
 }
 
-void ASurvivalCharacter::ServerToggleGear_Implementation(int32 Index)
+void ASurvivalCharacter::ServerSetGearEquipped_Implementation(int32 Index, bool bEquip)
 {
     if (HealthPoints <= 0 || !OwnedGear.Contains(Index) || Index < 0 || Index >= UE_ARRAY_COUNT(SurvivalGear))
         return;
-    const bool bRemove = WornGear.Contains(Index);
+    if (WornGear.Contains(Index) == bEquip) return;
     WornGear.RemoveAll([Index](int32 Other) {
         return FCString::Strcmp(SurvivalGear[Other].Slot, SurvivalGear[Index].Slot) == 0;
     });
-    if (!bRemove) WornGear.Add(Index);
+    if (bEquip) WornGear.Add(Index);
     RefreshGear();
     ForceNetUpdate();
 }
@@ -2040,19 +2067,21 @@ void ASurvivalCharacter::RefreshGear()
         Part->SetWorldTransform(FTransform(Rotation, GetMesh()->GetSocketLocation(Fit->Bone)
             + Rotation.RotateVector(Fit->Offset - GearMesh->GetBounds().Origin * Scale), Scale));
         Part->AttachToComponent(GetMesh(), FAttachmentTransformRules::KeepWorldTransform, Fit->Bone);
-        Part->SetOwnerNoSee(!bThirdPerson && !bInventoryOpen);
+        Part->SetOwnerNoSee(!bThirdPerson && !bCharacterPortrait);
         GearMeshes.Add(Part);
     }
-    if (bInventoryOpen) ShowWeaponPortrait(InspectedWeapon != ESurvivalItem::None);
+    if (bInventoryOpen) ShowWeaponPortrait(InspectedWeapon != ESurvivalItem::None, bCharacterPortrait);
 }
 
-void ASurvivalCharacter::ShowWeaponPortrait(bool bWeapon)
+void ASurvivalCharacter::ShowWeaponPortrait(bool bWeapon, bool bCharacter)
 {
-    PortraitCapture->bCaptureEveryFrame = bInventoryOpen;
-    GetMesh()->SetOwnerNoSee(!bThirdPerson && !bInventoryOpen);
-    for (UStaticMeshComponent* Part : GearMeshes) Part->SetOwnerNoSee(!bThirdPerson && !bInventoryOpen);
+    bCharacterPortrait = bInventoryOpen && bCharacter;
+    const bool bCapture = bInventoryOpen && (bWeapon || bCharacterPortrait);
+    PortraitCapture->bCaptureEveryFrame = bCapture;
+    GetMesh()->SetOwnerNoSee(!bThirdPerson && !bCharacterPortrait);
+    for (UStaticMeshComponent* Part : GearMeshes) Part->SetOwnerNoSee(!bThirdPerson && !bCharacterPortrait);
     InspectionWeapon->SetVisibility(bInventoryOpen && bWeapon);
-    if (!bInventoryOpen) { RefreshAttachments(); return; }
+    if (!bCapture) { RefreshAttachments(); return; }
     if (!PortraitTexture)
     {
         PortraitTexture = NewObject<UTextureRenderTarget2D>(this);
@@ -2072,7 +2101,7 @@ void ASurvivalCharacter::ShowWeaponPortrait(bool bWeapon)
         Focus = InspectionWeapon->Bounds.Origin;
         Distance = FMath::Max(25., InspectionWeapon->Bounds.SphereRadius * 3.5);
     }
-    else
+    else if (bCharacterPortrait)
     {
         PortraitCapture->ShowOnlyComponent(GetMesh());
         for (UStaticMeshComponent* Part : GearMeshes) PortraitCapture->ShowOnlyComponent(Part);
