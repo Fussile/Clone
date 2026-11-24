@@ -141,6 +141,8 @@ def place():
         prop_art["apply"](source_art / f"SM_{name}.glb", mesh, scratch, prepare_art, assets)
     prop_art["apply"](source_art / "Parish" / "SM_ParishUpperChurch.glb", parish_art["ParishUpperChurch"],
                       scratch, prepare_art, assets)
+    for name in ("SubstationHouse", "SubstationSwitchgear"):
+        prop_art["apply"](source_art / f"SM_{name}.glb", district_meshes[name], scratch, prepare_art, assets)
     military_crate = prop_art["apply"](source_art / "SM_ScavengeCrate.glb", crate_mesh, scratch, prepare_art, assets)
     unreal.log("Crossroads: restored embedded textures for pumps, crates, shelving and office props.")
     for mesh in (warehouse_mesh, shelf_mesh, desk_mesh, bed_mesh, crate_mesh, pump_mesh,
@@ -1128,8 +1130,11 @@ def place():
         } and site["id"] not in {
             "stadium", "hangars", "city-hospital", "warehouses", "city-nightlife"
         } else None
+        if site["id"] in {"airport", "hangars", "warehouses", "airport-services"}:
+            resized_site = key
         if site["id"] not in {"stadium", "university", "city-police", "city-hall"}:
-            box(key+"_slab", name+" slab", x, y, z-.6, w, d, .8, ground=True, material=concrete)
+            box(key+"_slab", name+" slab", x, y, z-.6, w, d, .8, ground=True,
+                material=style_materials["grass"] if site["kind"] == "suburbs" else concrete)
         # Leave a walkable pad at the front, including the initial spawn.
         if site["id"] == "stadium":
             new_key = key+"_community"
@@ -1144,7 +1149,16 @@ def place():
         elif site["id"] == "hangars":
             new_key = key+"_operations"
             landmarks["aircraft_hangar"](box, landmark_mesh, door, cache, new_key,
-                                          x, y, z+.215, concrete)
+                                          x-45, y, z+.215, concrete)
+            landmarks["aircraft_hangar"](box, landmark_mesh, door, cache, new_key+"_east",
+                                         x+45, y, z+.215, concrete)
+            taxi = plan["facilities"]["airport"]
+            taxi_y = taxi["y"]+airfield_dimensions["TAXIWAY_Y"]
+            for side in (-1, 1):
+                hx = x+side*45
+                ramp(f"{new_key}_taxilane_{side}", "Maintenance apron taxi lane", hx, taxi_y, y-32,
+                     taxi["datum"]+(hx-taxi["x"])*taxi["slope"], z+.21, 42, concrete)
+            sign(new_key+"_sign", "JOINT AIR OPERATIONS", x, y+32, z+3)
             migrate_landmark(key, new_key, (key+"_slab",))
         elif site["id"] in {"city-police", "city-hall", "university"}:
             new_key = key+"_landmark"
@@ -1177,8 +1191,48 @@ def place():
             place_hospital(key, x, y, z+.2)
         elif site["id"] == "warehouses":
             resized_site = key
-            place_warehouse(key, x, y, z+.2)
+            district = key+"_distribution"
+            for row in (-1, 1):
+                for bay in (-1, 0, 1):
+                    hall = f"{district}_{row}_{bay}"
+                    hx, hy = x+bay*48, y+row*22
+                    place_warehouse(hall, hx, hy, z+.2)
+                    dress_industrial(hall, hx, hy, z+.2, 44, 40, warehouse=True)
+                    sign(hall+"_sign", f"DISPATCH  {1+bay+1+(3 if row>0 else 0):02}", hx,
+                         hy-3.61*warehouse_depth_scale, z+.2+3.69)
+            migrate_landmark(key, district, (key+"_slab",))
             remove_blockout(key)
+        elif site["id"] in {"west-entertainment", "east-entertainment"}:
+            district = key+"_quarter"
+            venues = (("The Playhouse", "Stage Door Cafe"), ("Record Exchange", "Listening Room"),
+                      ("The Comedy Cellar", "Late Show Diner"), ("Arcade Hall", "Bowling Club"))
+            if site["id"] == "east-entertainment":
+                venues = (("Picture House", "Matinee Cafe"), ("Music Hall", "Backstage Bar"),
+                          ("Jazz Club", "Midnight Kitchen"), ("East Market", "Corner Bistro"))
+            for i, pair in enumerate(venues):
+                vx, vy = x+(-24 if i%2==0 else 24), y+(-17 if i<2 else 17)
+                block = f"{district}_{i}"
+                site_tools["nightlife_layout"](box, door, cache, encounter, sign, storefront_window,
+                                               block, vx, vy, z+.2, style_materials, pair)
+                for side in (-1, 1):
+                    facade(f"{block}_skin_{side}", "Storefront", vx+side*7.8, vy+1.7, z+.2,
+                           13.6, 12, 3.5, 0, 2.5, 2.8, bundled=True)
+            box(district+"_street", "Entertainment quarter street", x, y, z+.2, w, 9, .06,
+                ground=True, material=asphalt)
+            migrate_landmark(key, district, (key+"_slab",))
+        elif site["kind"] == "suburbs":
+            district = key+"_residential"
+            for row in (-1, 1):
+                for lot in range(4):
+                    hx, hy = x+(lot-1.5)*23, y+row*15
+                    for side in (-1, 1):
+                        storefront_window(f"{district}_{row}_{lot}_bay_{side}", hx+side*4.6, hy-6.3, z+.2)
+                    interiors["place_site"](box, door, ramp, cache, encounter, sign, storefront_window,
+                        treatment_bed, furniture, site_tools["building_shell"], site_tools["double_door"],
+                        f"{district}_{row}_{lot}", site, hx, hy, z+.2,
+                        20, 15, style_materials, scatter_caches)
+            box(district+"_lane", "Residential lane", x, y, z+.2, w, 7, .06, ground=True, material=asphalt)
+            migrate_landmark(key, district, (key+"_slab",))
         elif site["id"] == "city-nightlife":
             site_tools["nightlife_layout"](box, door, cache, encounter, sign, storefront_window,
                                           key, x, y, z+.2, style_materials)
@@ -1261,7 +1315,7 @@ def place():
                        0, 3.15, 3.3, bundled=True)
             remove_generated(key+"_shell", key+"_trim", key+"_portico_roof",
                              *(f"{key}_portico_{i}" for i in range(4)))
-        if site["kind"] == "industry" and site["id"] != "hangars":
+        if site["kind"] == "industry" and site["id"] not in {"hangars", "warehouses"}:
             dress_industrial(key, x, y, z+.2, w*.90, d*.86, warehouse=site["id"] == "warehouses")
         if site["id"] == "city-towers":
             annex_x = x+19.5
@@ -1281,7 +1335,8 @@ def place():
             positions, weights = city_cache_layouts[site["id"]]
             scatter_caches(key+"_district", x, y, z+.2, positions, weights, 95)
 
-        if site["id"] in {"city-towers", "city-hospital", "city-hall", "university", "city-police"}:
+        if site["id"] in {"city-towers", "city-hospital", "city-hall", "university", "city-police", "airport", "hangars",
+                          "east-entertainment", "west-entertainment"}:
             remove_generated(*(tag for tag in actor_tags if tag.startswith(key+"_") and tag not in site_keys))
         if site["id"] in {"winter-village", "hill-town", "north-lowlands"}:
             landmark_mesh(key+"_bus_stop", "Weathered roadside bus shelter", "WeatheredBusStop",
@@ -1312,6 +1367,7 @@ def place():
             migrate_landmark(key, key+"_Laitse")
     resized_site = None
     for site in plan["substations"]:
+        resized_site = "CrossroadsUtility_"+site["id"]
         utility["stamp_substation"](site, box, district_mesh, district_mesh, cache, sign, concrete)
     transmission = plan["grid"]
     for key, pole in transmission["poles"].items():

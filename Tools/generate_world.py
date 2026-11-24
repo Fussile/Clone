@@ -7,7 +7,7 @@ from pathlib import Path
 import struct
 import zlib
 
-from airfield_layout import facilities
+from airfield_layout import facilities, RUNWAY_HALF, RUNWAY_Y, TAXIWAY_Y
 from civic_landmarks import CAMPUS_SIZE
 from communications_layout import bake_checkpoints, bake_communications
 from region_route import bake_route
@@ -112,10 +112,13 @@ def generate(seed):
                         for span, _, fault in fissures for a, b in fault)
                 and all(math.hypot(px-sx, py-sy) > clearance + sr for sx, sy, sr, _ in plots))
 
+    parcel_sizes = {"university": CAMPUS_SIZE, "warehouses": (154, 92), "hangars": (180, 90),
+                    "west-entertainment": (106, 74), "east-entertainment": (106, 74)}
+    pads = []
     for site in plan["sites"]:
         if site["kind"] not in FOOTPRINTS:
             continue
-        w, d = CAMPUS_SIZE if site["id"] == "university" else FOOTPRINTS[site["kind"]]
+        w, d = parcel_sizes.get(site["id"], (98, 64) if site["kind"] == "suburbs" else FOOTPRINTS[site["kind"]])
         clearance = math.hypot(w, d)/2 + 5
         x, y = site["xy_m"]
 
@@ -129,6 +132,7 @@ def generate(seed):
             raise ValueError(f"No dry buildable plot near {site['id']}")
         px, py = position
         z = round(ground_height(px, py), 2)
+        pads.append((px, py, w/2, d/2, z))
         plots.append((px, py, clearance, z))
         site.update(plot_xy_m=[px, py], footprint_m=[w, d], foundation_z_m=z,
                     construction="shared_kit" if site["kind"] in {"suburbs", "ranch", "village", "services"}
@@ -147,6 +151,9 @@ def generate(seed):
                 terrain={"resolution": RESOLUTION, "xyz_scale_cm": [width*100/(RESOLUTION-1),
                                                                   depth*100/(RESOLUTION-1), 100]})
 
+    lot_cells = {}
+    airside = None
+
     def height(x, y):
         base = ground_height(x, y)
         river = river_distance(x,y)
@@ -157,14 +164,31 @@ def generate(seed):
         for span, drop, fault in fissures:
             gap = min(segment_distance(x,y,a,b) for a,b in fault)
             base -= drop*max(0.0, 1-gap/span)**2
-        for px, py, clearance, z in plots:
-            distance = math.hypot(x-px, y-py)
-            blend = max(0., min(1., (clearance+28-distance)/22))
-            base += (z-base)*blend
+        for px, py, half_w, half_d, z in pads:
+            dx, dy = abs(x-px)-half_w, abs(y-py)-half_d
+            if max(dx,dy) < 34:
+                distance = math.hypot(max(0, dx), max(0, dy))
+                base += (z-base)*(1-smoothstep((distance-8)/26))
+        # Grade the foundation itself, then taper the fill into its street setback.
+        for cx, cy, cs, sn, hw, hd, top in lot_cells.get((int(x//64), int(y//64)), ()):
+            dx, dy = x-cx, y-cy
+            edge = math.hypot(max(0, abs(dx*cs+dy*sn)-hw), max(0, abs(dy*cs-dx*sn)-hd))
+            if edge < 3:
+                base += (top-base)*(1-smoothstep(edge/3))
+        if airside:
+            dx, dy = x-airside["x"], y-airside["y"]
+            if abs(dx) < RUNWAY_HALF+42 and RUNWAY_Y-65 < dy < -10:
+                runway_edge = max(abs(dx)-RUNWAY_HALF, abs(dy-RUNWAY_Y)-22.5)
+                taxi_edge = max(abs(dx)-900, abs(dy-TAXIWAY_Y)-11.5)
+                infield_edge = max(abs(dx)-900, RUNWAY_Y-dy, dy-TAXIWAY_Y)
+                blend = 1-smoothstep((min(runway_edge, taxi_edge, infield_edge)-8)/30)
+                grade = airside["datum"]+dx*airside["slope"]-.14
+                base += (grade-base)*blend
         return base
 
     sites = {site["id"]: site for site in plan["sites"]}
     plan["facilities"] = facilities(sites["airport"], sites["stadium"], height)
+    airside = plan["facilities"]["airport"]
     # Keep the established POI pads and landscape. Widen the loop after plot placement.
     for road in plan["roads"]:
         if road["id"] == "downtown-loop":
@@ -181,6 +205,10 @@ def generate(seed):
     plan["communications"].extend(plan["substations"])
     compounds = bake_communications(plan, height, available, water_distance)
     plan["substations"] = [site for site in compounds if site["kind"] == "substation"]
+    for site in plan["substations"]:
+        px, py = site["plot_xy_m"]
+        w, d = site["footprint_m"]
+        pads.append((px, py, w/2, d/2, site["floor_z_m"]-.14))
     plan["communications"] = [site for site in compounds if site["kind"] != "substation"]
     plan["checkpoints"] = bake_checkpoints(plan["checkpoints"], plan["m4_route"])
     plan["m4_route"].extend(site["approach"] for site in compounds)
@@ -207,8 +235,25 @@ def generate(seed):
             clearance + math.hypot(*site["footprint_m"])/2+1 for site in compounds
         )
     plan["city_lots"], plan["city_barriers"] = bake_city(plan["m4_route"], height, district_available, seed)
+    for lot in plan["city_lots"]:
+        x, y = lot["x"], lot["y"]
+        angle = math.radians(-lot["yaw"])
+        w, d = lot["w"]/2, lot["d"]/2
+        radius = math.hypot(w, d)+3
+        pad = (x, y, math.cos(angle), math.sin(angle), w, d, lot["z"]-.14)
+        for i in range(int((x-radius)//64), int((x+radius)//64)+1):
+            for j in range(int((y-radius)//64), int((y+radius)//64)+1):
+                lot_cells.setdefault((i,j), []).append(pad)
+
+    def pole_available(x, y, clearance):
+        if abs(x-airside["x"]) < RUNWAY_HALF+35 and RUNWAY_Y-60 < y-airside["y"] < 15:
+            return False
+        return district_available(x, y, clearance) and all(
+            math.hypot(x-lot["x"], y-lot["y"]) > math.hypot(lot["w"], lot["d"])/2+clearance
+            for lot in plan["city_lots"])
+
     plan["wrecks"] = bake_traffic(plan["m4_route"], plan["sites"], plan["city_barriers"], seed)
-    plan["grid"] = bake_grid(plan, sites, height, district_available)
+    plan["grid"] = bake_grid(plan, sites, height, pole_available)
 
     # Assign static content to planned cells. IDs persist when exact coordinates change.
     cells = {}

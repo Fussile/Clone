@@ -1,9 +1,9 @@
 """POI dimensions and baked grades for the airport and community pitch."""
-RUNWAY_HALF = 213
+RUNWAY_HALF = 1050
 RUNWAY_Y = -122
 TAXIWAY_Y = -65
 APRON_Y = -45
-TURN_OFFS = (-175, 175)
+TURN_OFFS = (-880, -410, 99, 350, 880)
 
 
 def facilities(airport, stadium, height):
@@ -12,7 +12,7 @@ def facilities(airport, stadium, height):
     left, right = x-RUNWAY_HALF, x+RUNWAY_HALF
 
     def terrain_envelope(px):
-        return max(height(px, y+dy) for dy in (-140, -122, -105, -80, -60, -40, -29))
+        return max(height(px, y+dy) for dy in (-146, -122, -100, -80, -60, -40, -29))
 
     start = terrain_envelope(left)
     slope = (terrain_envelope(right)-start)/(right-left)

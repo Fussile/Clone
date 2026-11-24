@@ -78,9 +78,9 @@ def building_shell(box, key, x, y, floor, width, depth, height, doorway, wall, r
     return front
 
 
-def nightlife_layout(box, door, cache, encounter, sign, facade, key, x, y, floor, palette):
+def nightlife_layout(box, door, cache, encounter, sign, facade, key, x, y, floor, palette, names=("Freight Bar", "Crossroads Diner")):
     trim, brick, wood = (palette[name] for name in ("dark_trim", "brick_hardwood", "timber"))
-    for side, name, shade in ((-1, "Freight Bar", brick), (1, "Crossroads Diner", palette["petrol"])):
+    for side, name, shade in ((-1, names[0], brick), (1, names[1], palette["petrol"])):
         building = f"{key}_venue_{side}"
         cx, cy = x+side*7.8, y+1.7
         front = building_shell(box, building, cx, cy, floor, 13.6, 12, 3.5, 2.2, shade, trim)
@@ -95,7 +95,15 @@ def nightlife_layout(box, door, cache, encounter, sign, facade, key, x, y, floor
         facade(building+"_window_2", cx+3.55, front, floor)
         box(building+"_counter", "Service counter", cx-1.3, cy+2.4, floor,
             5.9, .75, 1.04, material=wood)
-        for i in range(3):
+        performance = name in {"The Playhouse", "The Comedy Cellar", "Listening Room",
+                               "Picture House", "Music Hall", "Jazz Club"}
+        if performance:
+            box(building+"_stage", "Performance stage", cx-4.1, cy-.6, floor,
+                3.2, 5.8, .38, material=wood)
+            for row in range(3):
+                box(f"{building}_audience_{row}", "Audience bench", cx+row*1.55, cy-.65, floor,
+                    .52, 3.9, .46, material=shade)
+        for i in range(0 if performance else 3):
             tx, ty = cx+4.05, cy-2.5+i*2.3
             box(f"{building}_table_{i}", "Dining table", tx, ty, floor+.74,
                 1.2, .75, .09, material=wood)

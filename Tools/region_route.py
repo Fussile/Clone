@@ -37,6 +37,9 @@ def bake_route(plan, ground_height, terrain_height):
         x, y = site["plot_xy_m"]
         entrance = (x, y+CAMPUS_PARKING_END if site["id"] == "university" else y-site["footprint_m"][1]/2)
         approach = (x, entrance[1]-8)
+        if site["id"] == "warehouses":
+            entrance = (x, y+site["footprint_m"][1]/2)
+            approach = (x, entrance[1]+8)
         road = roads[links[site["id"]]]
         connection = nearest_on_road(approach, road)
         roads[site["id"]+"_access"] = {
@@ -47,7 +50,7 @@ def bake_route(plan, ground_height, terrain_height):
 
     for site_id, road_id, offset, width in (
         ("stadium", "winter-crossroad", 25.5, 5),
-        ("airport", "airport-road", 17.5, 8),
+        ("airport", "terminal-access", 17.5, 8),
     ):
         design = plan["facilities"][site_id]
         x, y = design["x"], design["y"]

@@ -17,14 +17,14 @@ def pitch(box, mesh, key, design, palette, concrete):
             3.6, .55, .45, material=palette["timber"])
 
 
-def aircraft_hangar(box, mesh, door, cache, key, x, y, floor, concrete):
-    box(key+"_footing", "Hangar apron and floor", x, y, floor-.7, 36, 29, .7,
+def aircraft_hangar(box, mesh, door, cache, key, x, y, floor, concrete, scale=2.4):
+    box(key+"_footing", "Hangar apron and floor", x, y, floor-.7, 36*scale, 29*scale, .7,
         material=concrete, ground=True)
     mesh(key+"_shell", "Aircraft hangar", "AircraftHangar", x, y, floor+.015,
-         collision=True, opening_south=True)
-    door(key+"_aircraft_door", "Hangar shutter", x, y-12.55, floor, 16.0, 7.2,
+         collision=True, opening_south=True, scale=(scale, scale, scale))
+    door(key+"_aircraft_door", "Hangar shutter", x, y-12.55*scale, floor, 16.0*scale, 7.2*scale,
          roll_up=True, finish="dark_trim")
-    cache(key+"_parts", "Aircraft service supplies", x-11.4, y+4.0, floor, cloth_amount=3,
+    cache(key+"_parts", "Aircraft service supplies", x-11.4*scale, y+4.0*scale, floor, cloth_amount=3,
           timber_amount=5)
 
 
@@ -50,29 +50,29 @@ def airfield(box, mesh, door, ramp, sign, window, cache, encounter, key, design,
                 x+offset, y+dy, grade(offset)-1.45, span+.08, width, 1.45, ground=True,
                 material=material, rotation=(road_pitch, 0))
 
-    paved_strip("runway", 0, runway_y, 2*half, 28, asphalt)
+    paved_strip("runway", 0, runway_y, 2*half, 45, asphalt)
     mesh(key+"_runway_paint", "Runway threshold and center markings", "RunwayMarkings",
-         x, y+runway_y, datum+.017, pitch=road_pitch, align_long_axis=True)
-    paved_strip("parallel_taxiway", 0, taxi_y, 390, 11, asphalt)
+         x, y+runway_y, datum+.017, pitch=road_pitch, align_long_axis=True, scale=(2*half/426, 45/28, 1))
+    paved_strip("parallel_taxiway", 0, taxi_y, 1800, 23, asphalt)
     for offset in dimensions["TURN_OFFS"]:
         box(f"{key}_turnoff_{offset}", "Runway turnoff", x+offset, y+(runway_y+taxi_y)/2,
-            grade(offset)-1.46, 11, taxi_y-runway_y, 1.45, material=asphalt, ground=True,
+            grade(offset)-1.46, 23, taxi_y-runway_y, 1.45, material=asphalt, ground=True,
             rotation=(road_pitch, 0))
         box(f"{key}_guide_{offset}", "Taxiway turnoff guide line", x+offset, y+(runway_y+taxi_y)/2,
             grade(offset)+.013, .13, taxi_y-runway_y, .008, material=palette["traffic"],
             collision=False)
-    for i in range(32):
-        offset = (i-15.5)*12
+    for i in range(150):
+        offset = (i-74.5)*12
         box(f"{key}_taxi_line_{i}", "Taxiway centerline", x+offset, y+taxi_y, grade(offset)+.018,
             12.06, .14, .01, material=palette["traffic"], collision=False, rotation=(road_pitch, 0))
-    paved_strip("terminal_apron", -11, apron_y, 148, 29.5, concrete)
-    box(key+"_concourse_walk", "Terminal apron approach", x-11, y-22.3, floor-.45,
-        38, 28, .45, material=concrete, ground=True)
+    paved_strip("terminal_apron", -11, apron_y, 238, 32, concrete)
+    ramp(key+"_concourse_ramp", "Terminal apron approach", x-3, y-30, y-8,
+         grade(-3), floor, 12, concrete)
 
-    aircraft_hangar(box, mesh, door, cache, key+"_service_hangar", x+67, y-36,
-                    grade(67)+.05, concrete)
-    ramp(key+"_tow_path", "Hangar taxi connector", x+67, y+taxi_y, y-50.3,
-         grade(67), grade(67)+.05, 13, concrete)
+    aircraft_hangar(box, mesh, door, cache, key+"_service_hangar", x+99, y-20,
+                    grade(99)+.05, concrete, scale=1.8)
+    ramp(key+"_tow_path", "Hangar taxi connector", x+99, y+taxi_y, y-43,
+         grade(99), grade(99)+.05, 30, concrete)
 
     # Preserve the uploaded damaged terminal as a wreck alongside an enterable concourse.
     mesh(key+"_terminal_ruin", "Collapsed terminal wing", "RuinedTerminal", x+54, y+1, floor,

@@ -1,7 +1,7 @@
 """Place communications compounds and roadside defenses against the baked terrain."""
 import math
 
-COMPOUNDS = {"repeater": (32, 28), "radio": (66, 62), "transmitter": (38, 36), "substation": (31, 25)}
+COMPOUNDS = {"repeater": (32, 28), "radio": (66, 62), "transmitter": (38, 36), "substation": (54, 38)}
 
 
 def bake_communications(plan, height, available, water_distance):
@@ -29,7 +29,7 @@ def bake_communications(plan, height, available, water_distance):
                 ):
                     continue
                 samples = elevations(px, py, w, d)
-                if max(samples)-min(samples) <= 2.5:
+                if max(samples)-min(samples) <= (5 if spec["kind"] == "substation" else 2.5):
                     position = (px, py)
                     break
             if position:

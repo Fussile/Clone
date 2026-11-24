@@ -84,11 +84,16 @@ def bake_city(routes, height, available, seed):
     buildings = []
     blockers = []
     city_routes = [route for route in routes if route["id"].startswith("downtown-street-")]
-    for suffix, spacing, sizes in (
-        ("", 39, ((30, 27), (33, 31), (35, 36))),
-        ("_mid", 16, ((23, 20), (26, 22), (24, 19))),
+    outer_routes = [route for route in routes if route["id"] in {
+        "slaughterhouse-road", "southwest-arterial", "northern-arterial", "southwest-clinic-access",
+        "hospital-arterial", "southern-industrial-road", "east-clinic-road", "east-services-spur",
+        "airport-road", "lakehouse-west-access", "winter-crossroad", "southwest-lake-access"}]
+    for frontage, suffix, spacing, sizes in (
+        (city_routes, "", 39, ((30, 27), (33, 31), (35, 36))),
+        (city_routes, "_mid", 16, ((23, 20), (26, 22), (24, 19))),
+        (outer_routes, "_outer", 57, ((22, 20), (27, 23), (31, 24))),
     ):
-        for route in city_routes:
+        for route in frontage:
             placements = list(segment_samples(route, spacing))
             for index, ((x, y, z), dx, dy) in enumerate(placements):
                 # Reserve larger floor plates and leave a service alley between neighbors.
@@ -110,6 +115,8 @@ def bake_city(routes, height, available, seed):
                     core = math.hypot((px-2451)/340, (py-2069)/220) < 1
                     levels = 3 if face == "CornerShop" else rng.choice(
                         (13, 17, 21, 25) if core and face == "OfficeFacade" else (5, 9, 13))
+                    if suffix == "_outer":
+                        levels = rng.choice((2, 3, 4, 5, 6))
                     buildings.append(dict(id=ident, x=px, y=py, z=max(samples)+.08, road_z=z, setback=3.2,
                                           base=min(samples)-.35, w=width, d=depth,
                                           yaw=yaw,

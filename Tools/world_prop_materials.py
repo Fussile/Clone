@@ -8,7 +8,7 @@ import runpy
 
 WORLD = "/Game/Art/Crossroads/World"
 NAMES = ("WarehouseDoorwayShell", "WeatheredShelf", "ScavengeCrate", "FuelPumpSolid",
-         "OfficeCooler", "OfficeDrawer", "OfficeFiles", "OfficeWorkstation")
+         "SubstationHouse", "SubstationSwitchgear", "OfficeCooler", "OfficeDrawer", "OfficeFiles", "OfficeWorkstation")
 FORMATS = {"image/jpeg": ".jpg", "image/png": ".png"}
 read_glb = runpy.run_path(str(Path(__file__).with_name("prepare_sidearm_glb.py")))["read_glb"]
 
@@ -99,6 +99,11 @@ def apply(source, mesh, scratch, prepare_art, assets):
         material = prepare_art["make_material"](
             package, f"M_Surface_{index}", samples, tint=unreal.LinearColor(*color) if color != [1, 1, 1, 1] else None,
             scalars=scalars)
+        if source.stem in {"SM_SubstationHouse", "SM_SubstationSwitchgear"} and not material.get_editor_property("two_sided"):
+            material.set_editor_property("two_sided", True)
+            unreal.MaterialEditingLibrary.recompile_material(material)
+            if not assets.save_loaded_asset(material):
+                raise RuntimeError(f"Could not save two-sided yard material {name}.")
         materials[name] = material
         if source.stem == "SM_ScavengeCrate":
             military = prepare_art["make_material"](

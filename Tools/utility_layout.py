@@ -90,10 +90,12 @@ def stamp_substation(site, box, mesh, prop, cache, sign, concrete):
     w,d = site["footprint_m"]
     box(key+"_pad","Substation concrete pad",x,y,base,w,d,z-base,ground=True,material=concrete)
     mesh(key+"_house","Soviet electrical substation building","SubstationHouse",
-         x-8,y+3.8,z,(6.4,6.9,4.4))
+         x-16,y+2,z,(13,10,6.5))
     prop(key+"_switchgear","Electrical switchgear yard","SubstationSwitchgear",
-         x+3,y-2.8,z,(16,12,4.2),health=480)
+         x+9,y-7,z,(28,16,7.2),health=480)
     prop(key+"_transformer","Substation transformer","YardTransformer",
-         x-.5,y+6.8,z,(3.6,2.5,3.1),health=420)
+         x-1,y+9,z,(7.4,4.8,5.6),health=420)
+    prop(key+"_east_transformer","East transformer bank","YardTransformer",
+         x+18,y+10,z,(7.4,4.8,5.6),health=420)
     cache(key+"_parts","Utility parts crate",x-6.6,y-3,z,profile="BUILDING")
     sign(key+"_sign",site["name"].upper(),x-6,y-d/2+.35,z+1.45,size=28)

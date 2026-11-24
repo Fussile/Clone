@@ -48,7 +48,9 @@ At the warehouse, check both entrances and the supply crates inside. From the hi
 
 ### Airport and community pitch
 
-The southeast airport has a 426 m runway at map scale with the uploaded threshold and centerline markings, a parallel taxiway, two turnoffs and a terminal apron. The airport road reaches the landside entrance. A walkable concourse and control room sit beside the uploaded damaged terminal wing and ruined shop. Hangars at the airport and the southern hangar site use the uploaded interior mesh, with operable shutters at the modeled opening. The existing terrain remains the base for the new local pavement grades.
+The southern joint-use airfield has a 2,100 × 45 m runway, a 1,800 × 23 m parallel taxiway and five turnoffs. The terminal access road connects the domestic concourse to the southern arterial. A control room, damaged terminal wing, ruined shop and service hangar share the civilian apron. Two larger maintenance hangars connect to the taxiway on the east side. All three use the uploaded interior mesh and operable shutters.
+
+The warehouse parcel contains six loading halls in two rows. Each regional entertainment quarter has eight enterable venues. The suburban streets and outer arterial frontages represent parts of the pre-collapse metropolitan area within the playable 5 × 4 km region. Existing generated maps need a fresh terrain bake for these parcel grades. With the editor closed, run `Tools/reset_crossroads_world.ps1` to back up the generated map before opening the project.
 
 The northern community pitch replaces the stadium placeholder. Take the local approach from the winter crossroad to reach the uploaded field scan and entrance sign. [Model credits](M4WorldArt.txt)
 

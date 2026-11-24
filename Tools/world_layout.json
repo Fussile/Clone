@@ -39,7 +39,7 @@
     {"id": "police-hq", "road": "city-police_access", "xy_m": [1948, 2193]},
     {"id": "hospital", "road": "hospital-arterial", "xy_m": [2148, 2685]},
     {"id": "south-station", "road": "southern-arterial", "xy_m": [2501, 955]},
-    {"id": "airport", "road": "airport-road", "xy_m": [4460, 1522]},
+    {"id": "airport", "road": "terminal-access", "xy_m": [2390, 529]},
     {"id": "winter-village", "road": "north-lowland-road", "xy_m": [1870, 3580]}
   ],
   "sites": [
@@ -505,8 +505,8 @@
       "id": "warehouses",
       "name": "Warehouse District",
       "xy_m": [
-        2819,
-        1172
+        2720,
+        1070
       ],
       "kind": "industry",
       "architecture": "late_soviet"
@@ -564,8 +564,8 @@
       "id": "airport-hotels",
       "name": "Airport Hotels",
       "xy_m": [
-        3376,
-        1448
+        2375,
+        555
       ],
       "kind": "shops",
       "architecture": "modern"
@@ -574,8 +574,8 @@
       "id": "airport",
       "name": "Domestic Airport",
       "xy_m": [
-        3816,
-        1352
+        2320,
+        362
       ],
       "kind": "airport",
       "architecture": "modern"
@@ -584,8 +584,8 @@
       "id": "hangars",
       "name": "Airport Hangars",
       "xy_m": [
-        3640,
-        846
+        2670,
+        365
       ],
       "kind": "industry",
       "architecture": "late_soviet"
@@ -594,8 +594,8 @@
       "id": "airport-services",
       "name": "Airport Gas Station",
       "xy_m": [
-        3387,
-        1062
+        2475,
+        548
       ],
       "kind": "services",
       "architecture": "modern"
@@ -1649,6 +1649,7 @@
       ],
       "width_m": 9
     },
+    {"id": "terminal-access", "width_m": 10, "points_m": [[2571,639],[2450,570],[2320,480],[2320,454]]},
     {
       "id": "airport-road",
       "points_m": [
