@@ -64,10 +64,16 @@ def make_material(directory, name, textures, tint=None, world_repeat_cm=None, *,
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     path = f"{directory}/{name}"
     editing = unreal.MaterialEditingLibrary
+    world_material = directory == ART + "/World" or directory.startswith(ART + "/World/")
     if assets.does_asset_exist(path):
         material = assets.load_asset(path)
         # A failed projection can leave a saved asset with a partial graph.
         if world_repeat_cm is None or assets.get_metadata_tag(material, "CrossroadsProjection") == "1":
+            if world_material and not material.get_editor_property("used_with_nanite"):
+                material.set_editor_property("used_with_nanite", True)
+                editing.recompile_material(material)
+                if not assets.save_loaded_asset(material):
+                    raise RuntimeError(f"Could not save Nanite usage for {path}.")
             return material
         editing.delete_all_material_expressions(material)
     else:
@@ -75,6 +81,8 @@ def make_material(directory, name, textures, tint=None, world_repeat_cm=None, *,
         material = tools.create_asset(name, directory, unreal.Material, unreal.MaterialFactoryNew())
         if material is None:
             raise RuntimeError(f"Could not create {path}.")
+    if world_material:
+        material.set_editor_property("used_with_nanite", True)
     uv = None
     if world_repeat_cm is not None:
         # Pick a projection on each flat face so a 40 m wall and a 1 m jamb

@@ -964,9 +964,7 @@ def place():
         span = roof-floor+1
         def configure(actor):
             component = fitted_mesh(actor,parish_art["RoofLadder"],(.75,.18,span),yaw)
-            component.set_collision_profile_name("OverlapAllDynamic")
-            component.set_collision_response_to_channel(unreal.CollisionChannel.ECC_VISIBILITY,
-                                                        unreal.CollisionResponse.ECR_BLOCK)
+            component.set_collision_profile_name("CrossroadsRoofLadder")
         spawn(unreal.StaticMeshActor,key,"Roof ladder",x,y,floor+span/2,configure,
               tags=("CrossroadsRoofLadder",),relocate=True,reconfigure=True)
 
