@@ -81,7 +81,7 @@ public:
     bool IsWearing(int32 Index) const { return WornGear.Contains(Index); }
     UFUNCTION(Server, Reliable)
     void ServerToggleGear(int32 Index);
-    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out) const override;
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
     static bool CanQuickSlot(ESurvivalItem Item);
     bool SplitSelection();
     bool CanDropSelection() const;

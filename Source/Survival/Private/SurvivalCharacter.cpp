@@ -1976,9 +1976,9 @@ void ASurvivalCharacter::Dismantle()
     }
 }
 
-void ASurvivalCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out) const
+void ASurvivalCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
-    Super::GetLifetimeReplicatedProps(Out);
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME_CONDITION(ASurvivalCharacter, OwnedGear, COND_OwnerOnly);
     DOREPLIFETIME(ASurvivalCharacter, WornGear);
 }
@@ -2028,17 +2028,17 @@ void ASurvivalCharacter::RefreshGear()
         if (!Fit) continue;
         const TCHAR* MeshId = Gear.MeshOverride ? Gear.MeshOverride : Gear.Id;
         FString Path = FString::Printf(TEXT("/Game/Art/Equipment/%s/SM_%s.SM_%s"), MeshId, MeshId, MeshId);
-        UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *Path);
-            if (!Mesh) continue;
+        UStaticMesh* GearMesh = LoadObject<UStaticMesh>(nullptr, *Path);
+        if (!GearMesh) continue;
         UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(this);
-        Part->SetStaticMesh(Mesh);
+        Part->SetStaticMesh(GearMesh);
         Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         Part->SetCanEverAffectNavigation(false);
         Part->RegisterComponent();
-        const FVector Scale = Fit->Size / (Mesh->GetBounds().BoxExtent * 2).ComponentMax(FVector(0.01));
+        const FVector Scale = Fit->Size / (GearMesh->GetBounds().BoxExtent * 2).ComponentMax(FVector(0.01));
         const FQuat Rotation = GetActorQuat();
         Part->SetWorldTransform(FTransform(Rotation, GetMesh()->GetSocketLocation(Fit->Bone)
-            + Rotation.RotateVector(Fit->Offset - Mesh->GetBounds().Origin * Scale), Scale));
+            + Rotation.RotateVector(Fit->Offset - GearMesh->GetBounds().Origin * Scale), Scale));
         Part->AttachToComponent(GetMesh(), FAttachmentTransformRules::KeepWorldTransform, Fit->Bone);
         Part->SetOwnerNoSee(!bThirdPerson && !bInventoryOpen);
         GearMeshes.Add(Part);
