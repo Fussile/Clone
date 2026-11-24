@@ -98,6 +98,7 @@ def prepare_if_needed():
         f"/Game/Art/Crossroads/Interface/{icon.stem}"
         for icon in (project / "SourceArt" / "Crossroads" / "Interface").glob("T_UI_*.png")
     )
+    required += ("/Game/Art/Crossroads/Interface/T_UI_GearAtlas",)
     required += tuple(f"/Game/Art/Crossroads/World/Props/{name}/SM_{name}"
                       for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler"))
     required += tuple(f"/Game/Art/Crossroads/World/M_RegionFinish_{name}"

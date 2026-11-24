@@ -8,24 +8,30 @@
 enum class ESurvivalItem : uint8
 {
     Sidearm, Food, Water, Bandage, Timber, Stone, Cloth, Rounds, TimberDoor, Rifle, RifleRounds, BuilderGuide, ScavengerNotes, DressingSchematic, FieldDressing,
-    RifleStock, RifleReceiver, RifleBarrel, RifleOptic, None
+    RifleStock, RifleReceiver, RifleBarrel, RifleOptic, SidearmGrip, SidearmFrame, SidearmBarrel, SidearmSlide, None
 };
 
 const TCHAR* SurvivalItemName(ESurvivalItem Item);
 
-struct FSurvivalRifle
+struct FSurvivalWeaponAssembly
 {
     static constexpr int32 PartCount = 4;
     static constexpr int32 FactoryQuality = 40;
-    static constexpr int32 PartIndex(ESurvivalItem Item)
+    static constexpr ESurvivalItem FirstPart(ESurvivalItem Weapon)
     {
-        const int32 Slot = static_cast<int32>(Item) - static_cast<int32>(ESurvivalItem::RifleStock);
+        return Weapon == ESurvivalItem::Sidearm ? ESurvivalItem::SidearmGrip : ESurvivalItem::RifleStock;
+    }
+
+    static constexpr int32 PartIndex(ESurvivalItem Item, ESurvivalItem Weapon = ESurvivalItem::Rifle)
+    {
+        const int32 Slot = static_cast<int32>(Item) - static_cast<int32>(FirstPart(Weapon));
         return Slot >= 0 && Slot < PartCount ? Slot : INDEX_NONE;
     }
 
-    static const TCHAR* PartName(int32 Slot);
+    static const TCHAR* PartName(int32 Slot, ESurvivalItem Weapon = ESurvivalItem::Rifle);
     static int32 SpareQuality(int32 Slot);
     int32 GetPartQuality(int32 Slot) const { return Parts[Slot]; }
+    bool IsComplete() const;
     int32 GetQuality() const;
     float GetDamage() const;
     // Installs a part of the given quality and returns the quality of the part it replaced.
@@ -34,7 +40,7 @@ struct FSurvivalRifle
 private:
     int32 Parts[PartCount] = {FactoryQuality, FactoryQuality, FactoryQuality, FactoryQuality};
 };
-static_assert(FSurvivalRifle::PartIndex(ESurvivalItem::RifleOptic) == FSurvivalRifle::PartCount - 1);
+static_assert(FSurvivalWeaponAssembly::PartIndex(ESurvivalItem::RifleOptic) == FSurvivalWeaponAssembly::PartCount - 1);
 
 // One backpack cell. Plain items stack up to SurvivalItemMaxStack. Parts carry their own quality and never stack.
 struct FSurvivalPackCell
@@ -49,7 +55,10 @@ struct FSurvivalPackCell
 };
 
 int32 SurvivalItemMaxStack(ESurvivalItem Item);
-inline bool SurvivalItemHasQuality(ESurvivalItem Item) { return FSurvivalRifle::PartIndex(Item) != INDEX_NONE; }
+inline bool SurvivalItemHasQuality(ESurvivalItem Item)
+{
+    return FSurvivalWeaponAssembly::PartIndex(Item) != INDEX_NONE || FSurvivalWeaponAssembly::PartIndex(Item, ESurvivalItem::Sidearm) != INDEX_NONE;
+}
 
 struct FSurvivalIngredient
 {
@@ -98,8 +107,10 @@ struct FSurvivalItems
     int32 FieldDressings = 0;
     UPROPERTY()
     int32 RifleParts[4]{};
+    UPROPERTY()
+    int32 SidearmParts[4]{};
 
-    static_assert(FSurvivalRifle::PartCount == 4);
+    static_assert(FSurvivalWeaponAssembly::PartCount == 4);
     void Add(const FSurvivalItems& Other);
 };
 

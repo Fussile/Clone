@@ -117,6 +117,51 @@ FName ASurvivalSupplyCrate::GetLootId() const
     return Tags.IsEmpty() ? FName(*GetPathName()) : Tags[0];
 }
 
+int32* FSurvivalLoot::StackCount(ESurvivalItem Item)
+{
+    switch (Item)
+    {
+    case ESurvivalItem::Timber: return &Materials.Timber;
+    case ESurvivalItem::Stone: return &Materials.Stone;
+    case ESurvivalItem::Food: return &Items.Food;
+    case ESurvivalItem::Water: return &Items.Water;
+    case ESurvivalItem::Cloth: return &Items.Cloth;
+    case ESurvivalItem::Bandage: return &Items.Bandages;
+    case ESurvivalItem::FieldDressing: return &Items.FieldDressings;
+    case ESurvivalItem::Rounds: return &Items.Rounds;
+    case ESurvivalItem::RifleRounds: return &Items.RifleRounds;
+    case ESurvivalItem::TimberDoor: return &Items.TimberDoors;
+    case ESurvivalItem::BuilderGuide: return &Items.BuilderGuides;
+    case ESurvivalItem::ScavengerNotes: return &Items.ScavengerNotes;
+    case ESurvivalItem::DressingSchematic: return &Items.DressingSchematics;
+    default:
+        const int32 Part = FSurvivalWeaponAssembly::PartIndex(Item);
+        if (Part != INDEX_NONE) return &Items.RifleParts[Part];
+        const int32 SidearmPart = FSurvivalWeaponAssembly::PartIndex(Item, ESurvivalItem::Sidearm);
+        return SidearmPart != INDEX_NONE ? &Items.SidearmParts[SidearmPart] : nullptr;
+    }
+}
+
+int32 FSurvivalLoot::Count(ESurvivalItem Item) const
+{
+    if (Item == ESurvivalItem::None) return GearIndex != INDEX_NONE ? 1 : 0;
+    if (Item == ESurvivalItem::Rifle) return bRifle ? 1 : 0;
+    if (Item == ESurvivalItem::Sidearm) return bSidearm ? 1 : 0;
+    FSurvivalLoot Copy = *this;
+    const int32* Stack = Copy.StackCount(Item);
+    return Stack ? *Stack : 0;
+}
+
+FSurvivalLoot FSurvivalLoot::TakeStack(ESurvivalItem Item)
+{
+    FSurvivalLoot Result;
+    if (Item == ESurvivalItem::None) Swap(Result.GearIndex, GearIndex);
+    else if (Item == ESurvivalItem::Rifle) Swap(Result.bRifle, bRifle);
+    else if (Item == ESurvivalItem::Sidearm) Swap(Result.bSidearm, bSidearm);
+    else if (int32* Source = StackCount(Item)) Swap(*Result.StackCount(Item), *Source);
+    return Result;
+}
+
 bool FSurvivalLoot::IsEmpty() const
 {
     if (GearIndex != INDEX_NONE || !Materials.IsEmpty() || bSidearm || bRifle || Items.Food || Items.Water || Items.Cloth
@@ -125,9 +170,9 @@ bool FSurvivalLoot::IsEmpty() const
     {
         return false;
     }
-    for (int32 Parts : Items.RifleParts)
+    for (int32 Slot = 0; Slot < FSurvivalWeaponAssembly::PartCount; ++Slot)
     {
-        if (Parts > 0)
+        if (Items.RifleParts[Slot] > 0 || Items.SidearmParts[Slot] > 0)
         {
             return false;
         }
@@ -172,7 +217,8 @@ FSurvivalLoot ASurvivalSupplyCrate::RollLoot(FRandomStream& Random) const
                 Loot.Items.RifleRounds += Random.RandRange(1, 3);
                 if (Random.RandRange(1, 5) == 1)
                 {
-                    ++Loot.Items.RifleParts[Random.RandRange(0, FSurvivalRifle::PartCount - 1)];
+                    auto& Parts = Random.RandRange(0, 1) == 0 ? Loot.Items.RifleParts : Loot.Items.SidearmParts;
+                    ++Parts[Random.RandRange(0, FSurvivalWeaponAssembly::PartCount - 1)];
                 }
                 break;
             case ELootGroup::Books:
@@ -192,7 +238,7 @@ FSurvivalLoot ASurvivalSupplyCrate::RollLoot(FRandomStream& Random) const
     Loot.Items.BuilderGuides += FMath::Max(0, BuilderGuideAmount);
     Loot.Items.ScavengerNotes += FMath::Max(0, ScavengerNotesAmount);
     Loot.Items.DressingSchematics += FMath::Max(0, DressingSchematicAmount);
-    if (RiflePartSlot >= 0 && RiflePartSlot < FSurvivalRifle::PartCount)
+    if (RiflePartSlot >= 0 && RiflePartSlot < FSurvivalWeaponAssembly::PartCount)
     {
         ++Loot.Items.RifleParts[RiflePartSlot];
     }
@@ -217,9 +263,11 @@ void ASurvivalSupplyCrate::SetLootCycle(int32 Seed, const FSurvivalScavengeState
 {
     FRandomStream Random(Seed);
     const bool bOccupied = Random.RandRange(1, 100) <= SpawnChancePercent;
-    State = Previous ? *Previous : FSurvivalScavengeState{MaxHealth, false};
+    State = Previous ? *Previous : FSurvivalScavengeState{MaxHealth, false, {}};
     bWorldPresent = bOccupied && State.Health > 0.0f;
-    Contents = bWorldPresent && !State.bSearched ? RollLoot(Random) : FSurvivalLoot{};
+    Contents = {};
+    if (bWorldPresent && !State.bSearched)
+        Contents = State.Remaining.IsSet() ? State.Remaining.GetValue() : RollLoot(Random);
     bLootAvailable = !Contents.IsEmpty();
     bSidearmAvailable = Contents.bSidearm;
     bRifleAvailable = Contents.bRifle;
@@ -242,25 +290,27 @@ void ASurvivalSupplyCrate::RememberState()
     ForceNetUpdate();
 }
 
-FSurvivalLoot ASurvivalSupplyCrate::TakeLoot()
+FSurvivalLoot ASurvivalSupplyCrate::TakeLoot(bool bTakeAll, ESurvivalItem Item)
 {
-    if (!HasAuthority() || !bLootAvailable)
-    {
-        return {};
-    }
+    if (!HasAuthority() || !bLootAvailable) return {};
+    FSurvivalLoot Loot;
+    if (bTakeAll) Swap(Loot, Contents);
+    else Loot = Contents.TakeStack(Item);
+    if (Loot.IsEmpty()) return {};
+
+    bLootAvailable = !Contents.IsEmpty();
+    bSidearmAvailable = Contents.bSidearm;
+    bRifleAvailable = Contents.bRifle;
     if (bDropped)
     {
-        FSurvivalLoot Result = Contents;
-        Contents = {};
-        bLootAvailable = false;
-        Destroy();
-        return Result;
+        if (!bLootAvailable) Destroy();
+        return Loot;
     }
-    State.bSearched = true;
-    bLootAvailable = bSidearmAvailable = bRifleAvailable = false;
+
+    State.bSearched = !bLootAvailable;
+    if (bLootAvailable) State.Remaining = Contents;
+    else State.Remaining.Reset();
     RememberState();
-    FSurvivalLoot Loot = Contents;
-    Contents = {};
     return Loot;
 }
 
@@ -275,6 +325,7 @@ float ASurvivalSupplyCrate::TakeDamage(float Damage, const FDamageEvent&, AContr
     if (State.Health <= 0.0f)
     {
         Contents = {};
+        State.Remaining.Reset();
         bWorldPresent = bLootAvailable = bSidearmAvailable = bRifleAvailable = false;
         OnRep_WorldPresence();
     }

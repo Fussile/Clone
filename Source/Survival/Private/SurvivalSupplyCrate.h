@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GameFramework/Actor.h"
+#include "Misc/Optional.h"
 #include "SurvivalBuilding.h"
 #include "SurvivalVitals.h"
 #include "SurvivalSupplyCrate.generated.h"
@@ -41,12 +42,16 @@ struct FSurvivalLoot
     int32 GearIndex = INDEX_NONE;
 
     bool IsEmpty() const;
+    int32 Count(ESurvivalItem Item) const;
+    FSurvivalLoot TakeStack(ESurvivalItem Item);
+    int32* StackCount(ESurvivalItem Item);
 };
 
 struct FSurvivalScavengeState
 {
     float Health = 0.0f;
     bool bSearched = false;
+    TOptional<FSurvivalLoot> Remaining;
 };
 UCLASS()
 class ASurvivalSupplyCrate : public AActor
@@ -56,7 +61,9 @@ class ASurvivalSupplyCrate : public AActor
 public:
     ASurvivalSupplyCrate();
 
-    FSurvivalLoot TakeLoot();
+    FSurvivalLoot TakeLoot(bool bTakeAll, ESurvivalItem Item);
+    const FSurvivalLoot& PeekLoot() const { return Contents; }
+    bool IsDroppedLoot() const { return bDropped; }
     static bool Drop(ACharacter& Owner, const FSurvivalLoot& Loot);
     virtual float TakeDamage(float Damage, const FDamageEvent& Event, AController* InstigatorController,
         AActor* DamageCauser) override;
