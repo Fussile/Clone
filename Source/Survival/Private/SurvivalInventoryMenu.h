@@ -31,8 +31,8 @@ private:
     TSharedRef<SWidget> MakeRecipeBrowser();
     TSharedRef<SWidget> MakeSkillsPanel();
     TSharedRef<SWidget> MakeStatsPanel();
-    TSharedRef<SWidget> MakeLootPanel();
     TArray<FSlateBrush> GearIcons;
+    TStrongObjectPtr<UTexture2D> GearAtlas;
     ETraining SelectedStat = ETraining::Athletics;
     TSharedRef<SWidget> MakeTrainingDetails();
     bool MatchesTraining(ETraining Entry) const;
@@ -50,7 +50,7 @@ private:
     FSlateBrush Portrait;
     void SetWorkbench(bool bOpen);
     bool bModifying = false;
-    enum class EPage { Pack, Crafting, Skills, Gear, Stats, Loot };
+    enum class EPage { Pack, Crafting, Skills, Gear, Stats };
     EPage Page = EPage::Crafting;
     int32 TrainingTree = 0;
     TSharedPtr<SSearchBox> TrainingFilterBox;
@@ -64,3 +64,5 @@ private:
     TWeakObjectPtr<ASurvivalCharacter> Player;
     FSlateBrush Icons[static_cast<int32>(ESurvivalItem::None)];
 };
+
+TSharedRef<SWidget> MakeSurvivalLootGrid(ASurvivalCharacter& Character, ASurvivalHUD& HUD);

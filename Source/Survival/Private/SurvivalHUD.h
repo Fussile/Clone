@@ -17,6 +17,7 @@ class ASurvivalHUD : public AHUD
 
 public:
     void SetInventoryVisible(ASurvivalCharacter& Character, bool bVisible);
+    void SetLootVisible(ASurvivalCharacter& Character, bool bVisible);
     UTexture2D* GetItemIcon(ESurvivalItem Item) const;
     FBox2f GetItemIconUV(ESurvivalItem Item) const;
 
@@ -28,7 +29,8 @@ private:
     void DrawHUD() override;
     void DrawRifleScope(const ASurvivalCharacter& Character, float CenterX, float CenterY);
     void DrawHotbar(const ASurvivalCharacter& Character);
-    void RemoveInventoryWidget();
+    void RemoveMenuRoot();
+    void RefreshMenuRoot(const TSharedPtr<SWidget>& Focus);
     void DrawBuildMenu(const ASurvivalCharacter& Character);
     void DrawPlacement(const FSurvivalBuildPlacement& Placement, const FLinearColor& Color);
 
@@ -39,4 +41,7 @@ private:
     TObjectPtr<UTexture2D> ItemAtlas;
 
     TSharedPtr<SWidget> InventoryWidget;
+    TSharedPtr<SWidget> LootWidget;
+    TSharedPtr<SWidget> MenuRoot;
+    bool bMenuInputActive = false;
 };

@@ -18,7 +18,12 @@ enum class ESurvivalLootProfile : uint8
     Building,
     Medical,
     Security,
-    Office
+    Office,
+    Vehicle,
+    Mailbox,
+    MilitaryArmory,
+    Storage,
+    Dropped UMETA(Hidden)
 };
 
 USTRUCT()
@@ -43,15 +48,36 @@ struct FSurvivalLoot
 
     bool IsEmpty() const;
     int32 Count(ESurvivalItem Item) const;
-    FSurvivalLoot TakeStack(ESurvivalItem Item);
     int32* StackCount(ESurvivalItem Item);
+
+    int32 SidearmQuality = 0;
+    int32 RifleQuality = 0;
+};
+
+USTRUCT()
+struct FSurvivalLootSlot
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    uint8 ItemId = static_cast<uint8>(ESurvivalItem::None);
+    UPROPERTY()
+    int32 Count = 0;
+    UPROPERTY()
+    int32 Quality = 0;
+    UPROPERTY()
+    int32 GearIndex = INDEX_NONE;
+
+    ESurvivalItem Item() const { return static_cast<ESurvivalItem>(ItemId); }
+    bool IsEmpty() const { return Count <= 0; }
+    FSurvivalPackCell ToPackCell() const { return {Item(), Count, Quality, GearIndex}; }
 };
 
 struct FSurvivalScavengeState
 {
     float Health = 0.0f;
     bool bSearched = false;
-    TOptional<FSurvivalLoot> Remaining;
+    TArray<FSurvivalLootSlot> Slots;
 };
 UCLASS()
 class ASurvivalSupplyCrate : public AActor
@@ -61,15 +87,22 @@ class ASurvivalSupplyCrate : public AActor
 public:
     ASurvivalSupplyCrate();
 
-    FSurvivalLoot TakeLoot(bool bTakeAll, ESurvivalItem Item);
-    const FSurvivalLoot& PeekLoot() const { return Contents; }
+    static constexpr int32 MaxLootSlots = 36;
+    static constexpr int32 ChestSlots = 16;
+    const TArray<FSurvivalLootSlot>& GetSlots() const { return State.Slots; }
+    int32 GetLootRevision() const { return LootRevision; }
+    int32 GetLootSeed() const { return LootSeed; }
+    bool HasBeenSearched() const { return bWasSearched; }
     bool IsDroppedLoot() const { return bDropped; }
+    FString GetLootName() const;
+    float GetSearchDuration() const;
+    bool FinishSearch();
+    void MoveLoot(int32 From, int32 To, bool bSplit);
+    TArray<FSurvivalLootSlot> TakeLoot(const TArray<int32>& Indices);
     static bool Drop(ACharacter& Owner, const FSurvivalLoot& Loot);
     virtual float TakeDamage(float Damage, const FDamageEvent& Event, AController* InstigatorController,
         AActor* DamageCauser) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-    bool HasSidearm() const { return bLootAvailable && bSidearmAvailable; }
-    bool HasRifle() const { return bLootAvailable && bRifleAvailable; }
     bool HasSupplies() const { return bLootAvailable; }
 
     FName GetLootId() const;
@@ -116,7 +149,7 @@ private:
     UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "-1", ClampMax = "3"))
     int32 RiflePartSlot = -1;
 
-    UPROPERTY(EditAnywhere, Category = "Scavenging")
+    UPROPERTY(EditAnywhere, Replicated, Category = "Scavenging")
     ESurvivalLootProfile LootProfile = ESurvivalLootProfile::Authored;
 
     UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0", ClampMax = "100"))
@@ -132,18 +165,23 @@ private:
     bool bLootAvailable = false;
 
     UPROPERTY(Replicated)
-    bool bSidearmAvailable = false;
+    bool bWasSearched = false;
 
-    UPROPERTY(Replicated)
-    bool bRifleAvailable = false;
+    UPROPERTY(EditAnywhere, Category = "Scavenging")
+    FString LootName;
+
+    int32 LootRevision = 0;
+    int32 LootSeed = 0;
 
     UFUNCTION()
     void OnRep_WorldPresence();
 
     FSurvivalLoot RollLoot(FRandomStream& Random) const;
     void RememberState();
+    void UpdateLootState();
+    void PopulateSlots(FSurvivalLoot Loot, FRandomStream& Random);
+    int32 GetSlotCapacity() const;
 
     bool bDropped = false;
-    FSurvivalLoot Contents;
     FSurvivalScavengeState State;
 };

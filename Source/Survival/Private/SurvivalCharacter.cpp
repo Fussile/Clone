@@ -169,6 +169,8 @@ void ASurvivalCharacter::BeginPlay()
 void ASurvivalCharacter::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
+    if (HasAuthority() && (bSearchingContainer || bViewingContainer))
+        UpdateContainerSearch(DeltaSeconds);
     UpdateVitals(DeltaSeconds);
     UpdateRifle();
     UpdateSurvivorAnimation();
@@ -468,75 +470,288 @@ bool ASurvivalCharacter::CanReachLoot(const ASurvivalSupplyCrate* Crate, FVector
 
 void ASurvivalCharacter::ServerScavenge_Implementation(ASurvivalSupplyCrate* Crate, FVector_NetQuantize10 ImpactPoint)
 {
-    if (CanReachLoot(Crate, ImpactPoint))
-        ClientShowContainer(Crate, ImpactPoint, Crate->PeekLoot(), true);
-}
+    if (!CanReachLoot(Crate, ImpactPoint)) return;
 
-void ASurvivalCharacter::ClientShowContainer_Implementation(ASurvivalSupplyCrate* Crate,
-    FVector_NetQuantize10 ImpactPoint, const FSurvivalLoot& Preview, bool bOpenMenu)
-{
-    if (HealthPoints <= 0 || (!bOpenMenu && !bInventoryOpen)) return;
-    LootContainer = Crate;
-    LootImpactPoint = ImpactPoint;
-    ContainerLoot = Preview;
-    if (bOpenMenu && Crate) SetInventoryOpen(true);
-}
-
-void ASurvivalCharacter::TakeContainerLoot(bool bTakeAll, ESurvivalItem Item)
-{
-    if (bInventoryOpen && LootContainer.IsValid())
-        ServerTakeContainerLoot(LootContainer.Get(), LootImpactPoint, bTakeAll, static_cast<uint8>(Item), ContainerLoot.GearIndex);
-}
-
-void ASurvivalCharacter::ServerTakeContainerLoot_Implementation(ASurvivalSupplyCrate* Crate,
-    FVector_NetQuantize10 ImpactPoint, bool bTakeAll, uint8 Item, int32 ExpectedGear)
-{
-    if (Item > static_cast<uint8>(ESurvivalItem::None) || !CanReachLoot(Crate, ImpactPoint))
+    SearchImpactPoint = ImpactPoint;
+    if (Crate->HasBeenSearched())
     {
-        ClientShowContainer(nullptr, ImpactPoint, {}, false);
+        SearchProgress.Remove(Crate->GetLootId());
+        bSearchingContainer = false;
+        ClientSearchTime(0, false);
+        ShowContainer(*Crate, true);
         return;
     }
 
-    const auto Requested = static_cast<ESurvivalItem>(Item);
-    const bool bDropped = Crate->IsDroppedLoot();
-    const bool bStaleGear = !bTakeAll && Requested == ESurvivalItem::None
-        && Crate->PeekLoot().GearIndex != ExpectedGear;
-    const FSurvivalLoot Loot = bStaleGear ? FSurvivalLoot{} : Crate->TakeLoot(bTakeAll, Requested);
-    const bool bCrateValid = IsValid(Crate);
-    if (!Loot.IsEmpty())
-    {
-        if (Loot.GearIndex != INDEX_NONE) OwnedGear.Add(Loot.GearIndex);
-        ClientReceiveLoot(Loot, !bDropped && bCrateValid && !Crate->HasSupplies());
-    }
-    ClientShowContainer(bCrateValid ? Crate : nullptr, ImpactPoint,
-        bCrateValid ? Crate->PeekLoot() : FSurvivalLoot{}, false);
+    bViewingContainer = false;
+    SearchingContainer = Crate;
+    ActiveSearchId = Crate->GetLootId();
+    FSearchProgress* Entry = SearchProgress.Find(ActiveSearchId);
+    if (!Entry || Entry->Seed != Crate->GetLootSeed())
+        Entry = &SearchProgress.Add(ActiveSearchId, FSearchProgress{Crate->GetLootSeed(), Crate->GetSearchDuration()});
+    bSearchingContainer = true;
+    ClientSearchTime(Entry->SecondsLeft, false);
 }
 
-void ASurvivalCharacter::ClientReceiveLoot_Implementation(const FSurvivalLoot& Loot, bool bFinishedSearch)
+void ASurvivalCharacter::UpdateContainerSearch(float DeltaSeconds)
 {
-    FSurvivalMaterials Materials = Loot.Materials;
-    constexpr int32 AppraisalBonus[] = {0, 1, 2, 4};
-    const int32 ScavengingBonus = (Progression.Rank(ETraining::Scavenging) - 1) / 25
-        + AppraisalBonus[Progression.Rank(ETraining::LootAppraisal)];
-    Materials.Timber += FMath::Min(ScavengingBonus, Materials.Timber);
-    Materials.Stone += FMath::Min(ScavengingBonus, Materials.Stone);
-    Inventory.Add(Materials);
-    if (bFinishedSearch)
+    if (bViewingContainer)
+    {
+        ASurvivalSupplyCrate* Crate = ServerContainer.Get();
+        if (!CanReachLoot(Crate, SearchImpactPoint) || !Crate->HasBeenSearched())
+        {
+            ServerCloseContainer_Implementation();
+            ClientShowContainer(nullptr, TArray<FSurvivalLootSlot>{}, 0, false);
+        }
+        else if (Crate->GetLootRevision() != ServerSeenLootRevision)
+            ShowContainer(*Crate, false);
+    }
+
+    if (!bSearchingContainer) return;
+    ASurvivalSupplyCrate* Crate = SearchingContainer.Get();
+    FSearchProgress* Entry = SearchProgress.Find(ActiveSearchId);
+    if (!CanReachLoot(Crate, SearchImpactPoint) || !Entry || Entry->Seed != Crate->GetLootSeed())
+    {
+        bSearchingContainer = false;
+        ClientSearchTime(0, false);
+        return;
+    }
+
+    if (!Crate->HasBeenSearched() && (Entry->SecondsLeft -= DeltaSeconds) > 0) return;
+
+    const bool bFirstSearch = Crate->FinishSearch();
+    SearchProgress.Remove(ActiveSearchId);
+    bSearchingContainer = false;
+    ClientSearchTime(0, bFirstSearch);
+    ShowContainer(*Crate, true);
+}
+
+void ASurvivalCharacter::ClientSearchTime_Implementation(float Seconds, bool bFinished)
+{
+    SearchEndsAt = Seconds > 0 ? GetWorld()->GetTimeSeconds() + Seconds : 0;
+    if (bFinished)
     {
         Progression.AwardPractice(ETraining::Scavenging, 35);
         Progression.AwardXP(8);
     }
-    Items.Add(Loot.Items);
-    if (Loot.bRifle && !bHasRifle)
+}
+
+float ASurvivalCharacter::GetSearchSecondsLeft() const
+{
+    return FMath::Max(0.0, SearchEndsAt - GetWorld()->GetTimeSeconds());
+}
+
+void ASurvivalCharacter::ShowContainer(ASurvivalSupplyCrate& Crate, bool bOpenMenu)
+{
+    ServerContainer = &Crate;
+    bViewingContainer = true;
+    ServerSeenLootRevision = Crate.GetLootRevision();
+    ClientShowContainer(&Crate, Crate.GetSlots(), ServerSeenLootRevision, bOpenMenu);
+}
+
+void ASurvivalCharacter::ClientShowContainer_Implementation(ASurvivalSupplyCrate* Crate,
+    const TArray<FSurvivalLootSlot>& Slots, int32 Revision, bool bOpenMenu)
+{
+    if (HealthPoints <= 0 || (!bOpenMenu && !LootContainer.IsValid() && Crate)) return;
+    const bool bWasOpen = !ContainerSlots.IsEmpty();
+    LootContainer = Crate;
+    ContainerSlots = Slots;
+    ContainerRevision = Revision;
+    if (!ContainerSlots.IsEmpty()) bAimHeld = false;
+    if (bWasOpen != !ContainerSlots.IsEmpty())
     {
-        bHasRifle = true;
-        RifleAmmo = 1;
-        LoadRifleViewmodel();
-        UpdateRifleView();
+        if (APlayerController* Player = Cast<APlayerController>(GetController()))
+            if (ASurvivalHUD* HUD = Cast<ASurvivalHUD>(Player->GetHUD()))
+                HUD->SetLootVisible(*this, !ContainerSlots.IsEmpty());
     }
-    if (Loot.bSidearm && !bHasSidearm)
+}
+
+void ASurvivalCharacter::CloseContainer()
+{
+    ServerCloseContainer();
+    ClientShowContainer_Implementation(nullptr, TArray<FSurvivalLootSlot>{}, 0, false);
+}
+
+void ASurvivalCharacter::ServerCloseContainer_Implementation()
+{
+    ServerContainer.Reset();
+    bViewingContainer = false;
+}
+
+const FSurvivalLootSlot* ASurvivalCharacter::GetContainerSlot(int32 Index) const
+{
+    return ContainerSlots.IsValidIndex(Index) ? &ContainerSlots[Index] : nullptr;
+}
+
+namespace
+{
+bool PlaceLootStack(TArray<FSurvivalPackCell>& Pack, const FSurvivalLootSlot& Loot, int32 Target)
+{
+    const int32 Limit = Loot.GearIndex != INDEX_NONE ? MAX_int32 : SurvivalItemMaxStack(Loot.Item());
+    const auto Matches = [&Loot](const FSurvivalPackCell& Cell)
     {
-        EquipSidearm();
+        return !Cell.IsEmpty() && Cell.Item == Loot.Item() && Cell.GearIndex == Loot.GearIndex;
+    };
+    if (Target != INDEX_NONE)
+    {
+        if (!Pack.IsValidIndex(Target)) return false;
+        auto& Destination = Pack[Target];
+        if (Destination.IsEmpty()) Destination = Loot.ToPackCell();
+        else if (Matches(Destination) && Destination.Count <= Limit - Loot.Count) Destination.Count += Loot.Count;
+        else return false;
+        return true;
+    }
+
+    int32 Capacity = 0;
+    for (const auto& Cell : Pack)
+    {
+        if (Cell.IsEmpty()) Capacity += FMath::Min(Limit, Loot.Count - Capacity);
+        else if (Matches(Cell)) Capacity += FMath::Clamp(Limit - Cell.Count, 0, Loot.Count - Capacity);
+        if (Capacity >= Loot.Count) break;
+    }
+    if (Capacity < Loot.Count)
+    {
+        if (Pack.Num() + ASurvivalCharacter::PackRowWidth > ASurvivalCharacter::MaxPackCells) return false;
+        Pack.AddDefaulted(ASurvivalCharacter::PackRowWidth);
+    }
+
+    int32 Remaining = Loot.Count;
+    for (auto& Cell : Pack)
+    {
+        if (!Matches(Cell)) continue;
+        const int32 Moved = FMath::Clamp(Limit - Cell.Count, 0, Remaining);
+        Cell.Count += Moved;
+        Remaining -= Moved;
+        if (Remaining == 0) return true;
+    }
+    for (auto& Cell : Pack)
+    {
+        if (!Cell.IsEmpty()) continue;
+        Cell = Loot.ToPackCell();
+        Cell.Count = FMath::Min(Remaining, Limit);
+        Remaining -= Cell.Count;
+        if (Remaining == 0) return true;
+    }
+    return false;
+}
+
+bool IsWeaponLoot(ESurvivalItem Item)
+{
+    return Item == ESurvivalItem::Sidearm || Item == ESurvivalItem::Rifle;
+}
+}
+
+void ASurvivalCharacter::TakeContainerLoot(int32 Index, int32 PackTarget)
+{
+    if (!LootContainer.IsValid()) return;
+    TArray<FSurvivalPackCell> Preview = Pack;
+    TArray<int32> Indices;
+    for (int32 Slot = 0; Slot < ContainerSlots.Num(); ++Slot)
+    {
+        if (Index != INDEX_NONE && Slot != Index) continue;
+        const auto& Loot = ContainerSlots[Slot];
+        if (Loot.IsEmpty() || (IsWeaponLoot(Loot.Item()) && GetItemCount(Loot.Item()) > 0)) continue;
+        if (PlaceLootStack(Preview, Loot, PackTarget)) Indices.Add(Slot);
+    }
+    if (!Indices.IsEmpty())
+        ServerTakeContainerLoot(LootContainer.Get(), ContainerRevision, Indices, PackTarget);
+}
+
+bool ASurvivalCharacter::ValidateContainer(ASurvivalSupplyCrate* Crate, int32 Revision)
+{
+    if (!bViewingContainer || ServerContainer.Get() != Crate || !CanReachLoot(Crate, SearchImpactPoint) ||
+        !Crate->HasBeenSearched())
+        return false;
+    if (Crate->GetLootRevision() == Revision) return true;
+    ShowContainer(*Crate, false);
+    return false;
+}
+
+void ASurvivalCharacter::ServerTakeContainerLoot_Implementation(ASurvivalSupplyCrate* Crate,
+    int32 Revision, const TArray<int32>& Indices, int32 PackTarget)
+{
+    if (!ValidateContainer(Crate, Revision) || Indices.Num() > ASurvivalSupplyCrate::MaxLootSlots ||
+        (PackTarget != INDEX_NONE && (PackTarget < 0 || PackTarget >= MaxPackCells || Indices.Num() != 1)))
+        return;
+
+    const bool bApplyAppraisal = !Crate->IsDroppedLoot();
+    const auto Taken = Crate->TakeLoot(Indices);
+    for (const auto& Loot : Taken)
+        if (Loot.GearIndex != INDEX_NONE) OwnedGear.Add(Loot.GearIndex);
+    if (!Taken.IsEmpty()) ClientReceiveLoot(Taken, PackTarget, bApplyAppraisal);
+    if (IsValid(Crate)) ShowContainer(*Crate, false);
+    else
+    {
+        ServerCloseContainer_Implementation();
+        ClientShowContainer(nullptr, TArray<FSurvivalLootSlot>{}, 0, false);
+    }
+}
+
+void ASurvivalCharacter::MoveContainerLoot(int32 From, int32 To, bool bSplit)
+{
+    if (LootContainer.IsValid())
+        ServerMoveContainerLoot(LootContainer.Get(), ContainerRevision, From, To, bSplit);
+}
+
+void ASurvivalCharacter::ServerMoveContainerLoot_Implementation(ASurvivalSupplyCrate* Crate,
+    int32 Revision, int32 From, int32 To, bool bSplit)
+{
+    if (!ValidateContainer(Crate, Revision)) return;
+    Crate->MoveLoot(From, To, bSplit);
+    ShowContainer(*Crate, false);
+}
+
+void ASurvivalCharacter::ClientReceiveLoot_Implementation(const TArray<FSurvivalLootSlot>& Taken,
+    int32 PackTarget, bool bApplyAppraisal)
+{
+    for (const auto& Loot : Taken)
+    {
+        const auto Item = Loot.Item();
+        if (IsWeaponLoot(Item) && GetItemCount(Item) > 0) continue;
+        if (Loot.GearIndex != INDEX_NONE && !HasAuthority())
+        {
+            if (PackTarget != INDEX_NONE) PendingGearTargets.Add(Loot.GearIndex, PackTarget);
+            continue; // The replicated OwnedGear array supplies the actual item.
+        }
+        bool bPlaced = PlaceLootStack(Pack, Loot, PackTarget);
+        if (!bPlaced && PackTarget != INDEX_NONE) bPlaced = PlaceLootStack(Pack, Loot, INDEX_NONE);
+        if (Loot.GearIndex != INDEX_NONE) continue;
+        if (SurvivalItemHasQuality(Item))
+        {
+            if (!bPlaced) PendingLootParts.Add(Loot.ToPackCell());
+        }
+        else if (Item == ESurvivalItem::Sidearm)
+        {
+            if (Loot.Quality > 0)
+                for (int32 Slot = 0; Slot < FSurvivalWeaponAssembly::PartCount; ++Slot)
+                    SidearmAssembly.SwapPart(Slot, Loot.Quality);
+            EquipSidearm();
+        }
+        else if (Item == ESurvivalItem::Rifle)
+        {
+            bHasRifle = true;
+            if (Loot.Quality > 0)
+                for (int32 Slot = 0; Slot < FSurvivalWeaponAssembly::PartCount; ++Slot)
+                    RifleAssembly.SwapPart(Slot, Loot.Quality);
+            RifleAmmo = 1;
+            LoadRifleViewmodel();
+            UpdateRifleView();
+        }
+        else
+        {
+            FSurvivalLoot Grant;
+            if (int32* Count = Grant.StackCount(Item))
+            {
+                *Count = Loot.Count;
+                constexpr int32 AppraisalBonus[] = {0, 1, 2, 4};
+                const int32 Appraisal = FMath::Clamp(Progression.Rank(ETraining::LootAppraisal), 0, 3);
+                const int32 Bonus = bApplyAppraisal
+                    ? (Progression.Rank(ETraining::Scavenging) - 1) / 25 + AppraisalBonus[Appraisal] : 0;
+                Grant.Materials.Timber += FMath::Min(Bonus, Grant.Materials.Timber);
+                Grant.Materials.Stone += FMath::Min(Bonus, Grant.Materials.Stone);
+                Inventory.Add(Grant.Materials);
+                Items.Add(Grant.Items);
+            }
+        }
     }
 }
 
@@ -616,8 +831,10 @@ void ASurvivalCharacter::ServerUseRoofLadder_Implementation(AActor* Ladder, FVec
 
 void ASurvivalCharacter::Interact()
 {
-    if (HealthPoints <= 0 || bInventoryOpen)
+    if (HealthPoints <= 0 || bInventoryOpen) return;
+    if (HasOpenContainer())
     {
+        CloseContainer();
         return;
     }
     FHitResult LadderHit;
@@ -979,7 +1196,7 @@ bool ASurvivalCharacter::ShowHitMarker() const
 
 void ASurvivalCharacter::PrimaryAction()
 {
-    if (HealthPoints <= 0 || bInventoryOpen)
+    if (HealthPoints <= 0 || bInventoryOpen || HasOpenContainer())
     {
         return;
     }
@@ -1309,6 +1526,7 @@ void ASurvivalCharacter::TakeSurvivalDamage(int32 Amount)
     HealthPoints = FMath::Max(0, HealthPoints - Amount);
     if (HealthPoints == 0)
     {
+        if (HasOpenContainer()) CloseContainer();
         SetInventoryOpen(false);
         bBuildMode = false;
         ReloadCompleteAt = -1.0;
@@ -1371,11 +1589,6 @@ void ASurvivalCharacter::SetInventoryOpen(bool bOpen)
         return;
     }
     bInventoryOpen = bOpen;
-    if (!bOpen)
-    {
-        LootContainer.Reset();
-        ContainerLoot = {};
-    }
     InspectedWeapon = ESurvivalItem::None;
     ShowWeaponPortrait(false);
     bAimHeld = false;
@@ -1701,6 +1914,12 @@ void ASurvivalCharacter::RemoveFromPack(ESurvivalItem Item, int32 Amount)
 // The pack only decides where those totals sit: new items top up partial stacks first, spending empties the last stack.
 void ASurvivalCharacter::SyncPack()
 {
+    while (!PendingLootParts.IsEmpty())
+    {
+        const int32 Slot = FindFreePackCell();
+        if (Slot == INDEX_NONE) break;
+        Pack[Slot] = PendingLootParts.Pop();
+    }
     // OwnedGear includes worn garments. Only spare copies occupy backpack cells.
     int32 Remaining[UE_ARRAY_COUNT(SurvivalGear)]{};
     for (int32 Id : OwnedGear)
@@ -1728,6 +1947,20 @@ void ASurvivalCharacter::SyncPack()
         }
     }
 
+    for (auto It = PendingGearTargets.CreateIterator(); It; ++It)
+    {
+        if (!Pack.IsValidIndex(It.Value()) || !Pack[It.Value()].IsEmpty())
+        {
+            It.RemoveCurrent();
+            continue;
+        }
+        FSurvivalPackCell* Source = Pack.FindByPredicate([Id = It.Key()](const auto& Cell){ return Cell.GearIndex == Id; });
+        if (!Source) continue;
+        Pack[It.Value()] = *Source;
+        Pack[It.Value()].Count = 1;
+        if (--Source->Count == 0) *Source = {};
+        It.RemoveCurrent();
+    }
     for (const auto Weapon : {ESurvivalItem::Rifle, ESurvivalItem::Sidearm})
     {
         auto& SpareParts = Weapon == ESurvivalItem::Rifle ? Items.RifleParts : Items.SidearmParts;
@@ -1894,6 +2127,11 @@ void ASurvivalCharacter::ToggleBuildMode()
 
 void ASurvivalCharacter::RotatePiece()
 {
+    if (HasOpenContainer())
+    {
+        TakeContainerLoot();
+        return;
+    }
     if (bBuildMode)
     {
         QuarterTurns = (QuarterTurns + 1) % 4;

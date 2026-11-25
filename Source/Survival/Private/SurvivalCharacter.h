@@ -70,9 +70,14 @@ public:
     bool CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const;
     void CraftRecipe(int32 RecipeIndex, int32 Quantity);
     void ToggleInventory();
-    const FSurvivalLoot& GetContainerLoot() const { return ContainerLoot; }
+    const FSurvivalLootSlot* GetContainerSlot(int32 Index) const;
+    int32 GetContainerSlotCount() const { return ContainerSlots.Num(); }
+    int32 GetContainerRevision() const { return ContainerRevision; }
     bool HasOpenContainer() const { return LootContainer.IsValid(); }
-    void TakeContainerLoot(bool bTakeAll, ESurvivalItem Item = ESurvivalItem::None);
+    float GetSearchSecondsLeft() const;
+    void CloseContainer();
+    void TakeContainerLoot(int32 Index = INDEX_NONE, int32 PackTarget = INDEX_NONE);
+    void MoveContainerLoot(int32 From, int32 To, bool bSplit);
     UTextureRenderTarget2D* GetInventoryPortrait() const { return PortraitTexture; }
     void ShowWeaponPortrait(bool bWeapon, bool bCharacter = false);
     void RotateCharacterPortrait(float Degrees);
@@ -187,17 +192,39 @@ private:
     void ServerScavenge(ASurvivalSupplyCrate* Crate, FVector_NetQuantize10 ImpactPoint);
 
     UFUNCTION(Client, Reliable)
-    void ClientReceiveLoot(const FSurvivalLoot& Loot, bool bFinishedSearch);
+    void ClientReceiveLoot(const TArray<FSurvivalLootSlot>& Taken, int32 PackTarget, bool bApplyAppraisal);
     UFUNCTION(Client, Reliable)
-    void ClientShowContainer(ASurvivalSupplyCrate* Crate, FVector_NetQuantize10 ImpactPoint,
-        const FSurvivalLoot& Preview, bool bOpenMenu);
+    void ClientShowContainer(ASurvivalSupplyCrate* Crate, const TArray<FSurvivalLootSlot>& Slots,
+        int32 Revision, bool bOpenMenu);
+    UFUNCTION(Client, Reliable)
+    void ClientSearchTime(float Seconds, bool bFinished);
     UFUNCTION(Server, Reliable)
-    void ServerTakeContainerLoot(ASurvivalSupplyCrate* Crate, FVector_NetQuantize10 ImpactPoint,
-        bool bTakeAll, uint8 Item, int32 ExpectedGear);
+    void ServerCloseContainer();
+    UFUNCTION(Server, Reliable)
+    void ServerTakeContainerLoot(ASurvivalSupplyCrate* Crate, int32 Revision,
+        const TArray<int32>& Indices, int32 PackTarget);
+    UFUNCTION(Server, Reliable)
+    void ServerMoveContainerLoot(ASurvivalSupplyCrate* Crate, int32 Revision, int32 From, int32 To, bool bSplit);
     bool CanReachLoot(const ASurvivalSupplyCrate* Crate, FVector ImpactPoint) const;
+    bool ValidateContainer(ASurvivalSupplyCrate* Crate, int32 Revision);
+    void UpdateContainerSearch(float DeltaSeconds);
+    void ShowContainer(ASurvivalSupplyCrate& Crate, bool bOpenMenu);
+
+    struct FSearchProgress { int32 Seed = 0; float SecondsLeft = 0; };
+    TMap<FName, FSearchProgress> SearchProgress;
+    TWeakObjectPtr<ASurvivalSupplyCrate> SearchingContainer;
+    TWeakObjectPtr<ASurvivalSupplyCrate> ServerContainer;
+    FVector SearchImpactPoint = FVector::ZeroVector;
+    FName ActiveSearchId;
+    bool bSearchingContainer = false;
+    bool bViewingContainer = false;
+    int32 ServerSeenLootRevision = 0;
+    double SearchEndsAt = 0;
     TWeakObjectPtr<ASurvivalSupplyCrate> LootContainer;
-    FVector_NetQuantize10 LootImpactPoint;
-    FSurvivalLoot ContainerLoot;
+    TArray<FSurvivalLootSlot> ContainerSlots;
+    int32 ContainerRevision = 0;
+    TArray<FSurvivalPackCell> PendingLootParts;
+    TMap<int32, int32> PendingGearTargets;
 
     void ChangeItemCount(ESurvivalItem Item, int32 Delta);
     void SetInventoryOpen(bool bOpen);
