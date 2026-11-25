@@ -224,10 +224,13 @@ def prepare_sidearm_glb(source, destination, pistol_source, magazine_source):
     mount_magazine(model, binary, arms, magazine_bounds, magazine_source)
     model.pop("extensionsUsed", None)
     model.pop("extensionsRequired", None)
-    model["buffers"][0]["byteLength"] = len(binary)
     for animation in model["animations"]:
         animation["name"] = CLIPS[animation["name"]]
+    write_glb(destination, model, binary)
 
+
+def write_glb(destination, model, binary):
+    model["buffers"][0]["byteLength"] = len(binary)
     metadata = json.dumps(model, separators=(",", ":")).encode()
     metadata += b" " * (-len(metadata) % 4)
     destination.parent.mkdir(parents=True, exist_ok=True)

@@ -18,7 +18,8 @@ PLAYER = ART + "/Player"
 BUILDING = ART + "/Building"
 ZOMBIE = ART + "/StationZombie"
 WEAPON_AUDIO = "/Game/Audio/Weapons"
-VIEWMODEL = ART + "/AlignedSidearm"
+VIEWMODEL = ART + "/DressedSidearm"
+RIFLE_VIEWMODEL = ART + "/DressedSniper"
 LEVEL = "/Game/Maps/L_SouthernCrossroads"
 
 
@@ -321,13 +322,67 @@ def prepare_legacy_map():
         raise RuntimeError(f"Could not save the surfaces in {LEVEL}.")
 
 
-def import_sidearm():
+def import_viewmodel_cloth():
+    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    name = "M_ViewmodelCloth"
+    if assets.does_asset_exist(f"{VIEWMODEL}/{name}"):
+        return
+
+    tools = unreal.AssetToolsHelpers.get_asset_tools()
+    material = tools.create_asset(name, VIEWMODEL, unreal.Material, unreal.MaterialFactoryNew())
+    material.set_editor_property("used_with_skeletal_mesh", True)
+    edit = unreal.MaterialEditingLibrary
+    uv = edit.create_material_expression(material, unreal.MaterialExpressionTextureCoordinate, -500, 0)
+    color = edit.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -500, 180)
+    color.set_editor_property("parameter_name", unreal.Name("GearColor"))
+    color.set_editor_property("default_value", unreal.LinearColor(0.16, 0.16, 0.16, 1.0))
+    camo = edit.create_material_expression(material, unreal.MaterialExpressionScalarParameter, -500, 360)
+    camo.set_editor_property("parameter_name", unreal.Name("Camo"))
+    cloth = edit.create_material_expression(material, unreal.MaterialExpressionCustom, -200, 0)
+    inputs = []
+    for pin_name in ("UV", "Tint", "Camo"):
+        pin = unreal.CustomInput()
+        pin.set_editor_property("input_name", unreal.Name(pin_name))
+        inputs.append(pin)
+    cloth.set_editor_property("inputs", inputs)
+    cloth.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+    cloth.set_editor_property("code", """
+        float2 fabric = UV * 720.0;
+        float grain = sin(fabric.x) * cos(fabric.y);
+        float weave = 1.0 + 0.05 * grain * saturate(1.0 - length(fwidth(fabric)) * 0.25);
+        float patches = sin(UV.x * 63.0 + cos(UV.y * 35.0))
+                      + cos(UV.y * 73.0 + sin(UV.x * 43.0));
+        float pattern = lerp(0.55, 1.25, smoothstep(-0.2, 0.2, patches));
+        return Tint.rgb * weave * lerp(1.0, pattern, Camo);
+    """)
+    roughness = edit.create_material_expression(material, unreal.MaterialExpressionConstant, -200, 240)
+    roughness.set_editor_property("r", 0.88)
+    if not (edit.connect_material_expressions(uv, "", cloth, "UV")
+            and edit.connect_material_expressions(color, "", cloth, "Tint")
+            and edit.connect_material_expressions(camo, "", cloth, "Camo")
+            and edit.connect_material_property(cloth, "", unreal.MaterialProperty.MP_BASE_COLOR)
+            and edit.connect_material_property(roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)):
+        raise RuntimeError("Could not connect the viewmodel cloth material.")
+    edit.recompile_material(material)
+    if not assets.save_loaded_asset(material):
+        raise RuntimeError("Could not save the viewmodel cloth material.")
+
+
+def import_dressed_viewmodel(directory, names, source, *pistol_sources):
     generated = TOOLS.parent / "Saved" / "GeneratedArt"
+    import_skeletal_pack(directory, names, source, generated / f"{names[0]}.glb",
+                         "prepare_viewmodel_gear", *pistol_sources)
+    mesh = unreal.load_asset(f"{directory}/{names[0]}")
+    slots = [str(slot.get_editor_property("material_slot_name")) for slot in mesh.get_editor_property("materials")]
+    if not all(any(section in slot for slot in slots) for section in ("ViewmodelSleeves", "ViewmodelGloves")):
+        raise RuntimeError(f"{names[0]} is missing gear material slots.")
+
+
+def import_sidearm():
     sidearm = SOURCE / "Weapons" / "SM_CrossroadsSidearm.glb"
-    import_skeletal_pack(VIEWMODEL,
+    import_dressed_viewmodel(VIEWMODEL,
         ("SK_SidearmViewmodel", "ViewmodelIdle", "ViewmodelWalk", "ViewmodelFire", "ViewmodelReload", "ViewmodelReloadEmpty"),
-        SOURCE / "Weapons" / "fps_pistol_animations.glb", generated / "AlignedSidearm.glb", "prepare_sidearm_glb",
-        sidearm, SOURCE / "Weapons" / "SM_Magazine.glb")
+        SOURCE / "Weapons" / "fps_pistol_animations.glb", sidearm, SOURCE / "Weapons" / "SM_Magazine.glb")
     import_asset(sidearm, BUILDING, unreal.StaticMesh)
     shot = SOURCE / "Audio" / "SW_SidearmShot.wav"
     if shot.is_file():
@@ -335,11 +390,10 @@ def import_sidearm():
 
 
 def import_rifle():
-    sniper = ART + "/SniperSurface"
-    import_skeletal_pack(sniper, ("SK_SniperViewmodel", "SniperHold", "SniperFire", "SniperReload"),
-                         SOURCE / "Weapons" / "SK_SniperViewmodel.glb")
+    import_dressed_viewmodel(RIFLE_VIEWMODEL, ("SK_SniperViewmodel", "SniperHold", "SniperFire", "SniperReload"),
+                            SOURCE / "Weapons" / "SK_SniperViewmodel.glb")
     world_rifle = SOURCE / "Weapons" / "SM_CrossroadsSniper.glb"
-    import_asset(world_rifle, sniper, unreal.StaticMesh)
+    import_asset(world_rifle, ART + "/SniperSurface", unreal.StaticMesh)
 
 
 def import_characters():
@@ -374,7 +428,8 @@ def prepare():
     if os.environ.get("SURVIVAL_PREPARED_MARKER"):
         import equipment_art
         equipment_art.prepare()
-    for label, action in (("sidearm", import_sidearm), ("rifle", import_rifle),
+    for label, action in (("viewmodel cloth", import_viewmodel_cloth),
+                          ("sidearm", import_sidearm), ("rifle", import_rifle),
                           ("characters", import_characters), ("interface", import_interface)):
         unreal.log(f"Crossroads: importing {label}.")
         try:

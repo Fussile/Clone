@@ -113,9 +113,22 @@ struct FChoice
     FSurvivalLootSlot Slot;
     int32 Value;
     int32 Weight;
+    int32 DuplicateGroup;
 };
 
-constexpr int32 BudgetLimit = 4096;
+constexpr int32 BudgetLimit = 8192;
+constexpr int32 BulkStackBudget = 1000;
+constexpr int32 DuplicateLimit = 2;
+constexpr int32 DuplicateGroupCount = UE_ARRAY_COUNT(Values) + UE_ARRAY_COUNT(SurvivalGear);
+
+int32 GetDuplicateGroup(const FSurvivalLootSlot& Slot)
+{
+    if (Slot.GearIndex >= 0 && Slot.GearIndex < UE_ARRAY_COUNT(SurvivalGear))
+        return UE_ARRAY_COUNT(Values) + Slot.GearIndex;
+    if (Slot.ItemId < UE_ARRAY_COUNT(Values) && SurvivalItemMaxStack(Slot.Item()) == 1)
+        return Slot.ItemId;
+    return INDEX_NONE;
+}
 
 FSurvivalLootSlot MakeStack(EItem Item, int32 Count, int32 Quality, int32 Gear = INDEX_NONE)
 {
@@ -130,7 +143,7 @@ FSurvivalLootSlot MakeStack(EItem Item, int32 Count, int32 Quality, int32 Gear =
 void AddChoice(TArray<FChoice>& Choices, FSurvivalLootSlot Stack, int32 Weight, int32 Budget)
 {
     const int32 Value = SurvivalLootBudget::GetUnitValue(Stack) * Stack.Count;
-    if (Value > 0 && Value <= Budget) Choices.Add({Stack, Value, Weight});
+    if (Value > 0 && Value <= Budget) Choices.Add({Stack, Value, Weight, GetDuplicateGroup(Stack)});
 }
 }
 
@@ -152,7 +165,8 @@ int32 SurvivalLootBudget::GetUnitValue(const FSurvivalLootSlot& Slot)
 }
 
 TArray<FSurvivalLootSlot> SurvivalLootBudget::Roll(ESurvivalLootProfile Profile, int32 GameStage,
-    int32 MinimumValue, float DifficultyMultiplier, int32 Capacity, FRandomStream& Random, int32 FixedValue)
+    int32 MinimumValue, float DifficultyMultiplier, int32 Capacity, FRandomStream& Random,
+    TConstArrayView<FSurvivalLootSlot> AuthoredSlots)
 {
     TArray<FSurvivalLootSlot> Result;
     if (Capacity <= 0 || Profile == ESurvivalLootProfile::Authored || Profile == ESurvivalLootProfile::Storage ||
@@ -163,11 +177,20 @@ TArray<FSurvivalLootSlot> SurvivalLootBudget::Roll(ESurvivalLootProfile Profile,
     const int32 Stage = FMath::Clamp(GameStage, 1, FSurvivalProgression::LevelCap * 2);
     int32 Budget = FMath::Clamp(FMath::Max3(MinimumValue, Pool.MinimumValue,
         FMath::RoundToInt((Pool.BaseValue + (Stage - 1) * Pool.StageRate) * Difficulty)), 1, BudgetLimit);
-    Budget = FMath::Max(0, Budget - FixedValue);
+    int32 Copies[DuplicateGroupCount] = {};
+    for (const auto& Slot : AuthoredSlots)
+    {
+        if (Slot.IsEmpty()) continue;
+        Budget = FMath::Max(0, Budget - GetUnitValue(Slot) * Slot.Count);
+        const int32 Group = GetDuplicateGroup(Slot);
+        if (Group != INDEX_NONE) Copies[Group] += Slot.Count;
+    }
+    if (Budget == 0) return Result;
     const int32 QualityCeiling = FMath::Clamp(1 + FMath::RoundToInt((Stage - 1) * 4.0f * Difficulty
         + FMath::Max(0.0f, Difficulty - 1.0f) * 125.0f), 1, FSurvivalWeaponAssembly::MaxQuality);
 
-    if (Pool.GuaranteedItem != EItem::None && Budget >= Values[static_cast<int32>(Pool.GuaranteedItem)].BaseValue)
+    if (Pool.GuaranteedItem != EItem::None && Copies[static_cast<int32>(Pool.GuaranteedItem)] == 0
+        && Budget >= Values[static_cast<int32>(Pool.GuaranteedItem)].BaseValue)
     {
         auto Stack = MakeStack(Pool.GuaranteedItem, 1, 1);
         const auto& Price = Values[Stack.ItemId];
@@ -175,6 +198,7 @@ TArray<FSurvivalLootSlot> SurvivalLootBudget::Roll(ESurvivalLootProfile Profile,
         const int32 Top = FMath::Min(QualityCeiling, AffordableQuality);
         Stack.Quality = Random.RandRange(FMath::Max(1, Top / 3), Top);
         Result.Add(Stack);
+        ++Copies[Stack.ItemId];
         Budget -= GetUnitValue(Stack);
     }
 
@@ -200,49 +224,72 @@ TArray<FSurvivalLootSlot> SurvivalLootBudget::Roll(ESurvivalLootProfile Profile,
         }
         else
         {
-            const int32 Count = FMath::Min(Entry.MaxCount + (Stage - 1) / 4, SurvivalItemMaxStack(Entry.Item));
+            const int32 MaxCount = SurvivalItemMaxStack(Entry.Item);
+            const int32 Count = FMath::Min(Entry.MaxCount + (Stage - 1) / 4, MaxCount);
             // A singleton fills small gaps. Two larger stack sizes help higher-stage rolls fit the grid.
             AddChoice(Choices, MakeStack(Entry.Item, 1, 0), Count > 1 ? FMath::Max(1, Entry.Weight / 4) : Entry.Weight, Budget);
             if (Count > 1)
                 AddChoice(Choices, MakeStack(Entry.Item, 1 + Count / 2, 0), Entry.Weight, Budget);
             if (Count > 2)
                 AddChoice(Choices, MakeStack(Entry.Item, Count, 0), Entry.Weight, Budget);
+            if (Budget >= BulkStackBudget && Count < MaxCount)
+                AddChoice(Choices, MakeStack(Entry.Item, MaxCount, 0), FMath::Max(1, Entry.Weight / 4), Budget);
         }
     }
 
-    // Minimum slots needed to spend each value. Pick only options that still leave room
-    // to reach the best attainable total within the budget.
     TArray<int32> SlotsNeeded;
-    SlotsNeeded.Init(Capacity + 1, Budget + 1);
-    SlotsNeeded[0] = 0;
-    for (int32 Value = 1; Value <= Budget; ++Value)
-        for (const auto& Choice : Choices)
-            if (Choice.Value <= Value)
-                SlotsNeeded[Value] = FMath::Min(SlotsNeeded[Value], 1 + SlotsNeeded[Value - Choice.Value]);
+    const auto RecalculateValues = [&]
+    {
+        // A group reaching its limit retires every quality of that item at once.
+        Choices.RemoveAll([&](const FChoice& Choice)
+        {
+            return Choice.DuplicateGroup != INDEX_NONE && Copies[Choice.DuplicateGroup] >= DuplicateLimit;
+        });
+        const int32 RemainingSlots = Capacity - Result.Num();
+        SlotsNeeded.Init(RemainingSlots + 1, Budget + 1);
+        SlotsNeeded[0] = 0;
+        for (int32 Value = 1; Value <= Budget; ++Value)
+            for (const auto& Choice : Choices)
+                if (Choice.Value <= Value)
+                    SlotsNeeded[Value] = FMath::Min(SlotsNeeded[Value], 1 + SlotsNeeded[Value - Choice.Value]);
+        while (Budget > 0 && SlotsNeeded[Budget] > RemainingSlots) --Budget;
+    };
+    RecalculateValues();
 
-    while (Budget > 0 && SlotsNeeded[Budget] > Capacity - Result.Num()) --Budget;
+    TArray<int32, TInlineAllocator<64>> Weights;
+    Weights.Reserve(Choices.Num());
     while (Budget > 0 && Result.Num() < Capacity)
     {
         const int32 RemainingSlots = Capacity - Result.Num() - 1;
-        const auto Fits = [&](const FChoice& Choice)
-        {
-            return Choice.Value <= Budget && SlotsNeeded[Budget - Choice.Value] <= RemainingSlots;
-        };
+        Weights.Reset();
         int32 Weight = 0;
         for (const auto& Choice : Choices)
-            if (Fits(Choice)) Weight += Choice.Weight;
+        {
+            int32 Adjusted = 0;
+            if (Choice.Value <= Budget && SlotsNeeded[Budget - Choice.Value] <= RemainingSlots)
+            {
+                const bool bDuplicate = Choice.DuplicateGroup != INDEX_NONE && Copies[Choice.DuplicateGroup] > 0;
+                Adjusted = bDuplicate ? Choice.Weight : 8 * Choice.Weight;
+            }
+            Weights.Add(Adjusted);
+            Weight += Adjusted;
+        }
         if (Weight == 0) break;
 
         int32 Pick = Random.RandRange(1, Weight);
-        for (const auto& Choice : Choices)
+        int32 Group = INDEX_NONE;
+        for (int32 Index = 0; Index < Choices.Num(); ++Index)
         {
-            if (!Fits(Choice)) continue;
-            Pick -= Choice.Weight;
+            Pick -= Weights[Index];
             if (Pick > 0) continue;
+            const FChoice& Choice = Choices[Index];
             Result.Add(Choice.Slot);
             Budget -= Choice.Value;
+            Group = Choice.DuplicateGroup;
             break;
         }
+        if (Group != INDEX_NONE && ++Copies[Group] == DuplicateLimit && Budget > 0 && Result.Num() < Capacity)
+            RecalculateValues();
     }
     return Result;
 }

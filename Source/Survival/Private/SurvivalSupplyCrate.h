@@ -180,7 +180,7 @@ private:
     FSurvivalLoot GetAuthoredLoot() const;
 
     // Overrides can raise a site's reward floor and adjust its profile's regional scaling.
-    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0", ClampMax = "4096"))
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0", ClampMax = "8192"))
     int32 MinimumLootValue = 0;
     UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0.25", ClampMax = "4.0"))
     float LootDifficultyMultiplier = 1.0f;
