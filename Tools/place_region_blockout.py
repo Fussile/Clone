@@ -249,6 +249,7 @@ def place():
         def setup(actor):
             configure(actor)
             actor.set_editor_property("max_health", health)
+            actor.set_editor_property("loot_name", label.lower())
             actor.set_editor_property("loot_profile", getattr(unreal.SurvivalLootProfile, profile))
 
         return spawn(crate_class, key, label, x, y, z, setup, relocate=True, reconfigure=True)
@@ -291,7 +292,7 @@ def place():
                   relocate=True, reconfigure=True)
 
     def district_mesh(key, label, name, x, y, floor, dimensions, *, yaw=0, collision=True, health=None,
-                      align=True):
+                      align=True, loot_profile="BUILDING"):
         asset = district_meshes[name]
         center_z = floor + dimensions[2]/2
 
@@ -304,7 +305,7 @@ def place():
             spawn(unreal.StaticMeshActor, key, label, x, y, center_z, configure,
                   relocate=True, reconfigure=True)
         else:
-            prop_kind(key, label, health, "BUILDING", x, y, center_z, configure)
+            prop_kind(key, label, health, loot_profile, x, y, center_z, configure)
 
     facade_class = unreal.load_class(None, "/Script/Survival.SurvivalFacade")
     if not facade_class:
@@ -481,7 +482,8 @@ def place():
         dimensions = {"BurnedSedan": (4.6,1.92,1.34), "BurnedCompact": (4.05,1.73,1.19),
                       "RustedTruck": (6.4,2.37,2.52), "AbandonedVan": (4.44,1.83,1.72)}
         label = "Abandoned vehicle" if name == "AbandonedVan" else "Wrecked vehicle"
-        district_mesh(key,label,name,x,y,z,dimensions[name],yaw=yaw,health=240)
+        district_mesh(key, label, name, x, y, z, dimensions[name], yaw=yaw, health=240,
+                      loot_profile="VEHICLE")
 
     prop_profiles = {
         "Station counter": (95, "GENERAL"),
@@ -682,13 +684,22 @@ def place():
             else:
                 profile = "GENERAL"
 
+        if profile == "SECURITY" and any(key.startswith(f"CrossroadsRegion_{site}_")
+                                         for site in ("city-police", "north-police", "east-police")):
+            profile = "POLICE_ARMORY"
+
         def configure(actor):
             for prop, amount in {"timber_amount": 0, "stone_amount": 0, **loot}.items():
                 actor.set_editor_property(prop, amount)
             actor.set_editor_property("loot_profile", getattr(unreal.SurvivalLootProfile, profile))
             actor.set_editor_property("spawn_chance_percent", chance)
-            component = fitted_mesh(actor, crate_mesh, (.82, .61, .58))
-            if profile == "SECURITY" or loot.get("contains_sidearm") or loot.get("contains_rifle"):
+            actor.set_editor_property("loot_name", label.lower())
+            if profile == "MAILBOX":
+                component = fitted_mesh(actor, cube, (.38, .24, .26))
+                component.set_material(0, style_materials["petrol"])
+            else:
+                component = fitted_mesh(actor, crate_mesh, (.82, .61, .58))
+            if profile in {"SECURITY", "POLICE_ARMORY", "MILITARY_ARMORY"} or loot.get("contains_sidearm") or loot.get("contains_rifle"):
                 component.set_material(0, military_crate)
 
         # Rebase both existing and new actors before centering the imported mesh.
@@ -1169,6 +1180,8 @@ def place():
                 hx = x+side*45
                 ramp(f"{new_key}_taxilane_{side}", "Maintenance apron taxi lane", hx, taxi_y, y-32,
                      taxi["datum"]+(hx-taxi["x"])*taxi["slope"], z+.21, 42, concrete)
+            cache(new_key+"_armory", "Military weapon crate", x+45-21, y+14, z+.215,
+                  profile="MILITARY_ARMORY")
             sign(new_key+"_sign", "JOINT AIR OPERATIONS", x, y+32, z+3)
             migrate_landmark(key, new_key, (key+"_slab",))
         elif site["id"] in {"city-police", "city-hall", "university"}:
@@ -1434,6 +1447,12 @@ def place():
     remove_generated(*(previous_roads - touched_roads))
     for checkpoint in plan["checkpoints"]:
         communications["stamp_checkpoint"](checkpoint, communications_art)
+        x, y, z = checkpoint["xyz_m"]
+        dx, dy = checkpoint["end"][0] - x, checkpoint["end"][1] - y
+        length = math.hypot(dx, dy) or 1
+        offset = checkpoint["width_m"]/2 + 2.0
+        cache(f'CrossroadsCheckpoint_{checkpoint["id"]}_supplies', "Checkpoint supply crate",
+              x-dy/length*offset, y+dx/length*offset, z, profile="SECURITY", chance=65)
 
     spawn(unreal.TargetPoint, "CrossroadsRegionReady", "Crossroads region bake complete",
           sx, sy, 0, lambda actor: None, always_loaded=True)

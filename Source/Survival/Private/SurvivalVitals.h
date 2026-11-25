@@ -17,6 +17,7 @@ struct FSurvivalWeaponAssembly
 {
     static constexpr int32 PartCount = 4;
     static constexpr int32 FactoryQuality = 40;
+    static constexpr int32 MaxQuality = 999;
     static constexpr ESurvivalItem FirstPart(ESurvivalItem Weapon)
     {
         return Weapon == ESurvivalItem::Sidearm ? ESurvivalItem::SidearmGrip : ESurvivalItem::RifleStock;
@@ -50,6 +51,7 @@ struct FSurvivalPackCell
     int32 Quality = 0;
 
     int32 GearIndex = INDEX_NONE;
+    int32 WeaponId = INDEX_NONE;
 
     bool IsEmpty() const { return (Item == ESurvivalItem::None && GearIndex == INDEX_NONE) || Count <= 0; }
 };

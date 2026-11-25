@@ -14,6 +14,8 @@
 #include "SurvivalInventoryMenu.h"
 #include "SurvivalSupplyCrate.h"
 #include "SurvivalWorldDoor.h"
+#include "Widgets/Layout/SScaleBox.h"
+#include "Widgets/SBoxPanel.h"
 
 namespace
 {
@@ -69,47 +71,76 @@ FBox2f ASurvivalHUD::GetItemIconUV(ESurvivalItem Item) const
 
 void ASurvivalHUD::SetInventoryVisible(ASurvivalCharacter& Character, bool bVisible)
 {
+    if (bVisible == InventoryWidget.IsValid()) return;
+    RemoveMenuRoot();
+    if (bVisible) InventoryWidget = SNew(SSurvivalInventoryMenu).Player(&Character).HUD(this);
+    else InventoryWidget.Reset();
+    RefreshMenuRoot(bVisible ? InventoryWidget : LootWidget);
+}
+
+void ASurvivalHUD::SetLootVisible(ASurvivalCharacter& Character, bool bVisible)
+{
+    if (bVisible == LootWidget.IsValid()) return;
+    RemoveMenuRoot();
+    if (bVisible) LootWidget = MakeSurvivalLootGrid(Character, *this);
+    else LootWidget.Reset();
+    RefreshMenuRoot(bVisible ? LootWidget : InventoryWidget);
+}
+
+void ASurvivalHUD::RefreshMenuRoot(const TSharedPtr<SWidget>& Focus)
+{
     ULocalPlayer* LocalPlayer = PlayerOwner ? PlayerOwner->GetLocalPlayer() : nullptr;
     UGameViewportClient* Viewport = LocalPlayer ? LocalPlayer->ViewportClient : nullptr;
-    if (!LocalPlayer || !Viewport || bVisible == InventoryWidget.IsValid())
-    {
-        return;
-    }
+    if (!Viewport) return;
 
+    const bool bVisible = Focus.IsValid();
     if (bVisible)
     {
-        InventoryWidget = SNew(SSurvivalInventoryMenu).Player(&Character).HUD(this);
-        Viewport->AddViewportWidgetForPlayer(LocalPlayer, InventoryWidget.ToSharedRef(), 10);
+        auto Panels = SNew(SHorizontalBox);
+        if (LootWidget)
+            Panels->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(12)[LootWidget.ToSharedRef()];
+        if (InventoryWidget)
+            Panels->AddSlot().AutoWidth().VAlign(VAlign_Center)[InventoryWidget.ToSharedRef()];
+        MenuRoot = SNew(SScaleBox).Stretch(EStretch::ScaleToFit).StretchDirection(EStretchDirection::DownOnly)[Panels];
+        Viewport->AddViewportWidgetForPlayer(LocalPlayer, MenuRoot.ToSharedRef(), 10);
+
         FInputModeGameAndUI Mode;
-        Mode.SetWidgetToFocus(InventoryWidget);
+        Mode.SetWidgetToFocus(Focus);
         Mode.SetHideCursorDuringCapture(false);
         PlayerOwner->SetInputMode(Mode);
     }
     else
     {
-        RemoveInventoryWidget();
         PlayerOwner->SetInputMode(FInputModeGameOnly());
     }
-    PlayerOwner->bShowMouseCursor = bVisible;
-    PlayerOwner->SetIgnoreLookInput(bVisible);
-    PlayerOwner->SetIgnoreMoveInput(bVisible);
+
+    if (bMenuInputActive != bVisible)
+    {
+        bMenuInputActive = bVisible;
+        PlayerOwner->bShowMouseCursor = bVisible;
+        PlayerOwner->SetIgnoreLookInput(bVisible);
+        PlayerOwner->SetIgnoreMoveInput(bVisible);
+    }
 }
 
-void ASurvivalHUD::RemoveInventoryWidget()
+void ASurvivalHUD::RemoveMenuRoot()
 {
-    if (InventoryWidget && PlayerOwner)
+    if (MenuRoot && PlayerOwner)
     {
         if (ULocalPlayer* LocalPlayer = PlayerOwner->GetLocalPlayer(); LocalPlayer && LocalPlayer->ViewportClient)
-        {
-            LocalPlayer->ViewportClient->RemoveViewportWidgetForPlayer(LocalPlayer, InventoryWidget.ToSharedRef());
-        }
+            LocalPlayer->ViewportClient->RemoveViewportWidgetForPlayer(LocalPlayer, MenuRoot.ToSharedRef());
     }
-    InventoryWidget.Reset();
+    MenuRoot.Reset();
 }
 
 void ASurvivalHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-    RemoveInventoryWidget();
+    RemoveMenuRoot();
+    if (bMenuInputActive && PlayerOwner)
+    {
+        PlayerOwner->SetIgnoreLookInput(false);
+        PlayerOwner->SetIgnoreMoveInput(false);
+    }
     Super::EndPlay(EndPlayReason);
 }
 
@@ -218,11 +249,11 @@ void ASurvivalHUD::DrawHUD()
     const float CenterX = Canvas->SizeX * 0.5f;
     const float CenterY = Canvas->SizeY * 0.5f;
     const bool bScoped = Character->GetScopeBlend() > 0.0f && Character->GetScopeTexture();
-    if (bScoped && !Character->IsInventoryOpen())
+    if (bScoped && !Character->IsInventoryOpen() && !Character->HasOpenContainer())
     {
         DrawRifleScope(*Character, CenterX, CenterY);
     }
-    if (!bScoped && !Character->IsAimingSidearm() && !Character->IsInventoryOpen())
+    if (!bScoped && !Character->IsAimingSidearm() && !Character->IsInventoryOpen() && !Character->HasOpenContainer())
     {
         DrawRect(FLinearColor::White, CenterX - 1.5f, CenterY - 1.5f, 3.0f, 3.0f);
     }
@@ -325,7 +356,12 @@ void ASurvivalHUD::DrawHUD()
         return;
     }
 
-    if (Character->IsInventoryOpen())
+    if (const float Seconds = Character->GetSearchSecondsLeft(); Seconds > 0.0f)
+    {
+        DrawText(FString::Printf(TEXT("Searching   %.1f s"), Seconds),
+            FLinearColor::White, CenterX - 55.0f, CenterY + 55.0f);
+    }
+    if (Character->IsInventoryOpen() || Character->HasOpenContainer())
     {
         return;
     }
@@ -385,8 +421,9 @@ void ASurvivalHUD::DrawHUD()
     }
     else if (const ASurvivalSupplyCrate* Crate = Character->FindSupplyCrate())
     {
-        const TCHAR* Prompt = Crate->HasSupplies() ? TEXT("[E] Search container") : TEXT("[E] Check container");
-        DrawText(Prompt,
+        const TCHAR* Status = !Crate->HasBeenSearched() ? TEXT(" (untouched)") :
+            (Crate->HasSupplies() ? TEXT("") : TEXT(" (empty)"));
+        DrawText(FString::Printf(TEXT("Press E to search %s%s"), *Crate->GetLootName(), Status),
             FLinearColor::White, CenterX + 14.0f, CenterY + 12.0f);
     }
     else if (const FSurvivalFinishedPiece* Piece = Character->FindFinishedPiece())

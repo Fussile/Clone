@@ -8,51 +8,8 @@
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
 #include "SurvivalGameMode.h"
+#include "SurvivalLootBudget.h"
 #include "UObject/ConstructorHelpers.h"
-
-namespace
-{
-enum class ELootGroup : uint8 { Food, Building, Medical, Security, Books, Count };
-
-struct FLootWeights
-{
-    int32 Values[static_cast<int32>(ELootGroup::Count)];
-};
-
-constexpr FLootWeights General{{30, 30, 18, 10, 12}};
-constexpr FLootWeights Food{{78, 8, 7, 2, 5}};
-constexpr FLootWeights Building{{9, 73, 8, 6, 4}};
-constexpr FLootWeights Medical{{9, 6, 76, 3, 6}};
-constexpr FLootWeights Security{{9, 12, 15, 59, 5}};
-constexpr FLootWeights Office{{19, 15, 13, 5, 48}};
-
-const FLootWeights& WeightsFor(ESurvivalLootProfile Profile)
-{
-    switch (Profile)
-    {
-    case ESurvivalLootProfile::Food: return Food;
-    case ESurvivalLootProfile::Building: return Building;
-    case ESurvivalLootProfile::Medical: return Medical;
-    case ESurvivalLootProfile::Security: return Security;
-    case ESurvivalLootProfile::Office: return Office;
-    default: return General;
-    }
-}
-
-ELootGroup PickGroup(FRandomStream& Random, const FLootWeights& Weights)
-{
-    int32 Roll = Random.RandRange(1, 100);
-    for (int32 Index = 0; Index < static_cast<int32>(ELootGroup::Count); ++Index)
-    {
-        Roll -= Weights.Values[Index];
-        if (Roll <= 0)
-        {
-            return static_cast<ELootGroup>(Index);
-        }
-    }
-    return ELootGroup::Food;
-}
-}
 
 ASurvivalSupplyCrate::ASurvivalSupplyCrate()
 {
@@ -107,8 +64,8 @@ void ASurvivalSupplyCrate::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(ASurvivalSupplyCrate, bWorldPresent);
     DOREPLIFETIME(ASurvivalSupplyCrate, bLootAvailable);
-    DOREPLIFETIME(ASurvivalSupplyCrate, bSidearmAvailable);
-    DOREPLIFETIME(ASurvivalSupplyCrate, bRifleAvailable);
+    DOREPLIFETIME(ASurvivalSupplyCrate, bWasSearched);
+    DOREPLIFETIME(ASurvivalSupplyCrate, LootProfile);
 }
 
 FName ASurvivalSupplyCrate::GetLootId() const
@@ -152,16 +109,6 @@ int32 FSurvivalLoot::Count(ESurvivalItem Item) const
     return Stack ? *Stack : 0;
 }
 
-FSurvivalLoot FSurvivalLoot::TakeStack(ESurvivalItem Item)
-{
-    FSurvivalLoot Result;
-    if (Item == ESurvivalItem::None) Swap(Result.GearIndex, GearIndex);
-    else if (Item == ESurvivalItem::Rifle) Swap(Result.bRifle, bRifle);
-    else if (Item == ESurvivalItem::Sidearm) Swap(Result.bSidearm, bSidearm);
-    else if (int32* Source = StackCount(Item)) Swap(*Result.StackCount(Item), *Source);
-    return Result;
-}
-
 bool FSurvivalLoot::IsEmpty() const
 {
     if (GearIndex != INDEX_NONE || !Materials.IsEmpty() || bSidearm || bRifle || Items.Food || Items.Water || Items.Cloth
@@ -180,9 +127,10 @@ bool FSurvivalLoot::IsEmpty() const
     return true;
 }
 
-FSurvivalLoot ASurvivalSupplyCrate::RollLoot(FRandomStream& Random) const
+FSurvivalLoot ASurvivalSupplyCrate::GetAuthoredLoot() const
 {
     FSurvivalLoot Loot;
+    if (LootProfile == ESurvivalLootProfile::Storage) return Loot;
     if (LootProfile == ESurvivalLootProfile::Authored)
     {
         Loot.Materials = {FMath::Max(0, TimberAmount), FMath::Max(0, StoneAmount)};
@@ -190,87 +138,128 @@ FSurvivalLoot ASurvivalSupplyCrate::RollLoot(FRandomStream& Random) const
         Loot.Items.Water = FMath::Max(0, WaterAmount);
         Loot.Items.Cloth = FMath::Max(0, ClothAmount);
     }
-    else
-    {
-        const int32 Draws = Random.RandRange(1, 2);
-        for (int32 Index = 0; Index < Draws; ++Index)
-        {
-            switch (PickGroup(Random, WeightsFor(LootProfile)))
-            {
-            case ELootGroup::Food:
-                Loot.Items.Food += Random.RandRange(1, 3);
-                Loot.Items.Water += Random.RandRange(1, 2);
-                break;
-            case ELootGroup::Building:
-                Loot.Materials.Timber += Random.RandRange(3, 9);
-                Loot.Materials.Stone += Random.RandRange(1, 5);
-                break;
-            case ELootGroup::Medical:
-                Loot.Items.Cloth += Random.RandRange(1, 4);
-                if (Random.RandRange(1, 4) == 1)
-                {
-                    ++Loot.Items.Bandages;
-                }
-                break;
-            case ELootGroup::Security:
-                Loot.Items.Rounds += Random.RandRange(3, 7);
-                Loot.Items.RifleRounds += Random.RandRange(1, 3);
-                if (Random.RandRange(1, 5) == 1)
-                {
-                    auto& Parts = Random.RandRange(0, 1) == 0 ? Loot.Items.RifleParts : Loot.Items.SidearmParts;
-                    ++Parts[Random.RandRange(0, FSurvivalWeaponAssembly::PartCount - 1)];
-                }
-                break;
-            case ELootGroup::Books:
-                if (Random.RandRange(1, 3) == 1)
-                {
-                    ++Loot.Items.BuilderGuides;
-                }
-                else
-                {
-                    ++Loot.Items.ScavengerNotes;
-                }
-                break;
-            default: break;
-            }
-        }
-    }
-    Loot.Items.BuilderGuides += FMath::Max(0, BuilderGuideAmount);
-    Loot.Items.ScavengerNotes += FMath::Max(0, ScavengerNotesAmount);
-    Loot.Items.DressingSchematics += FMath::Max(0, DressingSchematicAmount);
+    Loot.Items.BuilderGuides = FMath::Max(0, BuilderGuideAmount);
+    Loot.Items.ScavengerNotes = FMath::Max(0, ScavengerNotesAmount);
+    Loot.Items.DressingSchematics = FMath::Max(0, DressingSchematicAmount);
     if (RiflePartSlot >= 0 && RiflePartSlot < FSurvivalWeaponAssembly::PartCount)
-    {
         ++Loot.Items.RifleParts[RiflePartSlot];
-    }
-    Loot.Items.RifleRounds += bContainsRifle ? 8 : 0;
-    if ((LootProfile == ESurvivalLootProfile::Security || LootProfile == ESurvivalLootProfile::General)
-        && Random.RandRange(1, 100) <= 35)
-    {
-        Loot.GearIndex = Random.RandRange(0, UE_ARRAY_COUNT(SurvivalGear) - 1);
-    }
+
+    if (LootProfile == ESurvivalLootProfile::Vehicle || LootProfile == ESurvivalLootProfile::Mailbox)
+        return Loot;
+
+    Loot.bSidearm = bContainsSidearm;
+    Loot.bRifle = bContainsRifle;
+    Loot.SidearmQuality = FSurvivalWeaponAssembly::FactoryQuality;
+    Loot.RifleQuality = FSurvivalWeaponAssembly::FactoryQuality;
+    if (bContainsSidearm) Loot.Items.Rounds = 8;
     if (bContainsRifle)
     {
-        // The station locker introduces the equipment screen on the first supply run.
+        Loot.Items.RifleRounds = 8;
         for (int32 Index = 0; Index < UE_ARRAY_COUNT(SurvivalGear); ++Index)
             if (FCString::Strcmp(SurvivalGear[Index].Id, TEXT("hard_hat")) == 0) Loot.GearIndex = Index;
     }
-    Loot.bSidearm = bContainsSidearm;
-    Loot.bRifle = bContainsRifle;
     return Loot;
+}
+
+FString ASurvivalSupplyCrate::GetLootName() const
+{
+    if (!LootName.IsEmpty()) return LootName;
+    switch (LootProfile)
+    {
+    case ESurvivalLootProfile::Vehicle: return TEXT("vehicle");
+    case ESurvivalLootProfile::Mailbox: return TEXT("mailbox");
+    case ESurvivalLootProfile::Storage: return TEXT("storage chest");
+    case ESurvivalLootProfile::Dropped: return TEXT("dropped supplies");
+    default: return TEXT("supply crate");
+    }
+}
+
+int32 ASurvivalSupplyCrate::GetSlotCapacity() const
+{
+    if (bDropped) return 4;
+    if (LootProfile == ESurvivalLootProfile::Mailbox) return 4;
+    if (LootProfile == ESurvivalLootProfile::Vehicle) return MaxLootSlots;
+    return ChestSlots;
+}
+
+float ASurvivalSupplyCrate::GetSearchDuration() const
+{
+    const FVector Extent = Mesh->Bounds.BoxExtent;
+    const double Length = Extent.GetMax() * 2.0;
+    const double Seconds = FMath::Clamp(0.35 + Length / 125.0, 0.65, 6.0);
+    if (LootProfile == ESurvivalLootProfile::Vehicle) return FMath::Max(4.0, Seconds);
+    if (LootProfile == ESurvivalLootProfile::Mailbox) return FMath::Min(1.0, Seconds);
+    return Seconds;
+}
+
+void ASurvivalSupplyCrate::PopulateSlots(const FSurvivalLoot& Loot)
+{
+    State.Slots.SetNum(GetSlotCapacity());
+    int32 NextSlot = 0;
+    for (uint8 Id = 0; Id <= static_cast<uint8>(ESurvivalItem::None) && NextSlot < State.Slots.Num(); ++Id)
+    {
+        const auto Item = static_cast<ESurvivalItem>(Id);
+        const int32 Limit = SurvivalItemMaxStack(Item);
+        int32 Count = Loot.Count(Item);
+        while (Count > 0 && NextSlot < State.Slots.Num())
+        {
+            FSurvivalLootSlot& Entry = State.Slots[NextSlot++];
+            Entry.ItemId = Id;
+            Entry.Count = FMath::Min(Count, Limit);
+            Count -= Entry.Count;
+            if (Item == ESurvivalItem::None) Entry.GearIndex = Loot.GearIndex;
+            else if (Item == ESurvivalItem::Sidearm) Entry.Quality = Loot.SidearmQuality;
+            else if (Item == ESurvivalItem::Rifle) Entry.Quality = Loot.RifleQuality;
+            else if (SurvivalItemHasQuality(Item))
+            {
+                const int32 Part = FSurvivalWeaponAssembly::PartIndex(Item);
+                Entry.Quality = Part != INDEX_NONE ? FSurvivalWeaponAssembly::SpareQuality(Part) : 40;
+            }
+        }
+    }
+}
+
+bool ASurvivalSupplyCrate::FinishSearch(int32 GameStage)
+{
+    if (!HasAuthority() || !bWorldPresent || bWasSearched) return false;
+    FRandomStream Random(LootSeed);
+    Random.RandRange(1, 100); // Match the occupancy draw at the start of this loot cycle.
+    PopulateSlots(GetAuthoredLoot());
+    int32 FixedValue = 0;
+    int32 FilledSlots = 0;
+    for (const auto& Slot : State.Slots)
+    {
+        if (Slot.IsEmpty()) continue;
+        FixedValue += SurvivalLootBudget::GetUnitValue(Slot) * Slot.Count;
+        ++FilledSlots;
+    }
+
+    auto Rolled = SurvivalLootBudget::Roll(LootProfile, GameStage, MinimumLootValue, LootDifficultyMultiplier,
+        State.Slots.Num() - FilledSlots, Random, FixedValue);
+    for (int32 Index = 0; Index < Rolled.Num(); ++Index)
+        State.Slots[FilledSlots + Index] = Rolled[Index];
+
+    if (LootProfile != ESurvivalLootProfile::Authored)
+    {
+        for (int32 Index = State.Slots.Num() - 1; Index > 0; --Index)
+            State.Slots.Swap(Index, Random.RandRange(0, Index));
+    }
+    State.bSearched = true;
+    UpdateLootState();
+    return true;
 }
 
 void ASurvivalSupplyCrate::SetLootCycle(int32 Seed, const FSurvivalScavengeState* Previous)
 {
+    LootSeed = Seed;
     FRandomStream Random(Seed);
     const bool bOccupied = Random.RandRange(1, 100) <= SpawnChancePercent;
-    State = Previous ? *Previous : FSurvivalScavengeState{MaxHealth, false, {}};
+    State = Previous ? *Previous : FSurvivalScavengeState{};
+    if (!Previous) State.Health = MaxHealth;
     bWorldPresent = bOccupied && State.Health > 0.0f;
-    Contents = {};
-    if (bWorldPresent && !State.bSearched)
-        Contents = State.Remaining.IsSet() ? State.Remaining.GetValue() : RollLoot(Random);
-    bLootAvailable = !Contents.IsEmpty();
-    bSidearmAvailable = Contents.bSidearm;
-    bRifleAvailable = Contents.bRifle;
+    bWasSearched = State.bSearched;
+    bLootAvailable = State.Slots.ContainsByPredicate([](const auto& Slot){ return !Slot.IsEmpty(); });
+    ++LootRevision;
     OnRep_WorldPresence();
     ForceNetUpdate();
 }
@@ -290,28 +279,60 @@ void ASurvivalSupplyCrate::RememberState()
     ForceNetUpdate();
 }
 
-FSurvivalLoot ASurvivalSupplyCrate::TakeLoot(bool bTakeAll, ESurvivalItem Item)
+void ASurvivalSupplyCrate::UpdateLootState()
 {
-    if (!HasAuthority() || !bLootAvailable) return {};
-    FSurvivalLoot Loot;
-    if (bTakeAll) Swap(Loot, Contents);
-    else Loot = Contents.TakeStack(Item);
-    if (Loot.IsEmpty()) return {};
+    bWasSearched = State.bSearched;
+    bLootAvailable = State.Slots.ContainsByPredicate([](const auto& Slot){ return !Slot.IsEmpty(); });
+    ++LootRevision;
+    if (!bDropped) RememberState();
+    else ForceNetUpdate();
+}
 
-    bLootAvailable = !Contents.IsEmpty();
-    bSidearmAvailable = Contents.bSidearm;
-    bRifleAvailable = Contents.bRifle;
-    if (bDropped)
+void ASurvivalSupplyCrate::MoveLoot(int32 From, int32 To, bool bSplit)
+{
+    if (!HasAuthority() || !bWasSearched || From == To || !State.Slots.IsValidIndex(From) || !State.Slots.IsValidIndex(To))
+        return;
+    FSurvivalLootSlot& Source = State.Slots[From];
+    FSurvivalLootSlot& Target = State.Slots[To];
+    if (Source.IsEmpty()) return;
+    const int32 Limit = Source.GearIndex != INDEX_NONE ? MAX_int32 : SurvivalItemMaxStack(Source.Item());
+    const int32 Amount = bSplit ? (Source.Count + 1) / 2 : Source.Count;
+    if (Target.IsEmpty())
     {
-        if (!bLootAvailable) Destroy();
-        return Loot;
+        Target = Source;
+        Target.Count = Amount;
+        Source.Count -= Amount;
     }
+    else if (Target.ItemId == Source.ItemId && Target.GearIndex == Source.GearIndex &&
+        Target.Quality == Source.Quality && Limit > 1)
+    {
+        const int32 Transfer = FMath::Min(Limit - Target.Count, Amount);
+        if (Transfer <= 0) return;
+        Target.Count += Transfer;
+        Source.Count -= Transfer;
+    }
+    else if (!bSplit) Swap(Source, Target);
+    else return;
+    if (Source.IsEmpty()) Source = {};
+    UpdateLootState();
+}
 
-    State.bSearched = !bLootAvailable;
-    if (bLootAvailable) State.Remaining = Contents;
-    else State.Remaining.Reset();
-    RememberState();
-    return Loot;
+TArray<FSurvivalLootSlot> ASurvivalSupplyCrate::TakeLoot(const TArray<int32>& Indices)
+{
+    TArray<FSurvivalLootSlot> Taken;
+    if (!HasAuthority() || !bWasSearched || !bLootAvailable || Indices.Num() > MaxLootSlots) return Taken;
+    for (int32 Index : Indices)
+    {
+        if (!State.Slots.IsValidIndex(Index) || State.Slots[Index].IsEmpty()) continue;
+        Taken.Add(State.Slots[Index]);
+        State.Slots[Index] = {};
+    }
+    if (!Taken.IsEmpty())
+    {
+        UpdateLootState();
+        if (bDropped && !bLootAvailable) Destroy();
+    }
+    return Taken;
 }
 
 float ASurvivalSupplyCrate::TakeDamage(float Damage, const FDamageEvent&, AController*, AActor*)
@@ -324,9 +345,9 @@ float ASurvivalSupplyCrate::TakeDamage(float Damage, const FDamageEvent&, AContr
     State.Health -= Applied;
     if (State.Health <= 0.0f)
     {
-        Contents = {};
-        State.Remaining.Reset();
-        bWorldPresent = bLootAvailable = bSidearmAvailable = bRifleAvailable = false;
+        State.Slots.Reset();
+        ++LootRevision;
+        bWorldPresent = bLootAvailable = false;
         OnRep_WorldPresence();
     }
     RememberState();
@@ -349,8 +370,11 @@ bool ASurvivalSupplyCrate::Drop(ACharacter& Owner, const FSurvivalLoot& Loot)
         ESpawnActorCollisionHandlingMethod::DontSpawnIfColliding);
     if (!Crate) return false;
     Crate->bDropped = true;
-    Crate->Contents = Loot;
+    Crate->LootProfile = ESurvivalLootProfile::Dropped;
+    Crate->PopulateSlots(Loot);
+    Crate->State.bSearched = Crate->bWasSearched = true;
     Crate->bLootAvailable = true;
+    Crate->State.Health = Crate->MaxHealth;
     Crate->bWorldPresent = true;
     Crate->FinishSpawning(Pose);
     return IsValid(Crate);

@@ -38,12 +38,21 @@ public:
     static constexpr int32 HotbarSize = 6;
     ESurvivalItem GetHotbarItem(int32 Slot) const { return Toolbelt[Slot].Item; }
     int32 GetToolbeltCount(int32 Slot) const { return Toolbelt[Slot].Count; }
+    int32 GetToolbeltWeaponId(int32 Slot) const { return Toolbelt[Slot].WeaponId; }
+    int32 GetWeaponQuality(int32 WeaponId) const;
+    void SelectToolbeltItem(int32 Slot);
+    void InspectWeapon(ESurvivalItem Weapon);
     int32 GetActiveHotbarSlot() const { return ActiveHotbarSlot; }
     int32 GetItemCount(ESurvivalItem Item) const;
     bool CanUseItem(ESurvivalItem Item) const;
     static ESurvivalItem TrainingBook(ETraining Entry);
     ESurvivalItem GetSelectedInventoryItem() const { return SelectedInventoryItem; }
-    void SetSelectedInventoryItem(ESurvivalItem Item) { SelectedInventoryItem = Item; SelectedPackSlot = INDEX_NONE; }
+    void SetSelectedInventoryItem(ESurvivalItem Item)
+    {
+        SelectedInventoryItem = Item;
+        SelectedPackSlot = INDEX_NONE;
+        SelectedWeaponId = INDEX_NONE;
+    }
     int32 GetSelectedPackSlot() const { return SelectedPackSlot; }
     void SetSelectedPackSlot(int32 Slot);
     static constexpr int32 PackSize = 24;
@@ -60,19 +69,21 @@ public:
     bool CanModifyRifle() const;
     bool SwapWeaponPart(int32 PackSlot);
     bool RemoveWeaponPart(int32 PartSlot);
-    const FSurvivalWeaponAssembly& GetWeaponAssembly(ESurvivalItem Weapon) const
-    {
-        return Weapon == ESurvivalItem::Sidearm ? SidearmAssembly : RifleAssembly;
-    }
+    const FSurvivalWeaponAssembly& GetWeaponAssembly(ESurvivalItem Weapon) const;
     void ChooseHotbarSlot(int32 Slot);
     void UseToolbeltSlot(int32 Slot);
     void UseItem(ESurvivalItem Item);
     bool CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const;
     void CraftRecipe(int32 RecipeIndex, int32 Quantity);
     void ToggleInventory();
-    const FSurvivalLoot& GetContainerLoot() const { return ContainerLoot; }
+    const FSurvivalLootSlot* GetContainerSlot(int32 Index) const;
+    int32 GetContainerSlotCount() const { return ContainerSlots.Num(); }
+    int32 GetContainerRevision() const { return ContainerRevision; }
     bool HasOpenContainer() const { return LootContainer.IsValid(); }
-    void TakeContainerLoot(bool bTakeAll, ESurvivalItem Item = ESurvivalItem::None);
+    float GetSearchSecondsLeft() const;
+    void CloseContainer();
+    void TakeContainerLoot(int32 Index = INDEX_NONE, int32 PackTarget = INDEX_NONE);
+    void MoveContainerLoot(int32 From, int32 To, bool bSplit);
     UTextureRenderTarget2D* GetInventoryPortrait() const { return PortraitTexture; }
     void ShowWeaponPortrait(bool bWeapon, bool bCharacter = false);
     void RotateCharacterPortrait(float Degrees);
@@ -83,7 +94,18 @@ public:
     void ToggleWeaponMod(ESurvivalItem Weapon, int32 Mod);
     ESurvivalItem InspectedWeapon = ESurvivalItem::None;
 private:
-    TMap<ESurvivalItem, uint8> InstalledMods;
+    struct FWeaponInstance
+    {
+        ESurvivalItem Item;
+        FSurvivalWeaponAssembly Assembly;
+        int32 Ammo = 0;
+        uint8 Mods = 0;
+    };
+    TArray<FWeaponInstance> WeaponItems;
+    int32 SelectedWeaponId = INDEX_NONE;
+    int32 InspectedWeaponId = INDEX_NONE;
+    int32 GetWeaponId(ESurvivalItem Weapon) const;
+    void CancelWeaponReloadOnSwitch(int32 PreviousWeaponId);
     UPROPERTY()
     TArray<TObjectPtr<UStaticMeshComponent>> AttachmentMeshes;
     void RefreshAttachments();
@@ -125,7 +147,7 @@ public:
     const FSurvivalFinishedPiece* FindFinishedPiece() const;
     void TakeSurvivalDamage(int32 Amount);
     int32 GetHealthPoints() const { return HealthPoints; }
-    int32 GetAmmo() const { return Ammo; }
+    int32 GetAmmo() const;
     int32 GetReserveAmmo() const { return Items.Rounds; }
     bool IsReloading() const { return ReloadCompleteAt >= 0.0; }
     bool IsAimingSidearm() const;
@@ -144,13 +166,13 @@ public:
     static constexpr int32 DefenseWaveCount = 3;
     bool IsRifleSelected() const { return GetHotbarItem(ActiveHotbarSlot) == ESurvivalItem::Rifle; }
     bool HasRifle() const { return bHasRifle; }
-    int32 GetRifleAmmo() const { return RifleAmmo; }
+    int32 GetRifleAmmo() const;
     int32 GetRifleReserve() const { return Items.RifleRounds; }
-    const FSurvivalWeaponAssembly& GetRifle() const { return RifleAssembly; }
     bool IsRifleReloading() const { return RifleReloadAt >= 0.0; }
     bool ShowHitMarker() const;
     void NotifyRoundHit(bool bHitZombie, bool bRifleRound);
     const FSurvivalProgression& GetProgression() const { return Progression; }
+    int32 GetLootGameStage() const { return LootGameStage; }
     void BuyTraining(ETraining Entry, int32 TargetRank);
 
 protected:
@@ -187,17 +209,39 @@ private:
     void ServerScavenge(ASurvivalSupplyCrate* Crate, FVector_NetQuantize10 ImpactPoint);
 
     UFUNCTION(Client, Reliable)
-    void ClientReceiveLoot(const FSurvivalLoot& Loot, bool bFinishedSearch);
+    void ClientReceiveLoot(const TArray<FSurvivalLootSlot>& Taken, int32 PackTarget, bool bApplyAppraisal);
     UFUNCTION(Client, Reliable)
-    void ClientShowContainer(ASurvivalSupplyCrate* Crate, FVector_NetQuantize10 ImpactPoint,
-        const FSurvivalLoot& Preview, bool bOpenMenu);
+    void ClientShowContainer(ASurvivalSupplyCrate* Crate, const TArray<FSurvivalLootSlot>& Slots,
+        int32 Revision, bool bOpenMenu);
+    UFUNCTION(Client, Reliable)
+    void ClientSearchTime(float Seconds, bool bFinished);
     UFUNCTION(Server, Reliable)
-    void ServerTakeContainerLoot(ASurvivalSupplyCrate* Crate, FVector_NetQuantize10 ImpactPoint,
-        bool bTakeAll, uint8 Item, int32 ExpectedGear);
+    void ServerCloseContainer();
+    UFUNCTION(Server, Reliable)
+    void ServerTakeContainerLoot(ASurvivalSupplyCrate* Crate, int32 Revision,
+        const TArray<int32>& Indices, int32 PackTarget);
+    UFUNCTION(Server, Reliable)
+    void ServerMoveContainerLoot(ASurvivalSupplyCrate* Crate, int32 Revision, int32 From, int32 To, bool bSplit);
     bool CanReachLoot(const ASurvivalSupplyCrate* Crate, FVector ImpactPoint) const;
+    bool ValidateContainer(ASurvivalSupplyCrate* Crate, int32 Revision);
+    void UpdateContainerSearch(float DeltaSeconds);
+    void ShowContainer(ASurvivalSupplyCrate& Crate, bool bOpenMenu);
+
+    struct FSearchProgress { int32 Seed = 0; float SecondsLeft = 0; };
+    TMap<FName, FSearchProgress> SearchProgress;
+    TWeakObjectPtr<ASurvivalSupplyCrate> SearchingContainer;
+    TWeakObjectPtr<ASurvivalSupplyCrate> ServerContainer;
+    FVector SearchImpactPoint = FVector::ZeroVector;
+    FName ActiveSearchId;
+    bool bSearchingContainer = false;
+    bool bViewingContainer = false;
+    int32 ServerSeenLootRevision = 0;
+    double SearchEndsAt = 0;
     TWeakObjectPtr<ASurvivalSupplyCrate> LootContainer;
-    FVector_NetQuantize10 LootImpactPoint;
-    FSurvivalLoot ContainerLoot;
+    TArray<FSurvivalLootSlot> ContainerSlots;
+    int32 ContainerRevision = 0;
+    TArray<FSurvivalPackCell> PendingLootItems;
+    TMap<int32, int32> PendingGearTargets;
 
     void ChangeItemCount(ESurvivalItem Item, int32 Delta);
     void SetInventoryOpen(bool bOpen);
@@ -254,11 +298,11 @@ private:
     bool bBuildMode = false;
     bool bThirdPerson = false;
     FSurvivalProgression Progression;
+    double SurvivalAgeSeconds = 0.0;
+    UPROPERTY(Replicated)
+    int32 LootGameStage = 1;
     float SprintPracticeTime = 0.0f;
     bool bHasRifle = false;
-    FSurvivalWeaponAssembly RifleAssembly;
-    FSurvivalWeaponAssembly SidearmAssembly;
-    int32 RifleAmmo = 0;
     double RifleReadyAt = 0.0;
     double RifleReloadAt = -1.0;
 
@@ -281,7 +325,6 @@ private:
     TObjectPtr<UStaticMeshComponent> RifleWorldMesh;
 
     bool bHasSidearm = false;
-    int32 Ammo = 0;
     FSurvivalItems Items;
     FSurvivalVitals Vitals;
     bool bInventoryOpen = false;
