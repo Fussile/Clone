@@ -27,6 +27,7 @@ public:
     void RemoveStructure(int32 Id);
     const FSurvivalMaterials& GetPlannedCost() const { return PlannedCost; }
     int32 GetWorldMinutes() const;
+    float GetDayLengthSeconds() const { return FMath::Max(60.0f, DayLengthSeconds); }
     double GetAmbientTemperature(const FVector& Position) const;
     bool SetTimeOfDay(double Hour);
     void RegisterScavengeObject(ASurvivalSupplyCrate& Object);

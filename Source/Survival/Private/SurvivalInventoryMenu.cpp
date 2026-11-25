@@ -57,10 +57,10 @@ const FSlateBrush* WhiteBrush()
 // Quality tiers for part bars and tooltips: grey, green, blue, purple, gold.
 FLinearColor QualityColor(int32 Quality)
 {
-    if (Quality >= 80) { return FLinearColor(0.84f, 0.67f, 0.25f); }
-    if (Quality >= 65) { return FLinearColor(0.55f, 0.42f, 0.72f); }
-    if (Quality >= 50) { return FLinearColor(0.30f, 0.52f, 0.72f); }
-    if (Quality >= 35) { return FLinearColor(0.36f, 0.60f, 0.34f); }
+    if (Quality >= 800) { return FLinearColor(0.84f, 0.67f, 0.25f); }
+    if (Quality >= 650) { return FLinearColor(0.55f, 0.42f, 0.72f); }
+    if (Quality >= 500) { return FLinearColor(0.30f, 0.52f, 0.72f); }
+    if (Quality >= 350) { return FLinearColor(0.36f, 0.60f, 0.34f); }
     return FLinearColor(0.55f, 0.56f, 0.55f);
 }
 
@@ -108,12 +108,8 @@ FText DescribeItem(const ASurvivalCharacter* Character, ESurvivalItem Item, int3
     Text += StackCount >= 0 && StackCount != Carried
         ? FString::Printf(TEXT("   x%d   (%d carried)"), StackCount, Carried)
         : FString::Printf(TEXT("   x%d"), Carried);
-    if (Item == ESurvivalItem::Rifle && Character->HasRifle())
-    {
-        const FSurvivalWeaponAssembly& Rifle = Character->GetRifle();
-        Text += FString::Printf(TEXT("\nQuality %d   Base damage %d\nSelect it and choose Modify to swap parts"),
-            Rifle.GetQuality(), FMath::RoundToInt(Rifle.GetDamage()));
-    }
+    if (Item == ESurvivalItem::Rifle || Item == ESurvivalItem::Sidearm)
+        Text += FString::Printf(TEXT("\nQuality %d\nSelect it and choose Modify to swap parts"), Quality);
     if (Character->CanUseItem(Item))
     {
         Text += TEXT("\nRight-click to use");
@@ -284,7 +280,7 @@ public:
             const FSurvivalPackCell Cell = bBelt || !Player.IsValid() ? FSurvivalPackCell() : Player->GetPackCell(Index);
             if (Cell.GearIndex != INDEX_NONE) return FText::FromString(FString::Printf(TEXT("%s  ·  %s\nShift-click to equip"), SurvivalGear[Cell.GearIndex].Label, SurvivalGear[Cell.GearIndex].Slot));
             const int32 Count = bBelt && Player.IsValid() ? Player->GetToolbeltCount(Index) : Cell.Count;
-            return DescribeItem(Player.Get(), Item(), Cell.Quality, Count);
+            return DescribeItem(Player.Get(), Item(), HasQuality() ? Quality() : Cell.Quality, Count);
         }));
         ChildSlot
         [
@@ -329,7 +325,7 @@ public:
         if (Event.GetEffectingButton() == EKeys::RightMouseButton)
         {
             if (!Player.IsValid() || Item() == ESurvivalItem::None) { return FReply::Unhandled(); }
-            if (bBelt) { Player->SetSelectedInventoryItem(Item()); }
+            if (bBelt) { Player->SelectToolbeltItem(Index); }
             else { Player->SetSelectedPackSlot(Index); }
             if (bBelt) Player->UseToolbeltSlot(Index);
             else Player->UseItem(Item());
@@ -344,7 +340,7 @@ public:
         if (!HasMouseCapture() || Event.GetEffectingButton() != EKeys::LeftMouseButton) { return FReply::Unhandled(); }
         if (Player.IsValid() && Geometry.IsUnderLocation(Event.GetScreenSpacePosition()))
         {
-            if (bBelt) { Player->SetSelectedInventoryItem(Item()); Player->ChooseHotbarSlot(Index); }
+            if (bBelt) { Player->SelectToolbeltItem(Index); Player->ChooseHotbarSlot(Index); }
             else if (Gear() != INDEX_NONE)
             {
                 Player->SetSelectedPackSlot(Index);
@@ -415,8 +411,14 @@ private:
         if (!Player.IsValid()) { return ESurvivalItem::None; }
         return bBelt ? Player->GetHotbarItem(Index) : Player->GetPackItem(Index);
     }
-    bool HasQuality() const { return SurvivalItemHasQuality(Item()); }
-    int32 Quality() const { return bBelt || !Player.IsValid() ? 0 : Player->GetPackCell(Index).Quality; }
+    bool HasQuality() const { return SurvivalItemHasQuality(Item()) || Item() == ESurvivalItem::Sidearm || Item() == ESurvivalItem::Rifle; }
+    int32 Quality() const
+    {
+        if (!Player.IsValid()) return 0;
+        const auto Cell = bBelt ? FSurvivalPackCell{} : Player->GetPackCell(Index);
+        return SurvivalItemHasQuality(Item()) ? Cell.Quality
+            : Player->GetWeaponQuality(bBelt ? Player->GetToolbeltWeaponId(Index) : Cell.WeaponId);
+    }
     FText CountText() const
     {
         if (Gear() != INDEX_NONE)
@@ -504,7 +506,7 @@ public:
                             .FillColorAndOpacity_Lambda([this]() { return FSlateColor(QualityColor(Installed())); })
                             .Percent_Lambda([this]() -> TOptional<float>
                             {
-                                return FMath::Clamp(static_cast<float>(Installed()) / 100.0f, 0.0f, 1.0f);
+                                return FMath::Clamp(static_cast<float>(Installed()) / static_cast<float>(FSurvivalWeaponAssembly::MaxQuality), 0.0f, 1.0f);
                             })
                         ]
                     ]
@@ -1104,7 +1106,7 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                         [SNew(SBox).WidthOverride(160).Visibility_Lambda([this]{return Page == EPage::Gear ? EVisibility::Visible : EVisibility::Collapsed;})
                             [SNew(SVerticalBox)
                                 + SVerticalBox::Slot().AutoHeight().Padding(8)[SectionLabel(TEXT("CHARACTER"))]
-                                + SVerticalBox::Slot().AutoHeight().Padding(8)[SNew(STextBlock).Text_Lambda([this]{ return Player.IsValid() ? FText::FromString(FString::Printf(TEXT("Level %d"),Player->GetProgression().CharacterLevel)) : FText::GetEmpty(); })]
+                                + SVerticalBox::Slot().AutoHeight().Padding(8)[SNew(STextBlock).Text_Lambda([this]{ return Player.IsValid() ? FText::FromString(FString::Printf(TEXT("Level %d\nLoot stage %d"),Player->GetProgression().CharacterLevel, Player->GetLootGameStage())) : FText::GetEmpty(); })]
                                 + SVerticalBox::Slot().AutoHeight().Padding(8)[SectionLabel(TEXT("QUESTS"))]
                                 + SVerticalBox::Slot().AutoHeight().Padding(8)[SNew(STextBlock).Text(FText::FromString(TEXT("No active quests")))]]]
                         + SHorizontalBox::Slot().FillWidth(1)
@@ -1881,8 +1883,7 @@ void SSurvivalInventoryMenu::SetWorkbench(bool bOpen)
     bModifying = bOpen;
     if (Player.IsValid())
     {
-        Player->InspectedWeapon = !bOpen ? ESurvivalItem::None :
-            AssemblyWeapon(Player->GetSelectedInventoryItem());
+        Player->InspectWeapon(bOpen ? AssemblyWeapon(Player->GetSelectedInventoryItem()) : ESurvivalItem::None);
         Player->ShowWeaponPortrait(bOpen, Page == EPage::Gear);
         Portrait.SetResourceObject(Player->GetInventoryPortrait());
     }

@@ -23,7 +23,8 @@ enum class ESurvivalLootProfile : uint8
     Mailbox,
     MilitaryArmory,
     Storage,
-    Dropped UMETA(Hidden)
+    Dropped UMETA(Hidden),
+    PoliceArmory
 };
 
 USTRUCT()
@@ -96,7 +97,7 @@ public:
     bool IsDroppedLoot() const { return bDropped; }
     FString GetLootName() const;
     float GetSearchDuration() const;
-    bool FinishSearch();
+    bool FinishSearch(int32 GameStage);
     void MoveLoot(int32 From, int32 To, bool bSplit);
     TArray<FSurvivalLootSlot> TakeLoot(const TArray<int32>& Indices);
     static bool Drop(ACharacter& Owner, const FSurvivalLoot& Loot);
@@ -176,10 +177,16 @@ private:
     UFUNCTION()
     void OnRep_WorldPresence();
 
-    FSurvivalLoot RollLoot(FRandomStream& Random) const;
+    FSurvivalLoot GetAuthoredLoot() const;
+
+    // Overrides can raise a site's reward floor and adjust its profile's regional scaling.
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0", ClampMax = "4096"))
+    int32 MinimumLootValue = 0;
+    UPROPERTY(EditAnywhere, Category = "Scavenging", meta = (ClampMin = "0.25", ClampMax = "4.0"))
+    float LootDifficultyMultiplier = 1.0f;
     void RememberState();
     void UpdateLootState();
-    void PopulateSlots(FSurvivalLoot Loot, FRandomStream& Random);
+    void PopulateSlots(const FSurvivalLoot& Loot);
     int32 GetSlotCapacity() const;
 
     bool bDropped = false;

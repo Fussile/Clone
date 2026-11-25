@@ -684,6 +684,10 @@ def place():
             else:
                 profile = "GENERAL"
 
+        if profile == "SECURITY" and any(key.startswith(f"CrossroadsRegion_{site}_")
+                                         for site in ("city-police", "north-police", "east-police")):
+            profile = "POLICE_ARMORY"
+
         def configure(actor):
             for prop, amount in {"timber_amount": 0, "stone_amount": 0, **loot}.items():
                 actor.set_editor_property(prop, amount)
@@ -695,7 +699,7 @@ def place():
                 component.set_material(0, style_materials["petrol"])
             else:
                 component = fitted_mesh(actor, crate_mesh, (.82, .61, .58))
-            if profile in {"SECURITY", "MILITARY_ARMORY"} or loot.get("contains_sidearm") or loot.get("contains_rifle"):
+            if profile in {"SECURITY", "POLICE_ARMORY", "MILITARY_ARMORY"} or loot.get("contains_sidearm") or loot.get("contains_rifle"):
                 component.set_material(0, military_crate)
 
         # Rebase both existing and new actors before centering the imported mesh.

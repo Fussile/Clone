@@ -20,7 +20,19 @@ Open **I**, then **Skills**. The catalog uses rank caps and knowledge requiremen
 
 **Caps Lock** toggles a 100 m/s standing movement speed in editor and Development builds. The HUD shows when test speed is enabled.
 
-Loot is weighted by the type of container. Farms have more provisions, and downtown has more containers per building and on each office floor. Press **E** to scavenge containers and props. Props have individual hit points. Destroying one forfeits its contents until the next refresh. A shared server timer refreshes loot every three in-game days of active world time by default. Leaving and returning to a World Partition cell preserves its searched state, remaining loot, and slot arrangement until the timer rolls over. Mailboxes have 4 slots, supply and storage chests have 16, and vehicles have 36. Vehicles never roll firearms. Police and checkpoint crates favor common supplies and lower-quality weapons, while the military crate at the joint-use airfield favors higher-quality weapons. Starting a fresh session resets the loot clock. Set `LootRefreshDays` in `Config/DefaultGame.ini` to tune the interval.
+Loot rolls when the first player finishes searching a container. The **Character** tab shows loot GameStage, which is character level plus completed days survived during the current life, with the day bonus capped at the character's level. Each source has a weighted item pool and a point budget that grows with GameStage. The budget also uses the source's difficulty multiplier and minimum value. The roll spends as close to its target as the available items and slots allow. Weapons and parts use quality **1–999**. Each weapon has its own parts, loaded ammunition, and mods.
+
+| Source | Stage 1 budget | Typical contents |
+| --- | ---: | --- |
+| Mailbox | 15 | Cloth and reading material |
+| Vehicle | 36 | Provisions, medical supplies, and clothing |
+| Checkpoint supply crate | 92 | Supplies and pistol parts |
+| Police armory | 250 | Commonly two low-quality pistols with supplies |
+| Military armory | 120 minimum | A guaranteed pistol, with stronger weapons and parts at higher stages |
+
+Item values, pools, and profile defaults are in `Source/Survival/Private/SurvivalLootBudget.cpp` and `SurvivalGear.h`. A placed crate can raise its minimum with `MinimumLootValue` and change the regional scaling with `LootDifficultyMultiplier`. Starter crates preserve authored items, and fixed contents count toward the budget in crates that also roll random loot.
+
+Press **E** to scavenge containers and props. Destroying a prop forfeits its contents until the next refresh. Leaving and returning to a World Partition cell preserves remaining loot and slot arrangement until the shared server refresh, every three in-game days of active world time by default. Set `LootRefreshDays` in `Config/DefaultGame.ini` to change the interval.
 
 ## Build a playtest ZIP
 

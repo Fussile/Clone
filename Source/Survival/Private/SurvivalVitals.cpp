@@ -65,7 +65,10 @@ int32 FSurvivalWeaponAssembly::GetQuality() const
 
 float FSurvivalWeaponAssembly::GetDamage() const
 {
-    return IsComplete() ? 70.0f + (GetQuality() - FactoryQuality) * 0.5f : 0.0f;
+    if (!IsComplete()) return 0.0f;
+    const int32 Quality = GetQuality();
+    if (Quality <= FactoryQuality) return 70.0f + (Quality - FactoryQuality) * 0.5f;
+    return 70.0f + (Quality - FactoryQuality) * (30.0f / (MaxQuality - FactoryQuality));
 }
 
 int32 FSurvivalWeaponAssembly::SwapPart(int32 Slot, int32 NewQuality)
@@ -75,7 +78,7 @@ int32 FSurvivalWeaponAssembly::SwapPart(int32 Slot, int32 NewQuality)
         return NewQuality;
     }
     const int32 Replaced = Parts[Slot];
-    Parts[Slot] = FMath::Clamp(NewQuality, 0, 100);
+    Parts[Slot] = FMath::Clamp(NewQuality, 0, MaxQuality);
     return Replaced;
 }
 
