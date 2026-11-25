@@ -9,6 +9,7 @@
 #include "CollisionQueryParams.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
+#include "Components/SpotLightComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
@@ -1088,6 +1089,7 @@ void ASurvivalCharacter::PlaySidearmAnimation(UAnimSequence* Sequence, bool bLoo
     {
         CurrentViewmodelAnimation = Sequence;
         SidearmViewmodel->PlayAnimation(Sequence, bLoop);
+        SidearmViewmodel->SetPlayRate(1.0f);
     }
 }
 
@@ -1096,7 +1098,7 @@ void ASurvivalCharacter::UpdateSidearmAnimation()
     const double Now = GetWorld()->GetTimeSeconds();
     if (IsSidearmSelected() && IsReloading() && Now >= ReloadCompleteAt)
     {
-        const int32 Transfer = FMath::Min(Items.Rounds, SidearmCapacity - GetAmmo());
+        const int32 Transfer = FMath::Min(Items.Rounds, FMath::Max(0, (HasWeaponMod(ESurvivalItem::Sidearm, ExtendedMagazine) ? SidearmCapacity * 2 : SidearmCapacity) - GetAmmo()));
         WeaponItems[Toolbelt[ActiveHotbarSlot].WeaponId].Ammo += Transfer;
         Items.Rounds -= Transfer;
         ReloadCompleteAt = -1.0;
@@ -1169,7 +1171,12 @@ void ASurvivalCharacter::UpdateWeaponAim(float DeltaSeconds)
 
     const float PistolAlpha = FMath::SmoothStep(0.0f, 1.0f, AimBlend);
     const float RifleAlpha = FMath::SmoothStep(0.0f, 1.0f, ScopeBlend);
-    FirstPersonCamera->SetFieldOfView(90.0f - 16.0f * PistolAlpha - 6.0f * RifleAlpha);
+    const auto* ControllerPC = Cast<APlayerController>(Controller);
+    const bool bVariable = HasWeaponMod(GetHotbarItem(ActiveHotbarSlot), VariableScope);
+    if (bVariable && ControllerPC && (PistolAlpha > .5f || RifleAlpha > .5f) && ControllerPC->WasInputKeyJustPressed(EKeys::Z))
+        bHighOpticZoom = !bHighOpticZoom;
+    ScopeCapture->FOVAngle = bVariable ? (bHighOpticZoom ? 6.f : 15.f) : 20.f;
+    FirstPersonCamera->SetFieldOfView(90.0f - (bVariable ? (bHighOpticZoom ? 65.f : 40.f) : 16.f) * PistolAlpha - 6.0f * RifleAlpha);
     if (bViewmodelReady && (AimBlend > 0.0f || PreviousAim > 0.0f))
     {
         // Track the idle pose. Leave the last alignment in place during recoil.
@@ -1217,7 +1224,7 @@ void ASurvivalCharacter::StartReload()
 {
     const double Now = GetWorld()->GetTimeSeconds();
     if (HealthPoints <= 0 || bInventoryOpen || !bHasSidearm || !GetWeaponAssembly(ESurvivalItem::Sidearm).IsComplete() || !IsSidearmSelected() || IsReloading() || Now < NextShotAt
-        || GetAmmo() >= SidearmCapacity || Items.Rounds <= 0)
+        || GetAmmo() >= (HasWeaponMod(ESurvivalItem::Sidearm, ExtendedMagazine) ? SidearmCapacity * 2 : SidearmCapacity) || Items.Rounds <= 0)
     {
         return;
     }
@@ -1226,8 +1233,10 @@ void ASurvivalCharacter::StartReload()
     {
         Clip = ViewmodelReloadEmpty.Get();
     }
-    ReloadCompleteAt = Now + (Clip ? Clip->GetPlayLength() : 1.4);
+    const float Rate = HasWeaponMod(ESurvivalItem::Sidearm, QuickMagazine) ? 1.35f : 1.0f;
+    ReloadCompleteAt = Now + (Clip ? Clip->GetPlayLength() : 1.4) / Rate;
     PlaySidearmAnimation(Clip, false);
+    SidearmViewmodel->SetPlayRate(Rate);
 }
 
 bool ASurvivalCharacter::ShowHitMarker() const
@@ -1392,12 +1401,12 @@ void ASurvivalCharacter::FireRifle()
     }
     --WeaponItems[Toolbelt[ActiveHotbarSlot].WeaponId].Ammo;
     CurrentRifleAnimation = nullptr;
-    RifleReadyAt = Now + (RifleFire ? RifleFire->GetPlayLength() : 2.0);
+    RifleReadyAt = Now + (RifleFire ? RifleFire->GetPlayLength() : 2.0) / (HasWeaponMod(ESurvivalItem::Rifle, FasterBolt) ? 1.25 : 1.0);
     AddControllerPitchInput(-1.35f * WeaponRecoil(ESurvivalItem::Rifle));
     if (USoundBase* Sound = LoadObject<USoundBase>(nullptr,
         TEXT("/Game/Audio/Weapons/SW_SidearmShot.SW_SidearmShot"), nullptr, LOAD_NoWarn))
     {
-        UGameplayStatics::PlaySoundAtLocation(this, Sound, Origin);
+        UGameplayStatics::PlaySoundAtLocation(this, Sound, Origin, HasWeaponMod(ESurvivalItem::Rifle, Suppressor) ? .25f : 1.0f);
     }
 }
 
@@ -1405,10 +1414,10 @@ void ASurvivalCharacter::ReloadRifle()
 {
     const double Now = GetWorld()->GetTimeSeconds();
     if (bHasRifle && GetWeaponAssembly(ESurvivalItem::Rifle).IsComplete() && HealthPoints > 0 && !bInventoryOpen && !IsRifleReloading()
-        && GetRifleAmmo() < RifleCapacity && Items.RifleRounds > 0 && Now >= RifleReadyAt)
+        && GetRifleAmmo() < (HasWeaponMod(ESurvivalItem::Rifle, ExtendedMagazine) ? RifleCapacity * 2 : RifleCapacity) && Items.RifleRounds > 0 && Now >= RifleReadyAt)
     {
         CurrentRifleAnimation = nullptr;
-        RifleReloadAt = Now + (RifleReload ? RifleReload->GetPlayLength() : 1.8);
+        RifleReloadAt = Now + (RifleReload ? RifleReload->GetPlayLength() : 1.8) / (HasWeaponMod(ESurvivalItem::Rifle, QuickMagazine) ? 1.35 : 1.0);
     }
 }
 
@@ -1417,7 +1426,7 @@ void ASurvivalCharacter::UpdateRifle()
     const double Now = GetWorld()->GetTimeSeconds();
     if (IsRifleSelected() && IsRifleReloading() && Now >= RifleReloadAt)
     {
-        const int32 Transfer = FMath::Min(RifleCapacity - GetRifleAmmo(), Items.RifleRounds);
+        const int32 Transfer = FMath::Min(FMath::Max(0, (HasWeaponMod(ESurvivalItem::Rifle, ExtendedMagazine) ? RifleCapacity * 2 : RifleCapacity) - GetRifleAmmo()), Items.RifleRounds);
         Items.RifleRounds -= Transfer;
         WeaponItems[Toolbelt[ActiveHotbarSlot].WeaponId].Ammo += Transfer;
         RifleReloadAt = -1.0;
@@ -1435,6 +1444,8 @@ void ASurvivalCharacter::UpdateRifle()
     {
         CurrentRifleAnimation = Desired;
         RifleViewmodel->PlayAnimation(Desired, Desired == RifleHold.Get());
+        RifleViewmodel->SetPlayRate(Desired == RifleFire.Get() && HasWeaponMod(ESurvivalItem::Rifle, FasterBolt) ? 1.25f :
+            Desired == RifleReload.Get() && HasWeaponMod(ESurvivalItem::Rifle, QuickMagazine) ? 1.35f : 1.0f);
     }
 }
 
@@ -2431,6 +2442,7 @@ void ASurvivalCharacter::RefreshGear()
         GearMeshes.Add(Part);
     }
     if (bInventoryOpen) ShowWeaponPortrait(InspectedWeapon != ESurvivalItem::None, bCharacterPortrait);
+    else RefreshAttachments();
 }
 
 void ASurvivalCharacter::RefreshViewmodelGear(USkeletalMeshComponent* Viewmodel)
@@ -2658,15 +2670,18 @@ bool ASurvivalCharacter::CanToggleWeaponMod(ESurvivalItem Weapon, int32 Mod) con
     if (!CanInspectWeapon(Weapon) || !WeaponItems.IsValidIndex(GetWeaponId(Weapon)) || Mod < 0 || Mod >= UE_ARRAY_COUNT(WeaponMods)) return false;
     const auto Family = Weapon == ESurvivalItem::Sidearm ? EWeaponFamily::Sidearm : EWeaponFamily::Rifle;
     return (WeaponMods[Mod].Families & static_cast<uint8>(Family)) &&
-        (HasWeaponMod(Weapon, Mod) || GetItemCount(Mod == 0 ? ESurvivalItem::Cloth : ESurvivalItem::Stone) > 0);
+        (HasWeaponMod(Weapon, Mod) || GetWeaponQuality(GetWeaponId(Weapon)) >= MountQuality[static_cast<uint8>(WeaponMods[Mod].Slot)]);
 }
 
 void ASurvivalCharacter::ToggleWeaponMod(ESurvivalItem Weapon, int32 Mod)
 {
     if (!CanToggleWeaponMod(Weapon, Mod)) return;
     const bool bRemove = HasWeaponMod(Weapon, Mod);
-    ChangeItemCount(Mod == 0 ? ESurvivalItem::Cloth : ESurvivalItem::Stone, bRemove ? 1 : -1);
-    WeaponItems[GetWeaponId(Weapon)].Mods ^= 1 << Mod;
+    auto& Installed = WeaponItems[GetWeaponId(Weapon)].Mods;
+    for (int32 Index = 0; Index < UE_ARRAY_COUNT(WeaponMods); ++Index)
+        if (WeaponMods[Index].Slot == WeaponMods[Mod].Slot)
+            Installed &= ~(1u << Index);
+    if (!bRemove) Installed |= 1u << Mod;
     SyncPack();
     RefreshAttachments();
 }
@@ -2681,6 +2696,9 @@ float ASurvivalCharacter::WeaponRecoil(ESurvivalItem Weapon) const
 
 void ASurvivalCharacter::RefreshAttachments()
 {
+    for (USpotLightComponent* Light : AttachmentLights)
+        if (Light) Light->DestroyComponent();
+    AttachmentLights.Reset();
     for (UStaticMeshComponent* Part : AttachmentMeshes)
         if (Part) Part->DestroyComponent();
     AttachmentMeshes.Reset();
@@ -2731,6 +2749,27 @@ void ASurvivalCharacter::RefreshAttachments()
         {
             const auto& Mod = WeaponMods[Index];
             Mount(Mod.Dimensions, Mod.AlongWeapon, Mod.Height);
+            const bool bLaser = Mod.Slot == EWeaponMount::Laser;
+            if (bPreview || !IsLocallyControlled() || (!bLaser && Mod.Slot != EWeaponMount::Light)) continue;
+            const bool bInfrared = Index == IRLaser || Index == IRIlluminator;
+            if (bInfrared && !WornGear.ContainsByPredicate([](int32 Gear) {
+                return Gear >= 0 && Gear < UE_ARRAY_COUNT(SurvivalGear) &&
+                    (FCString::Strcmp(SurvivalGear[Gear].Id, TEXT("nvg_phosphor")) == 0 ||
+                     FCString::Strcmp(SurvivalGear[Gear].Id, TEXT("quad_night_vision_goggle")) == 0 ||
+                     FCString::Strcmp(SurvivalGear[Gear].Id, TEXT("tactical_modern_helmet_w_nvgs")) == 0);
+            })) continue;
+            auto* Light = NewObject<USpotLightComponent>(this);
+            Light->SetupAttachment(FirstPersonCamera);
+            Light->SetRelativeLocation(FVector(50, 3, -4));
+            Light->SetCastShadows(false);
+            Light->SetAttenuationRadius(bLaser ? 3500.f : 1800.f);
+            Light->SetInnerConeAngle(bLaser ? .2f : 10.f);
+            Light->SetOuterConeAngle(bLaser ? .4f : 24.f);
+            Light->SetIntensity(bLaser ? 12000.f : 6000.f);
+            Light->SetLightColor(Index == RedLaser ? FLinearColor::Red :
+                (bLaser || bInfrared) ? FLinearColor::Green : FLinearColor::White);
+            Light->RegisterComponent();
+            AttachmentLights.Add(Light);
         }
     if (bRifle)
         for (int32 Slot=0; Slot<FSurvivalWeaponAssembly::PartCount; ++Slot)
