@@ -1007,9 +1007,9 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
     {
         Mounts->AddSlot().AutoHeight().Padding(0,2)
         [SNew(SButton).ButtonStyle(&MenuButtonStyle()).ButtonColorAndOpacity(Tile)
-            .Text_Lambda([this,Mod]{ return FText::FromString(FString::Printf(TEXT("%s %s%s"),
+            .Text_Lambda([this,Mod]{ return FText::FromString(FString::Printf(TEXT("%s %s  ·  Q%d"),
                 Player.IsValid() && Player->HasWeaponMod(Player->InspectedWeapon, Mod) ? TEXT("Remove") : TEXT("Fit"),
-                WeaponMods[Mod].Name, Player.IsValid() && Player->HasWeaponMod(Player->InspectedWeapon,Mod) ? TEXT("") : Mod == 0 ? TEXT("  ·  1 cloth") : TEXT("  ·  1 stone"))); })
+                WeaponMods[Mod].Name, MountQuality[static_cast<uint8>(WeaponMods[Mod].Slot)])); })
             .IsEnabled_Lambda([this,Mod]{ return Player.IsValid() && Player->CanToggleWeaponMod(Player->InspectedWeapon,Mod); })
             .OnClicked_Lambda([this,Mod]{ if (Player.IsValid()) Player->ToggleWeaponMod(Player->InspectedWeapon,Mod); return FReply::Handled(); })];
     }

@@ -19,6 +19,7 @@ class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
+class USpotLightComponent;
 class USpringArmComponent;
 
 UCLASS()
@@ -99,7 +100,7 @@ private:
         ESurvivalItem Item;
         FSurvivalWeaponAssembly Assembly;
         int32 Ammo = 0;
-        uint8 Mods = 0;
+        uint32 Mods = 0;
     };
     TArray<FWeaponInstance> WeaponItems;
     int32 SelectedWeaponId = INDEX_NONE;
@@ -108,6 +109,9 @@ private:
     void CancelWeaponReloadOnSwitch(int32 PreviousWeaponId);
     UPROPERTY()
     TArray<TObjectPtr<UStaticMeshComponent>> AttachmentMeshes;
+    UPROPERTY()
+    TArray<TObjectPtr<USpotLightComponent>> AttachmentLights;
+    bool bHighOpticZoom = false;
     void RefreshAttachments();
     float WeaponRecoil(ESurvivalItem Weapon) const;
 public:
