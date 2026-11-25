@@ -11,7 +11,7 @@ from airfield_layout import facilities, RUNWAY_HALF, RUNWAY_Y, TAXIWAY_Y
 from civic_landmarks import CAMPUS_SIZE
 from communications_layout import bake_checkpoints, bake_communications
 from region_route import bake_route
-from rail_layout import bake_rail
+from rail_layout import bake_rail, FREIGHT, TRAM
 from downtown_layout import bake_city, bake_traffic, streets
 from utility_layout import bake_grid
 
@@ -22,7 +22,7 @@ FOOTPRINTS = {
     "hospital": (66, 48), "highrise": (48, 42), "garage": (48, 32),
     "civic": (54, 36), "police": (34, 26), "industry": (56, 38),
     "airport": (160, 35), "shops": (36, 22), "clinic": (24, 18),
-    "services": (23, 19), "suburbs": (22, 15), "ranch": (24, 18),
+    "services": (34, 25), "suburbs": (22, 15), "ranch": (24, 18),
     "village": (23, 17),
 }
 
@@ -137,6 +137,41 @@ def generate(seed):
         site.update(plot_xy_m=[px, py], footprint_m=[w, d], foundation_z_m=z,
                     construction="shared_kit" if site["kind"] in {"suburbs", "ranch", "village", "services"}
                     else "custom_shell_shared_structure")
+
+    # Reserve roadside retail before rail, utility and street-front infill are baked.
+    retail = [(s["id"]+"-shops", s["name"]+" Shops", s["plot_xy_m"], True)
+              for s in plan["sites"] if s["kind"]=="suburbs"]
+    retail += [("hardware-"+area, title+" Hardware", xy, False) for area,title,xy in (
+        ("west","West River",(1020,2320)), ("east","East Highway",(3890,2150)),
+        ("south","Southern Depot",(2870,555)))]
+    track_segments = [pair for line in (*FREIGHT.values(),*TRAM.values()) for pair in segments(line)]
+    for ident,title,anchor,strip in retail:
+        w,d = (76,32) if strip else (22,24)
+        clearance = math.hypot(w,d)/2+3
+        candidates = []
+        for road in plan["roads"]:
+            for a,b in segments(road["points_m"]):
+                count = max(1,math.ceil(math.dist(a,b)/20))
+                for j in range(count):
+                    rx,ry = (a[k]+(b[k]-a[k])*j/count for k in (0,1))
+                    if math.dist(anchor,(rx,ry)) > 950:
+                        continue
+                    for dx in (0, -clearance, clearance):
+                        px,py = round(rx+dx),round(ry+clearance+road["width_m"]/2+5)
+                        candidates.append((math.dist(anchor,(px,py))+abs(dx)*.4,px,py,road["id"],rx,ry))
+        for _,px,py,road_id,rx,ry in sorted(candidates):
+            if any(segment_distance(px,py,a,b)<clearance+5 for a,b in track_segments):
+                continue
+            if available(px,py,clearance) and all(water_distance(px+(rx-px)*t/8,
+                    py-d/2+(ry-py+d/2)*t/8)>4 for t in range(9)):
+                break
+        else:
+            raise ValueError(f"No roadside parcel for {ident}")
+        z = round(ground_height(px,py),2)
+        plots.append((px,py,clearance,z)); pads.append((px,py,w/2,d/2,z))
+        plan["sites"].append(dict(id=ident,name=title,kind="retail_strip" if strip else "hardware",
+            architecture="modern",xy_m=[px,py],plot_xy_m=[px,py],footprint_m=[w,d],
+            foundation_z_m=z, road=road_id, driveway_end=[rx,ry]))
 
     bridges = []
     for road in plan["roads"]:

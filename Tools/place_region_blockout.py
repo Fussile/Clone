@@ -1340,11 +1340,11 @@ def place():
             remove_blockout(key)
         elif site["id"] in {"west-entertainment", "east-entertainment"}:
             district = key+"_quarter"
-            venues = (("The Playhouse", "Stage Door Cafe"), ("Record Exchange", "Listening Room"),
-                      ("The Comedy Cellar", "Late Show Diner"), ("Arcade Hall", "Bowling Club"))
+            venues = (("The Playhouse", "Stage Door Cafe"), ("Riverside Range", "Listening Room"),
+                      ("The Comedy Cellar", "Late Show Diner"), ("Crossroads Casino", "Union Nightclub"))
             if site["id"] == "east-entertainment":
                 venues = (("Picture House", "Matinee Cafe"), ("Music Hall", "Backstage Bar"),
-                          ("Jazz Club", "Midnight Kitchen"), ("East Market", "Corner Bistro"))
+                          ("Jazz Club", "Midnight Kitchen"), ("Branch Library", "Corner Bistro"))
             for i, pair in enumerate(venues):
                 vx, vy = x+(-24 if i%2==0 else 24), y+(-17 if i<2 else 17)
                 block = f"{district}_{i}"
@@ -1356,6 +1356,37 @@ def place():
             box(district+"_street", "Entertainment quarter street", x, y, z+.2, w, 9, .06,
                 ground=True, material=asphalt)
             migrate_landmark(key, district, (key+"_slab",))
+        elif site["kind"] in {"retail_strip","hardware"}:
+            shops = (("Hardware","BUILDING"),("Supermarket","FOOD"),("Clothing Outlet","GENERAL"),
+                     ("Bookshop","OFFICE"),("Electronics","OFFICE"))
+            if site["kind"] == "hardware":
+                shops = shops[:1]
+            for index,(title,profile) in enumerate(shops):
+                unit = f"{key}_unit_{index}"
+                width = (w-4)/len(shops)
+                cx,cy = x+(index-(len(shops)-1)/2)*width, y+3
+                front = site_tools["building_shell"](box,unit,cx,cy,z+.2,width-.35,12,4,2.5,
+                                                     style_materials["StationBrick"],concrete)
+                site_tools["double_door"](door,unit+"_entry",title+" entrance",cx,front-.04,z+.2,
+                                          2.5,2.35,"petrol")
+                facade(unit+"_skin","Storefront",cx,cy,z+.2,width-.35,12,4,0,2.65,2.8,bundled=True)
+                sign(unit+"_sign",title.upper(),cx,front-.4,z+3.55,size=30)
+                for side in (-1,1):
+                    tag = f"{unit}_stock_{side}"
+                    px = cx+side*width*.26
+                    if title=="Electronics":
+                        furnishing(tag,"Electronics display","desk",px,cy,z+.2,(2.4,1.1,1.2),90)
+                    elif title=="Clothing Outlet":
+                        box(tag,"Clothing display table",px,cy,z+.2,1.2,3,.85,
+                            material=style_materials["timber"])
+                    else:
+                        furnishing(tag,title+" shelving","shelf",px,cy,z+.2,(3.2,.9,1.9),90)
+                cache(unit+"_delivery",title+" delivery",cx-width*.31,cy+4.4,z+.2,profile=profile)
+                box(unit+"_till","Checkout counter",cx+width*.30,cy-3.9,z+.2,2,.7,.97,
+                    material=style_materials["timber"])
+            box(key+"_walk","Retail sidewalk",x,y-4.6,z+.2,w-2,3,.10,ground=True,material=concrete)
+            box(key+"_parking","Customer forecourt",x,y-(d/2+6)/2,z+.2,w-2,d/2-6,.05,
+                ground=True,material=asphalt)
         elif site["kind"] == "suburbs":
             district = key+"_homes"
             distance = math.hypot(x-sx,y-sy)
@@ -1452,6 +1483,21 @@ def place():
                        0, 3.15, 3.3, bundled=True)
             remove_generated(key+"_shell", key+"_trim", key+"_portico_roof",
                              *(f"{key}_portico_{i}" for i in range(4)))
+        if site["kind"] == "services":
+            garage = key+("_SixTwelve_garage" if site["id"]=="southwest-services" else "_garage")
+            gx,gy = x+12,y+1
+            front = site_tools["building_shell"](box,garage,gx,gy,z+.2,8.6,10,4.8,4.2,
+                style_materials["StationBrick"],concrete,clear_height=3.5)
+            door(garage+"_shutter","Auto shop bay door",gx,front-.06,z+.2,4.2,3.5,
+                 roll_up=True,finish="dark_trim")
+            sign(garage+"_sign","AUTO SERVICE",gx,front-.25,z+4.35,size=28)
+            box(garage+"_link","Covered service passage",x+7,gy,z+3.2,3,4,.18,material=concrete)
+            for side in (-1,1):
+                box(f"{garage}_post_{side}","Vehicle lift column",gx+side*1.65,gy,z+.2,.35,.45,2.85,
+                    material=style_materials["petrol"])
+            box(garage+"_bench","Maintenance workbench",gx,gy+3.6,z+.2,3.8,.85,.95,
+                material=style_materials["timber"])
+            cache(garage+"_parts","Auto parts cabinet",gx-3,gy+3.4,z+.2,profile="BUILDING")
         if site["kind"] == "industry" and site["id"] not in {"hangars", "warehouses", "east-factory", "west-factory"}:
             dress_industrial(key, x, y, z+.2, w*.90, d*.86, warehouse=site["id"] == "warehouses")
         if site["id"] == "city-towers":

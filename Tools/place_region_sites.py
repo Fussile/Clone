@@ -97,13 +97,30 @@ def nightlife_layout(box, door, cache, encounter, sign, facade, key, x, y, floor
             5.9, .75, 1.04, material=wood)
         performance = name in {"The Playhouse", "The Comedy Cellar", "Listening Room",
                                "Picture House", "Music Hall", "Jazz Club"}
+        special = name in {"Branch Library","Crossroads Casino","Union Nightclub","Riverside Range"}
+        if name=="Branch Library":
+            for i in range(3):
+                box(f"{building}_stacks_{i}","Archive shelving",cx-4+i*3.5,cy-.3,floor,
+                    1.7,.65,1.85,material=wood)
+        elif name=="Crossroads Casino":
+            for i in range(3):
+                box(f"{building}_gaming_{i}","Card table",cx-3.7+i*3.6,cy-.6,floor,
+                    2.25,1.4,.88,material=palette["petrol"])
+        elif name=="Union Nightclub":
+            box(building+"_dance","Dance floor",cx,cy-.9,floor,7.4,5,.06,material=trim)
+            box(building+"_dj","DJ booth",cx-4.8,cy-.9,floor,1.4,3.2,1.14,material=wood)
+        elif name=="Riverside Range":
+            for i in range(3):
+                box(f"{building}_target_{i}","Range target",cx-3+i*3,cy+4.9,floor+1.3,
+                    .85,.12,.95,material=palette["traffic"],collision=False)
+            sign(building+"_gallery","INDOOR RANGE",cx,cy+4.7,floor+2.65,size=22)
         if performance:
             box(building+"_stage", "Performance stage", cx-4.1, cy-.6, floor,
                 3.2, 5.8, .38, material=wood)
             for row in range(3):
                 box(f"{building}_audience_{row}", "Audience bench", cx+row*1.55, cy-.65, floor,
                     .52, 3.9, .46, material=shade)
-        for i in range(0 if performance else 3):
+        for i in range(0 if performance or special else 3):
             tx, ty = cx+4.05, cy-2.5+i*2.3
             box(f"{building}_table_{i}", "Dining table", tx, ty, floor+.74,
                 1.2, .75, .09, material=wood)
@@ -112,9 +129,21 @@ def nightlife_layout(box, door, cache, encounter, sign, facade, key, x, y, floor
             for direction in (-1, 1):
                 box(f"{building}_seat_{i}_{direction}", "Booth seat", tx, ty+direction*.64,
                     floor, 1.25, .5, .45, material=shade)
-        cache(building+"_stock", f"{name} stock", cx-4.8, cy+3.7, floor,
-              food_amount=2 if side>0 else 1, water_amount=3 if side>0 else 2,
-              scavenger_notes_amount=int(side<0))
+        if name=="Branch Library":
+            cache(building+"_stock","Library returns cabinet",cx-4.8,cy+3.7,floor,
+                  profile="OFFICE",scavenger_notes_amount=1)
+        elif name in {"Crossroads Casino","Riverside Range"}:
+            cache(building+"_stock",name+" office lockbox",cx-4.8,cy+3.7,floor,profile="SECURITY")
+        else:
+            cache(building+"_stock",f"{name} stock",cx-4.8,cy+3.7,floor,profile="FOOD",
+                  food_amount=2 if side>0 else 1,water_amount=3 if side>0 else 2)
+        if any(word in name for word in ("Diner","Bistro","Kitchen","Cafe")):
+            box(building+"_prep","Kitchen prep counter",cx+2,cy+4.9,floor,
+                4.2,.8,.95,material=trim)
+        if "Bar" in name or name=="Union Nightclub":
+            for stool in range(4):
+                box(f"{building}_stool_{stool}","Bar stool",cx-3.5+stool*1.35,cy+1.25,floor,
+                    .44,.44,.72,material=wood)
         encounter(building+"_walker", f"{name} walker", cx+1.6, cy+1.5, floor)
     box(key+"_walk", "Nightlife sidewalk", x, y-5.9, floor, 33, 2.7, .12, material=palette["concrete"])
 

@@ -46,7 +46,7 @@ def prepare_region(tools, ground_material):
         # Reuse the baked samples on subsequent attempts when the source layout matches.
         signature = hashlib.sha256()
         for name in ("generate_world.py", "world_layout.json", "region_route.py", "airfield_layout.py",
-                     "communications_layout.py", "civic_landmarks.py"):
+                     "communications_layout.py", "civic_landmarks.py", "rail_layout.py"):
             signature.update((tools / name).read_bytes())
         revision = signature.hexdigest()
         stamp = output / "Terrain.sha256"

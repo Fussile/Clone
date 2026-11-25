@@ -35,6 +35,11 @@ def bake_route(plan, ground_height, terrain_height):
         "western-estates":"estate-avenue",
     }
     for site in plan["sites"]:
+        if "driveway_end" in site:
+            x,y = site["plot_xy_m"]
+            roads[site["id"]+"_access"] = dict(id=site["id"]+"_access", width_m=6,
+                points_m=[(x,y-site["footprint_m"][1]/2),site["driveway_end"]],
+                start_z=site["foundation_z_m"]+.2)
         if site["id"] not in links:
             continue
         x, y = site["plot_xy_m"]
