@@ -16,6 +16,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/HitResult.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/TargetPoint.h"
@@ -164,7 +165,7 @@ void ASurvivalCharacter::BeginPlay()
     CrouchMoveAnimation = LoadClip(TEXT("SurvivorCrouchMove"));
     ProneIdleAnimation = LoadClip(TEXT("SurvivorProneIdle"));
     ProneMoveAnimation = LoadClip(TEXT("SurvivorProneMove"));
-    UpdateSurvivorAnimation();
+    UpdateSurvivorAnimation(0.0f);
 }
 
 void ASurvivalCharacter::Tick(float DeltaSeconds)
@@ -182,7 +183,7 @@ void ASurvivalCharacter::Tick(float DeltaSeconds)
         UpdateContainerSearch(DeltaSeconds);
     UpdateVitals(DeltaSeconds);
     UpdateRifle();
-    UpdateSurvivorAnimation();
+    UpdateSurvivorAnimation(DeltaSeconds);
     if (bHasSidearm && HealthPoints > 0)
     {
         UpdateSidearmAnimation();
@@ -191,9 +192,17 @@ void ASurvivalCharacter::Tick(float DeltaSeconds)
     SyncPack();
 }
 
-void ASurvivalCharacter::UpdateSurvivorAnimation()
+void ASurvivalCharacter::UpdateSurvivorAnimation(float DeltaSeconds)
 {
-    const bool bMoving = GetVelocity().SizeSquared2D() > FMath::Square(20.0);
+    const FVector Velocity = GetVelocity();
+    const double SpeedSquared = Velocity.SizeSquared2D();
+    const bool bMoving = SpeedSquared > FMath::Square(20.0);
+    const UCharacterMovementComponent* Movement = GetCharacterMovement();
+    const bool bAirborne = Movement->IsFalling();
+    AirborneAnimationTime = bAirborne ? AirborneAnimationTime + DeltaSeconds : 0.0f;
+    // Jump immediately on takeoff, but ignore brief floor gaps while running.
+    const bool bShowJump = bAirborne && (Velocity.Z > 80.0 || AirborneAnimationTime > 0.10f
+        || (JumpAnimation && CurrentAnimation == JumpAnimation));
     UAnimSequence* Desired = IdleAnimation.Get();
     if (Stance == EStance::Prone)
     {
@@ -203,14 +212,23 @@ void ASurvivalCharacter::UpdateSurvivorAnimation()
     {
         Desired = bMoving ? CrouchMoveAnimation.Get() : CrouchIdleAnimation.Get();
     }
-    else if (GetCharacterMovement()->IsFalling() && JumpAnimation)
+    else if (bShowJump && JumpAnimation)
     {
         Desired = JumpAnimation.Get();
     }
     else if (bMoving)
     {
-        Desired = GetVelocity().SizeSquared2D() > FMath::Square(WalkSpeed)
-            ? RunAnimation.Get() : WalkAnimation.Get();
+        // The local player already knows the sprint cap. Remote movement uses
+        // two speed thresholds so floor and replication jitter won't restart the clip.
+        const bool bLocalSprint = IsLocallyControlled() && Movement->MaxWalkSpeed >= SprintSpeed;
+        const float RunEntrySpeed = bLocalSprint ? WalkSpeed * 0.8f : WalkSpeed + 45.0f;
+        const float RunExitSpeed = bLocalSprint ? WalkSpeed * 0.65f : WalkSpeed + 10.0f;
+        bPlayingRun = SpeedSquared > FMath::Square(bPlayingRun ? RunExitSpeed : RunEntrySpeed);
+        Desired = bPlayingRun && RunAnimation ? RunAnimation.Get() : WalkAnimation.Get();
+    }
+    else
+    {
+        bPlayingRun = false;
     }
     if (Desired && Desired != CurrentAnimation.Get())
     {
@@ -1001,7 +1019,7 @@ void ASurvivalCharacter::UpdateSidearmView()
 
 void ASurvivalCharacter::LoadSidearmViewmodel()
 {
-    constexpr TCHAR MeshPath[] = TEXT("/Game/Art/Crossroads/AlignedSidearm/SK_SidearmViewmodel.SK_SidearmViewmodel");
+    constexpr TCHAR MeshPath[] = TEXT("/Game/Art/Crossroads/DressedSidearm/SK_SidearmViewmodel.SK_SidearmViewmodel");
     USkeletalMesh* Arms = LoadObject<USkeletalMesh>(nullptr, MeshPath, nullptr, LOAD_NoWarn);
     if (!Arms)
     {
@@ -1009,6 +1027,7 @@ void ASurvivalCharacter::LoadSidearmViewmodel()
     }
 
     SidearmViewmodel->SetSkeletalMesh(Arms);
+    RefreshViewmodelGear(SidearmViewmodel);
     const FName CameraBone(TEXT("Head_Cam_014"));
     if (!SidearmViewmodel->DoesSocketExist(CameraBone) || !SidearmViewmodel->DoesSocketExist(ViewmodelGripBone))
     {
@@ -1051,7 +1070,7 @@ void ASurvivalCharacter::LoadSidearmViewmodel()
 
     const auto LoadClip = [](const TCHAR* Name)
     {
-        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/AlignedSidearm/%s.%s"), Name, Name);
+        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/DressedSidearm/%s.%s"), Name, Name);
         return LoadObject<UAnimSequence>(nullptr, *Path);
     };
     ViewmodelIdle = LoadClip(TEXT("ViewmodelIdle"));
@@ -1309,12 +1328,13 @@ void ASurvivalCharacter::LoadRifleViewmodel()
     RifleWorldMesh->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,
         TEXT("/Game/Art/Crossroads/SniperSurface/SM_CrossroadsSniper.SM_CrossroadsSniper")));
     USkeletalMesh* Arms = LoadObject<USkeletalMesh>(nullptr,
-        TEXT("/Game/Art/Crossroads/SniperSurface/SK_SniperViewmodel.SK_SniperViewmodel"));
+        TEXT("/Game/Art/Crossroads/DressedSniper/SK_SniperViewmodel.SK_SniperViewmodel"));
     if (!Arms)
     {
         return;
     }
     RifleViewmodel->SetSkeletalMesh(Arms);
+    RefreshViewmodelGear(RifleViewmodel);
     RifleViewmodel->RefreshBoneTransforms(nullptr);
     const FName Breech(TEXT("ViewBreech"));
     if (!RifleViewmodel->DoesSocketExist(SniperMuzzle) || !RifleViewmodel->DoesSocketExist(Breech))
@@ -1342,7 +1362,7 @@ void ASurvivalCharacter::LoadRifleViewmodel()
 
     const auto LoadClip = [](const TCHAR* Name)
     {
-        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/SniperSurface/%s.%s"), Name, Name);
+        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/DressedSniper/%s.%s"), Name, Name);
         return LoadObject<UAnimSequence>(nullptr, *Path);
     };
     RifleHold = LoadClip(TEXT("SniperHold"));
@@ -2370,6 +2390,8 @@ void ASurvivalCharacter::ServerSetGearEquipped_Implementation(int32 Index, bool 
 
 void ASurvivalCharacter::RefreshGear()
 {
+    RefreshViewmodelGear(SidearmViewmodel);
+    RefreshViewmodelGear(RifleViewmodel);
     for (UStaticMeshComponent* Part : GearMeshes)
         if (Part) Part->DestroyComponent();
     GearMeshes.Reset();
@@ -2409,6 +2431,57 @@ void ASurvivalCharacter::RefreshGear()
         GearMeshes.Add(Part);
     }
     if (bInventoryOpen) ShowWeaponPortrait(InspectedWeapon != ESurvivalItem::None, bCharacterPortrait);
+}
+
+void ASurvivalCharacter::RefreshViewmodelGear(USkeletalMeshComponent* Viewmodel)
+{
+    const USkeletalMesh* Mesh = Viewmodel->GetSkeletalMeshAsset();
+    if (!IsLocallyControlled() || !Mesh) return;
+
+    const FSurvivalGearDefinition* OuterLayer = nullptr;
+    const FSurvivalGearDefinition* BodyLayer = nullptr;
+    const FSurvivalGearDefinition* Gloves = nullptr;
+    for (const int32 Index : WornGear)
+    {
+        if (Index < 0 || Index >= UE_ARRAY_COUNT(SurvivalGear)) continue;
+        const auto& Gear = SurvivalGear[Index];
+        if (FCString::Strcmp(Gear.Slot, TEXT("Torso")) == 0 && Gear.ViewmodelColor.A > 0.0f)
+            OuterLayer = &Gear;
+        else if (FCString::Strcmp(Gear.Slot, TEXT("Body")) == 0)
+            BodyLayer = &Gear;
+        else if (FCString::Strcmp(Gear.Slot, TEXT("Hands")) == 0)
+            Gloves = &Gear;
+    }
+
+    UMaterialInterface* Cloth = nullptr;
+    const auto& Materials = Mesh->GetMaterials();
+    for (int32 Index = 0; Index < Materials.Num(); ++Index)
+    {
+        const auto& Slot = Materials[Index];
+        const FString Name = Slot.MaterialSlotName.ToString();
+        const FSurvivalGearDefinition* Layer = nullptr;
+        if (Name.Contains(TEXT("ViewmodelSleeves"))) Layer = OuterLayer ? OuterLayer : BodyLayer;
+        else if (Name.Contains(TEXT("ViewmodelGloves"))) Layer = Gloves;
+        else continue;
+
+        if (!Layer || Layer->ViewmodelColor.A <= 0.0f)
+        {
+            Viewmodel->SetMaterial(Index, nullptr);
+            continue;
+        }
+        if (!Cloth)
+            Cloth = LoadObject<UMaterialInterface>(nullptr,
+                TEXT("/Game/Art/Crossroads/DressedSidearm/M_ViewmodelCloth.M_ViewmodelCloth"), nullptr, LOAD_NoWarn);
+        if (!Cloth) return;
+        auto* Material = Cast<UMaterialInstanceDynamic>(Viewmodel->GetMaterial(Index));
+        if (!Material)
+            Material = Viewmodel->CreateDynamicMaterialInstance(Index, Cloth);
+        if (Material)
+        {
+            Material->SetVectorParameterValue(TEXT("GearColor"), Layer->ViewmodelColor);
+            Material->SetScalarParameterValue(TEXT("Camo"), Layer->ViewmodelCamo);
+        }
+    }
 }
 
 void ASurvivalCharacter::ShowWeaponPortrait(bool bWeapon, bool bCharacter)

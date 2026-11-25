@@ -225,17 +225,15 @@ bool ASurvivalSupplyCrate::FinishSearch(int32 GameStage)
     FRandomStream Random(LootSeed);
     Random.RandRange(1, 100); // Match the occupancy draw at the start of this loot cycle.
     PopulateSlots(GetAuthoredLoot());
-    int32 FixedValue = 0;
     int32 FilledSlots = 0;
     for (const auto& Slot : State.Slots)
     {
         if (Slot.IsEmpty()) continue;
-        FixedValue += SurvivalLootBudget::GetUnitValue(Slot) * Slot.Count;
         ++FilledSlots;
     }
 
     auto Rolled = SurvivalLootBudget::Roll(LootProfile, GameStage, MinimumLootValue, LootDifficultyMultiplier,
-        State.Slots.Num() - FilledSlots, Random, FixedValue);
+        State.Slots.Num() - FilledSlots, Random, State.Slots);
     for (int32 Index = 0; Index < Rolled.Num(); ++Index)
         State.Slots[FilledSlots + Index] = Rolled[Index];
 

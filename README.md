@@ -30,7 +30,7 @@ Loot rolls when the first player finishes searching a container. The **Character
 | Police armory | 250 | Commonly two low-quality pistols with supplies |
 | Military armory | 120 minimum | A guaranteed pistol, with stronger weapons and parts at higher stages |
 
-Item values, pools, and profile defaults are in `Source/Survival/Private/SurvivalLootBudget.cpp` and `SurvivalGear.h`. A placed crate can raise its minimum with `MinimumLootValue` and change the regional scaling with `LootDifficultyMultiplier`. Starter crates preserve authored items, and fixed contents count toward the budget in crates that also roll random loot.
+Item values, pools, and profile defaults are in `Source/Survival/Private/SurvivalLootBudget.cpp` and `SurvivalGear.h`. A placed crate can raise its minimum with `MinimumLootValue` and change the regional scaling with `LootDifficultyMultiplier`. Authored contents count toward the budget and duplicate limit. A second copy of a non-stackable item rolls at one-eighth weight, regardless of quality. Random loot stops at two copies per item. Precise spending depends on the available loot and grid space.
 
 Press **E** to scavenge containers and props. Destroying a prop forfeits its contents until the next refresh. Leaving and returning to a World Partition cell preserves remaining loot and slot arrangement until the shared server refresh, every three in-game days of active world time by default. Set `LootRefreshDays` in `Config/DefaultGame.ini` to change the interval.
 

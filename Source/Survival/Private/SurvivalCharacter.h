@@ -265,7 +265,10 @@ private:
     void RemovePlan();
     void Dismantle();
     void ToggleView();
-    void UpdateSurvivorAnimation();
+    void UpdateSurvivorAnimation(float DeltaSeconds);
+    void RefreshViewmodelGear(USkeletalMeshComponent* Viewmodel);
+    float AirborneAnimationTime = 0.0f;
+    bool bPlayingRun = false;
     void PrimaryAction();
     void EquipSidearm();
     bool FireRound(const FVector& Muzzle, double Range, bool bRifleRound);
