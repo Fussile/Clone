@@ -1140,6 +1140,13 @@ def place():
                 raise RuntimeError(f"Could not prepare residential collision: {source.name}")
             housing[style].append(mesh)
 
+    fixtures = {}
+    for name in ("Refrigerator", "DocumentSafe", "FloorSafe"):
+        fixtures[name] = import_asset(source_art/"Household"/f"SM_{name}.glb",
+                                      f"{world_art}/Household", unreal.StaticMesh)
+        if not unreal.CrossroadsWorldBake.set_static_mesh_collision(fixtures[name]):
+            raise RuntimeError(f"Could not prepare {name} collision")
+
     housing_styles = {"western-estates":"Villa", "lakehouse-east":"Villa",
                       "middle-suburbs":"TimberStone", "south-suburbs":"European"}
     neighborhoods = [(site["plot_xy_m"], housing_styles[site["id"]]) for site in plan["sites"]
@@ -1148,6 +1155,22 @@ def place():
     def home(key,x,y,z,yaw,style=None):
         if style is None:
             style = min(neighborhoods,key=lambda item: math.dist((x,y),item[0]))[1]
+        angle = math.radians(yaw)
+        def furnish(tag,label,mesh,u,v,size,profile,health):
+            def setup(actor):
+                fitted_mesh(actor,mesh,size,yaw)
+            prop_kind(key+"_"+tag,label,health,profile,x+u*math.cos(angle)+v*math.sin(angle),
+                      y-u*math.sin(angle)+v*math.cos(angle),z+size[2]/2,setup)
+        furnish("fridge","Kitchen refrigerator",fixtures["Refrigerator"],1.55,-1.6,
+                (.86,.76,1.84),"FOOD",95)
+        furnish("dresser","Bedroom drawers",office_meshes["OfficeDrawer"],-2.3,2.0,
+                (.95,.5,.84),"GENERAL",65)
+        if random.Random(key+"_safe").random() < (.62 if style=="Villa" else .26):
+            heavy = style=="Villa"
+            furnish("safe","Floor safe" if heavy else "Document safe",
+                    fixtures["FloorSafe" if heavy else "DocumentSafe"],1.5,2.4,
+                    (.66,.62,.85) if heavy else (.48,.42,.43),"SECURITY" if heavy else "OFFICE",
+                    650 if heavy else 300)
         if housing[style]:
             mesh = random.Random(key).choice(housing[style])
             bounds = mesh.get_bounding_box()
