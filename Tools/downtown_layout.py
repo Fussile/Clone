@@ -91,11 +91,18 @@ def bake_city(routes, height, available, seed):
     for frontage, suffix, spacing, sizes in (
         (city_routes, "", 39, ((30, 27), (33, 31), (35, 36))),
         (city_routes, "_mid", 16, ((23, 20), (26, 22), (24, 19))),
-        (outer_routes, "_outer", 57, ((22, 20), (27, 23), (31, 24))),
+        (outer_routes, "_outer", 18, ((22, 20), (27, 23), (31, 24))),
     ):
         for route in frontage:
             placements = list(segment_samples(route, spacing))
+            last_frontage = None
             for index, ((x, y, z), dx, dy) in enumerate(placements):
+                if suffix == "_outer":
+                    distance = math.hypot(x-2451, y-2069)
+                    target = 32 + 43*min(1, distance/2350)
+                    if last_frontage and math.dist(last_frontage,(x,y)) < target:
+                        continue
+                    last_frontage = (x,y)
                 # Reserve larger floor plates and leave a service alley between neighbors.
                 for side in (-1, 1):
                     width, depth = rng.choice(sizes)
@@ -203,7 +210,7 @@ def tower_interior(width, depth, levels, style):
     return parts
 
 
-def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, tower, church, ladder, palette):
+def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, tower, church, ladder, palette, home):
     church_lot = min((lot for lot in lots if min(lot["w"],lot["d"]) >= 27),
                      key=lambda lot: math.hypot(lot["x"]-2451,lot["y"]-2069),default=None)
     for lot in lots:
@@ -233,6 +240,10 @@ def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, tower
                      z-.20, walkway_width, 2.3, .20, "concrete")
         else:
             slab("_walk", "Street sidewalk", 0, -d/2-1.15, z-.20, w+.4, 2.3, .20, "concrete")
+        if lot["id"].endswith("_outer"):
+            hx,hy = point(0,-d/2+6.3)
+            home(key+"_house",hx,hy,z,yaw)
+            continue
         if lot is church_lot:
             church(key+"_parish",x,y,z,yaw,w,d)
             continue

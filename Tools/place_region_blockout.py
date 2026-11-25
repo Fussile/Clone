@@ -88,6 +88,7 @@ def place():
         "RuinedTerminal": [((-1.35,1.35),(.15,2.55),(-20,20))],
         "RuinedAirportShop": [((-1.35,1.35),(.15,2.45),(-25,25))],
         "SkalkaTower": [((-.9,.9),(-8,1.5),(-20,20))],
+        "PanelHousingExterior": [((-1.2,1.2),(-.1,2.65),(-6,6))],
         "SubstationHouse": [((-.54,.54),(-1,1.62),(-4,4))],
     }
     cut_mesh = runpy.run_path(str(root/"Tools"/"survey_access.py"))["prepare"]
@@ -125,6 +126,7 @@ def place():
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Region/{name}", unreal.StaticMesh)
         for name in sorted(district_assets - {"AbandonedVan", "SubstationHouse"})
     }
+    district_meshes["PanelHousingExterior"] = survey_mesh("PanelHousingExterior")
     district_meshes["SubstationHouse"] = survey_mesh("SubstationHouse")
     district_meshes["AbandonedVan"] = import_asset(source_art / "SM_AbandonedVan.glb",
         f"{world_art}/SurveyDetail/AbandonedVan", unreal.StaticMesh)
@@ -1128,6 +1130,56 @@ def place():
                       x+dx, y+dy, floor+dimensions[2]/2, configure)
         remove_generated(*(tag for tag in actor_tags if tag.startswith(key+"_fab_") and tag not in desired))
 
+    housing = {}
+    for style in ("Villa", "TimberStone", "European"):
+        housing[style] = []
+        for source in sorted((source_art / "Housing" / style).glob("*.glb")):
+            mesh = import_asset(source, f"{world_art}/Housing/{style}", unreal.StaticMesh,
+                                refresh_if_source_changed=True)
+            if not unreal.CrossroadsWorldBake.set_static_mesh_collision(mesh):
+                raise RuntimeError(f"Could not prepare residential collision: {source.name}")
+            housing[style].append(mesh)
+
+    housing_styles = {"western-estates":"Villa", "lakehouse-east":"Villa",
+                      "middle-suburbs":"TimberStone", "south-suburbs":"European"}
+    neighborhoods = [(site["plot_xy_m"], housing_styles[site["id"]]) for site in plan["sites"]
+                     if site["id"] in housing_styles]
+
+    def home(key,x,y,z,yaw,style=None):
+        if style is None:
+            style = min(neighborhoods,key=lambda item: math.dist((x,y),item[0]))[1]
+        if housing[style]:
+            mesh = random.Random(key).choice(housing[style])
+            bounds = mesh.get_bounding_box()
+            size = bounds.max-bounds.min
+            if min(size.x,size.y,size.z) <= 0:
+                raise ValueError(f"Empty residential mesh: {mesh.get_name()}")
+            factor = min(17/size.x,13/size.y)
+            dims = (size.x*factor,size.y*factor,size.z*factor)
+            def install(actor):
+                fitted_mesh(actor,mesh,dims,yaw)
+            spawn(unreal.StaticMeshActor,key+"_residence",style+" residence",x,y,z+dims[2]/2,
+                  install,relocate=True,reconfigure=True)
+            return
+
+        # Keep each house traversable until its furnished architectural model is installed.
+        angle = math.radians(yaw)
+        def oriented(fn):
+            def place(tag,label,u,v,floor,*args,**options):
+                if fn is box:
+                    pitch,heading = options.pop("rotation",(0,0))
+                    options["rotation"] = (pitch,heading+yaw)
+                elif fn is door:
+                    options["yaw"] = options.get("yaw",0)+yaw
+                return fn(tag,label,x+u*math.cos(angle)+v*math.sin(angle),
+                          y-u*math.sin(angle)+v*math.cos(angle),floor,*args,**options)
+            return place
+        finish = {"Villa":"stucco_metal","TimberStone":"timber","European":"brick_hardwood"}[style]
+        interiors["place_site"](oriented(box),oriented(door),ramp,oriented(cache),oriented(encounter),
+            sign, storefront_window,treatment_bed,furniture,site_tools["building_shell"],
+            site_tools["double_door"],key,dict(kind="suburbs",id=key,name="Residence",architecture=finish),
+            0,0,z,20,15,style_materials,scatter_caches)
+
     has_start = any(isinstance(actor, unreal.PlayerStart) for actor in existing)
     for landscape in landscapes:
         tags = list(landscape.get_editor_property("tags"))
@@ -1282,16 +1334,14 @@ def place():
                 ground=True, material=asphalt)
             migrate_landmark(key, district, (key+"_slab",))
         elif site["kind"] == "suburbs":
-            district = key+"_residential"
+            district = key+"_homes"
+            distance = math.hypot(x-sx,y-sy)
+            columns = max(2,min(5,round(5-distance/700)))
             for row in (-1, 1):
-                for lot in range(4):
-                    hx, hy = x+(lot-1.5)*23, y+row*15
-                    for side in (-1, 1):
-                        storefront_window(f"{district}_{row}_{lot}_bay_{side}", hx+side*4.6, hy-6.3, z+.2)
-                    interiors["place_site"](box, door, ramp, cache, encounter, sign, storefront_window,
-                        treatment_bed, furniture, site_tools["building_shell"], site_tools["double_door"],
-                        f"{district}_{row}_{lot}", site, hx, hy, z+.2,
-                        20, 15, style_materials, scatter_caches)
+                for lot in range(columns):
+                    hx, hy = x+((lot+.5)/columns-.5)*(w-2), y+row*15
+                    home(f"{district}_{row}_{lot}",hx,hy,z+.2,0 if row>0 else 180,housing_styles[site["id"]])
+            remove_generated(*(tag for tag in actor_tags if tag.startswith(district+"_") and tag not in site_keys))
             box(district+"_lane", "Residential lane", x, y, z+.2, w, 7, .06, ground=True, material=asphalt)
             migrate_landmark(key, district, (key+"_slab",))
         elif site["id"] == "city-nightlife":
@@ -1314,13 +1364,16 @@ def place():
                 wreck(f"{key}_upper_wreck_{i}", x+dx, y-6, z+3.35, 90,
                       "AbandonedVan" if i%2 else "BurnedCompact")
             remove_blockout(key)
-        elif site["id"] == "southwest-apartments":
-            site_tools["apartment_layout"](box, door, cache, encounter, key, x, y-7, z+.2, plan["seed"])
-            interiors["place_site"](box, door, ramp, cache, encounter, sign, storefront_window,
-                treatment_bed, furniture, site_tools["building_shell"], site_tools["double_door"], key+"_east_block",
-                site, x, y+10, z+.2, 34, 12, style_materials, scatter_caches)
-            remove_generated(key+"_exterior", key+"_closed")
-            remove_blockout(key)
+        elif site["id"] in {"southwest-apartments", "north-apartments"}:
+            estate = key+"_panel_estate"
+            for row in (-1,1):
+                block = f"{estate}_{row}"
+                by = y+row*10
+                district_mesh(block+"_skin","Residential panel block","PanelHousingExterior",
+                              x,by,z+.2,(38,13,11),collision=False)
+                civic["hall"](block,x,by,z+.2,37,12.7,3,0,"academic","Apartments",
+                              box,door,cache,encounter,sign,lambda *args: True,style_materials)
+            migrate_landmark(key,estate,(key+"_slab",))
         elif site["id"] == "southwest-services":
             new_key = key+"_SixTwelve"
             imported_station(new_key, x, y, z+.2)
@@ -1439,7 +1492,7 @@ def place():
                                              transmission["poles"][b]["phases"], strict=True)):
             cable(f"CrossroadsCable_{a}_{b}_{index}",start,end)
     downtown["stamp_city"](plan["city_lots"],plan["city_barriers"],box,facade,
-                           communications_art,door,cache,furnishing,tower,church,roof_ladder,style_materials)
+                           communications_art,door,cache,furnishing,tower,church,roof_ladder,style_materials,home)
     remove_generated(*(previous_infill - touched_infill))
     for car in plan["wrecks"]:
         wreck("CrossroadsWreck_"+car["id"],car["x"],car["y"],car["z"],car["yaw"],car["model"])

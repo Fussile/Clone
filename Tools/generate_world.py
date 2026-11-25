@@ -266,7 +266,7 @@ def generate(seed):
 
 def write_heightmap(path, plan, height, raw_path=None):
     width, depth = plan["size_m"]
-    columns, rows = 500, 400
+    columns, rows = width//10, depth//10
     stride_x, stride_y = width/columns, depth/rows
     coarse = [[height(x*stride_x, depth-y*stride_y) for x in range(columns+1)] for y in range(rows+1)]
     x_fractions = [x*columns/(RESOLUTION-1) for x in range(RESOLUTION)]
@@ -298,7 +298,7 @@ def write_heightmap(path, plan, height, raw_path=None):
 
 def write_map(path, plan):
     width, depth = plan["size_m"]
-    map_w, map_h = 1000, 800
+    map_w, map_h = 1000, 1000
 
     def svg_xy(xy):
         return xy[0]/5, 74+(depth-xy[1])/5
@@ -312,15 +312,15 @@ def write_map(path, plan):
     labels = {"crater-town", "winter-village", "north-industry", "hill-town", "city-hospital",
               "city-police", "city-towers", "west-factory", "university", "airport", "south-base",
               "south-services", "warehouses", "west-entertainment", "east-clinic", "farms", "western-estates", "east-factory"}
-    lines = ['<svg xmlns="http://www.w3.org/2000/svg" width="1064" height="982" viewBox="-32 0 1064 982">',
-             '<rect x="-32" width="1064" height="982" fill="#131b20"/>',
+    lines = ['<svg xmlns="http://www.w3.org/2000/svg" width="1064" height="1182" viewBox="-32 0 1064 1182">',
+             '<rect x="-32" width="1064" height="1182" fill="#131b20"/>',
              '<text x="0" y="39" fill="#edf1e5" font-family="sans-serif" font-size="26" font-weight="bold">Crossroads region</text>',
              '<defs><linearGradient id="region" x2="0%" y2="100%"><stop stop-color="#3b5461"/>'
              '<stop offset=".51" stop-color="#425046"/><stop offset="1" stop-color="#655344"/></linearGradient></defs>',
              f'<rect y="74" width="{map_w}" height="{map_h}" fill="url(#region)"/>']
     for x in range(0, width+1, 500):
         sx = x/5
-        lines.append(f'<path d="M{sx} 74v800" stroke="#d8eddf" opacity=".14"/>')
+        lines.append(f'<path d="M{sx} 74v1000" stroke="#d8eddf" opacity=".14"/>')
     for y in range(0, depth+1, 500):
         _, sy = svg_xy([0, y])
         lines.append(f'<path d="M0 {sy}h1000" stroke="#d8eddf" opacity=".14"/>')
@@ -386,9 +386,9 @@ def write_map(path, plan):
             offset = -6 if align == "end" else 6
             lines.append(f'<text x="{x+offset}" y="{y-5}" text-anchor="{align}" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">{label}</text>')
     lines += ['<g fill="#e1e8dc" font-family="sans-serif" font-size="14">',
-              '<text x="925" y="39">N ↑</text><text x="0" y="907">20 km²  ·  5 km east–west  ·  4 km north–south  ·  Teal transmission lines</text>',
-              '<text x="0" y="936">Gold highway  ·  Grey regional roads  ·  Squares mark candidate bridges  ·  Salmon marks fissures</text>',
-              '<text x="0" y="959">Lime approaches  ·  Orange elevated decks  ·  Purple freight rail  ·  Pink tram and stops</text></g></svg>']
+              '<text x="925" y="39">N ↑</text><text x="0" y="1107">25 km²  ·  5 km east–west  ·  5 km north–south  ·  Teal transmission lines</text>',
+              '<text x="0" y="1136">Gold highway  ·  Grey regional roads  ·  Squares mark candidate bridges  ·  Salmon marks fissures</text>',
+              '<text x="0" y="1159">Lime approaches  ·  Orange elevated decks  ·  Purple freight rail  ·  Pink tram and stops</text></g></svg>']
     path.write_text("\n".join(lines)+"\n", encoding="utf-8")
 
 

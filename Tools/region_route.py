@@ -29,7 +29,10 @@ def bake_route(plan, ground_height, terrain_height):
         "south-services": "southern-arterial", "warehouses": "southern-industrial-road",
         "city-hospital": "hospital-arterial", "city-police": "downtown-loop",
         "city-parking": "east-west-highway", "city-nightlife": "east-west-highway",
-        "university": "airport-road",
+        "university": "airport-road", "school":"school-road", "north-clinic":"school-road",
+        "north-police":"school-road", "mall":"school-road", "car-lot":"school-road",
+        "north-services":"winter-approach", "winter-village":"winter-approach",
+        "western-estates":"estate-avenue",
     }
     for site in plan["sites"]:
         if site["id"] not in links:
@@ -49,7 +52,7 @@ def bake_route(plan, ground_height, terrain_height):
         }
 
     for site_id, road_id, offset, width in (
-        ("stadium", "winter-crossroad", 25.5, 5),
+        ("stadium", "school-road", 25.5, 5),
         ("airport", "terminal-access", 17.5, 8),
     ):
         design = plan["facilities"][site_id]

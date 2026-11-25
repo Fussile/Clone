@@ -1,6 +1,6 @@
 # Crossroads region
 
-The first M4 world pass translates the sketch into a 5 km east–west by 4 km north–south region. [The planning map](CrossroadsRegion.svg) shows the anchored locations, the east–west highway, proposed secondary roads, candidate bridge crossings, lakes L1 through L7 and the Great Fissure. The rectangle is 20 km². Mountains, water, the fissure and the radiation corridors reduce the usable land. At the current top walking speed of 6 m/s, a straight 5 km crossing takes about 14 minutes. A 1 km walk takes about three minutes.
+The first M4 world pass translates the sketch into a 5 km east–west by 5 km north–south region. [The planning map](CrossroadsRegion.svg) shows the anchored locations, the east–west highway, proposed secondary roads, candidate bridge crossings, lakes L1 through L7 and the Great Fissure. The rectangle is 25 km². Mountains, water, the fissure and the radiation corridors reduce the usable land. At the current top walking speed of 6 m/s, a straight 5 km crossing takes about 14 minutes. A 1 km walk takes about three minutes.
 
 The city center reserves plots for a general hospital, police headquarters, civic center, towers, a parking garage and a restaurant and bar strip. Outlying districts include the winter village and northern lakes, the Great Lake and wetlands, the southwest and southeast industrial districts, the airport and the dry southern towns. Site IDs carry through to the baked manifest. Travel routes, bridge sites and plot footprints are provisional so they can be revised as the districts take shape.
 
@@ -50,7 +50,7 @@ At the warehouse, check both entrances and the supply crates inside. From the hi
 
 The southern joint-use airfield has a 2,100 × 45 m runway, a 1,800 × 23 m parallel taxiway and five turnoffs. The terminal access road connects the domestic concourse to the southern arterial. A control room, damaged terminal wing, ruined shop and service hangar share the civilian apron. Two larger maintenance hangars connect to the taxiway on the east side. All three use the uploaded interior mesh and operable shutters.
 
-The warehouse parcel contains six loading halls in two rows. Each regional entertainment quarter has eight enterable venues. The suburban streets and outer arterial frontages represent parts of the pre-collapse metropolitan area within the playable 5 × 4 km region. Existing generated maps need a fresh terrain bake for these parcel grades. With the editor closed, run `Tools/reset_crossroads_world.ps1` to back up the generated map before opening the project.
+The warehouse parcel contains six loading halls in two rows. Each regional entertainment quarter has eight enterable venues. The suburban streets and outer arterial frontages represent parts of the pre-collapse metropolitan area within the playable 5 × 5 km region. Existing generated maps need a fresh terrain bake for these parcel grades. With the editor closed, run `Tools/reset_crossroads_world.ps1` to back up the generated map before opening the project.
 
 The northern community pitch replaces the stadium placeholder. Take the local approach from the winter crossroad to reach the uploaded field scan and entrance sign. [Model credits](M4WorldArt.txt)
 

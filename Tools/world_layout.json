@@ -1,7 +1,7 @@
 {
   "size_m": [
     5000,
-    4000
+    5000
   ],
   "downtown_xy_m": [
     2451,
@@ -40,15 +40,15 @@
     {"id": "hospital", "road": "hospital-arterial", "xy_m": [2148, 2685]},
     {"id": "south-station", "road": "southern-arterial", "xy_m": [2501, 955]},
     {"id": "airport", "road": "terminal-access", "xy_m": [2390, 529]},
-    {"id": "winter-village", "road": "north-lowland-road", "xy_m": [1870, 3580]}
+    {"id": "winter-village", "road": "winter-approach", "xy_m": [1990, 4480]}
   ],
   "sites": [
     {
       "id": "crater-town",
       "name": "Crater Town",
       "xy_m": [
-        409,
-        3591
+        465,
+        4280
       ],
       "kind": "village",
       "architecture": "late_soviet"
@@ -58,7 +58,7 @@
       "name": "North Ranch",
       "xy_m": [
         1220,
-        3577
+        4100
       ],
       "kind": "ranch",
       "architecture": "late_soviet"
@@ -117,8 +117,8 @@
       "id": "winter-village",
       "name": "Winter Village",
       "xy_m": [
-        2058,
-        3623
+        1860,
+        4720
       ],
       "kind": "village",
       "architecture": "late_soviet"
@@ -127,8 +127,8 @@
       "id": "north-clinic",
       "name": "North Clinic",
       "xy_m": [
-        2475,
-        3568
+        2500,
+        4160
       ],
       "kind": "clinic",
       "architecture": "modern"
@@ -137,8 +137,8 @@
       "id": "north-services",
       "name": "North Gas Station",
       "xy_m": [
-        2632,
-        3522
+        2445,
+        4290
       ],
       "kind": "services",
       "architecture": "modern"
@@ -147,8 +147,8 @@
       "id": "north-police",
       "name": "North Police Station",
       "xy_m": [
-        2890,
-        3595
+        2800,
+        4150
       ],
       "kind": "police",
       "architecture": "classical_civic"
@@ -157,8 +157,8 @@
       "id": "mall",
       "name": "Regional Mall",
       "xy_m": [
-        2212,
-        3297
+        2360,
+        3770
       ],
       "kind": "shops",
       "architecture": "modern"
@@ -167,8 +167,8 @@
       "id": "school",
       "name": "Major School",
       "xy_m": [
-        2607,
-        3329
+        2600,
+        4230
       ],
       "kind": "civic",
       "architecture": "modern"
@@ -177,8 +177,8 @@
       "id": "stadium",
       "name": "Community Soccer Field",
       "xy_m": [
-        2821,
-        3310
+        2710,
+        4240
       ],
       "kind": "civic",
       "architecture": "modern"
@@ -187,8 +187,8 @@
       "id": "car-lot",
       "name": "Car Dealership",
       "xy_m": [
-        1956,
-        3080
+        2460,
+        3735
       ],
       "kind": "shops",
       "architecture": "modern"
@@ -217,8 +217,8 @@
       "id": "western-estates",
       "name": "Western Estates",
       "xy_m": [
-        1865,
-        2676
+        2200,
+        3300
       ],
       "kind": "suburbs",
       "architecture": "stucco_metal"
@@ -248,7 +248,7 @@
       "name": "Light Industrial Park",
       "xy_m": [
         3272,
-        3623
+        4130
       ],
       "kind": "industry",
       "architecture": "late_soviet"
@@ -1313,6 +1313,12 @@
       ],
       "width_m": 8
     },
+    {"id":"crater-road-north","width_m":7,"points_m":[[577,3651],[490,3890],[410,4110],[465,4250]]},
+    {"id":"ranch-road-north","width_m":7,"points_m":[[1049,3572],[1140,3790],[1240,4010],[1220,4070]]},
+    {"id":"north-works-road","width_m":9,"points_m":[[3157,3499],[3260,3810],[3310,4000],[3272,4090]]},
+    {"id":"estate-avenue","width_m":9,"points_m":[[2335,3439],[2240,3350],[2240,3250]]},
+    {"id":"school-road","width_m":10,"points_m":[[2440,3467],[2410,3750],[2510,4000],[2550,4195],[2700,4195],[2810,4195]]},
+    {"id":"winter-approach","width_m":7,"points_m":[[2550,4195],[2460,4260],[2280,4360],[2110,4390],[1990,4480],[2020,4590],[1940,4660],[1860,4690]]},
     {
       "id": "winter-crossroad",
       "points_m": [
@@ -1956,6 +1962,8 @@
   ],
   "lowland": {"xy_m": [1580, 3170], "radii_m": [520, 605]},
   "hills": [
+    {"xy_m":[1840,4510],"rise_m":58,"radius_m":170},
+    {"xy_m":[2110,4690],"rise_m":42,"radius_m":145},
     {"xy_m": [1445, 3471], "rise_m": 34, "radius_m": 170},
     {"xy_m": [1481, 3614], "rise_m": 43, "radius_m": 180},
     {"xy_m": [1569, 3738], "rise_m": 36, "radius_m": 155},
