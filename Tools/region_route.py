@@ -29,6 +29,7 @@ def bake_route(plan, ground_height, terrain_height):
         "south-services": "southern-arterial", "warehouses": "southern-industrial-road",
         "city-hospital": "hospital-arterial", "city-police": "downtown-loop",
         "city-parking": "east-west-highway", "city-nightlife": "east-west-highway",
+        "power-northeast":"headworks-road","water-treatment":"southern-industrial-road",
         "university": "airport-road", "school":"school-road", "north-clinic":"school-road",
         "north-police":"school-road", "mall":"school-road", "car-lot":"school-road",
         "north-services":"winter-approach", "winter-village":"winter-approach",

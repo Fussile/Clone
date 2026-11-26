@@ -304,10 +304,10 @@
     },
     {
       "id": "power-northeast",
-      "name": "Eastern Power Plant",
+      "name": "Headwaters Hydro Station",
       "xy_m": [
-        4063,
-        3549
+        3980,
+        4580
       ],
       "kind": "industry",
       "architecture": "late_soviet"
@@ -441,9 +441,10 @@
       "kind": "village",
       "architecture": "late_soviet"
     },
+    {"id":"water-treatment","name":"Crossroads Wastewater Works","kind":"industry","architecture":"late_soviet","xy_m":[3210,1320]},
     {
       "id": "power-southwest",
-      "name": "Western Power Plant",
+      "name": "Southern Nuclear Station",
       "xy_m": [
         1415,
         722
@@ -580,6 +581,7 @@
       "kind": "airport",
       "architecture": "modern"
     },
+    {"id":"air-reserve","name":"Reserve Squadron Apron","kind":"industry","architecture":"modern","xy_m":[2050,363]},
     {
       "id": "hangars",
       "name": "Airport Hangars",
@@ -976,6 +978,7 @@
     {
       "id": "great-lake-inlet",
       "points_m": [
+        [3870,4880], [3900,4580], [3860,4210],
         [
           3819,
           3775
@@ -1316,6 +1319,7 @@
     {"id":"crater-road-north","width_m":7,"points_m":[[577,3651],[490,3890],[410,4110],[465,4250]]},
     {"id":"ranch-road-north","width_m":7,"points_m":[[1049,3572],[1140,3790],[1240,4010],[1220,4070]]},
     {"id":"north-works-road","width_m":9,"points_m":[[3157,3499],[3260,3810],[3310,4000],[3272,4090]]},
+    {"id":"headworks-road","width_m":7,"points_m":[[3272,4090],[3420,4190],[3650,4320],[3940,4460],[3980,4540]]},
     {"id":"estate-avenue","width_m":9,"points_m":[[2335,3439],[2240,3350],[2240,3250]]},
     {"id":"school-road","width_m":10,"points_m":[[2440,3467],[2410,3750],[2510,4000],[2550,4195],[2700,4195],[2810,4195]]},
     {"id":"winter-approach","width_m":7,"points_m":[[2550,4195],[2460,4260],[2280,4360],[2110,4390],[1990,4480],[2020,4590],[1940,4660],[1860,4690]]},

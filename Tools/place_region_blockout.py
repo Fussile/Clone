@@ -117,11 +117,11 @@ def place():
         parish_art[name] = asset
 
     district_solids = {
-        "CornerShop", "SubstationHouse", "SubstationSwitchgear", "TransmissionPylon",
+        "GuardTower", "MilitaryAmbulance", "CornerShop", "SubstationHouse", "SubstationSwitchgear", "TransmissionPylon",
         "BurnedSedan", "BurnedCompact", "RustedTruck", "AbandonedVan",
         "SixTwelveShop", "SixTwelveCanopy",
     }
-    district_assets = district_solids | {"StoneFacade", "OfficeFacade", "Storefront", "TransmissionCable"}
+    district_assets = district_solids | {"QuarantineWire","CoolingTower","StoneFacade", "OfficeFacade", "Storefront", "TransmissionCable"}
     district_meshes = {
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Region/{name}", unreal.StaticMesh)
         for name in sorted(district_assets - {"AbandonedVan", "SubstationHouse"})
@@ -194,6 +194,12 @@ def place():
     style_materials["brick_hardwood"] = style_materials["StationBrick"]
     concrete = finish("Concrete", color_map, 200)
     style_materials["timber"] = unreal.load_asset("/Game/Art/Crossroads/Building/M_CrossroadsTimber")
+    hangar_finish = finish("HangarConcrete", color_map, 200)
+    if not hangar_finish.get_editor_property("two_sided"):
+        hangar_finish.set_editor_property("two_sided", True)
+        unreal.MaterialEditingLibrary.recompile_material(hangar_finish)
+        if not assets.save_loaded_asset(hangar_finish):
+            raise RuntimeError("Could not save the hangar interior finish")
     style_materials["concrete"] = concrete
     style_materials["asphalt"] = asphalt
 
@@ -590,7 +596,8 @@ def place():
             component.set_static_mesh(asset)
             component.set_collision_profile_name("BlockAll" if collision or name in {"PitchEntranceSign", "RadiationSign"} else "NoCollision")
             if name == "AircraftHangar" and concrete:
-                component.set_material(0, concrete)
+                for slot in range(max(1,component.get_num_materials())):
+                    component.set_material(slot, hangar_finish)
             actor.set_actor_scale3d(unreal.Vector(*local_scale))
             rotation = unreal.Rotator(yaw=yaw)
             if pitch:
@@ -601,7 +608,7 @@ def place():
             prop_kind(key, label, 120, "BUILDING", x, y, z, configure)
         else:
             spawn(unreal.StaticMeshActor, key, label, x, y, z, configure,
-                  reconfigure=name in {"RuinedTerminal", "RuinedAirportShop"})
+                  reconfigure=name in {"AircraftHangar","RuinedTerminal", "RuinedAirportShop"})
 
     def remove_generated(*keys):
         for key in keys:
@@ -1203,6 +1210,24 @@ def place():
             site_tools["double_door"],key,dict(kind="suburbs",id=key,name="Residence",architecture=finish),
             0,0,z,20,15,style_materials,scatter_caches)
 
+    cylinder=unreal.load_asset("/Engine/BasicShapes/Cylinder.Cylinder")
+    def basin(key,x,y,z,diameter,height,cooling):
+        def round_part(tag,label,bottom,width,rise,material):
+            def setup(actor):
+                component=fitted_mesh(actor,cylinder,(width,width,rise))
+                component.set_material(0,material)
+            spawn(unreal.StaticMeshActor,key+tag,label,x,y,bottom+rise/2,setup,relocate=True,reconfigure=True)
+        if cooling:
+            def shell(actor):
+                component=fitted_mesh(actor,district_meshes["CoolingTower"],(diameter,diameter,height+5))
+                component.set_material(0,hangar_finish)
+            spawn(unreal.StaticMeshActor,key+"_shell","Evaporative cooling tower",x,y,z+(height+5)/2,
+                  shell,relocate=True,reconfigure=True)
+            return
+        round_part("_base","Clarifier tank",z,diameter,height,concrete)
+        round_part("_surface","Settling basin surface",z+height,diameter*.91,.08,style_materials["glazing"])
+        box(key+"_walk","Clarifier service bridge",x,y,z+height+.18,diameter,1,.22,material=concrete)
+
     has_start = any(isinstance(actor, unreal.PlayerStart) for actor in existing)
     for landscape in landscapes:
         tags = list(landscape.get_editor_property("tags"))
@@ -1243,6 +1268,73 @@ def place():
                                   new_key, plan["facilities"]["airport"], z+.2, style_materials, asphalt, concrete,
                                   airfield_dimensions)
             migrate_landmark(key, new_key, (key+"_slab",))
+        elif site["id"] in {"south-base","water-treatment","power-northeast","power-southwest"}:
+            compound=key+"_compound"
+            base=z+.2
+            def facility(tag,label,cx,cy,bw,bd,bh):
+                front=site_tools["building_shell"](box,compound+tag,cx,cy,base,bw,bd,bh,2.4,
+                                                   style_materials["StationBrick"],concrete)
+                site_tools["double_door"](door,compound+tag+"_entry",label+" entrance",cx,front-.04,
+                                          base,2.4,2.35,"petrol")
+                sign(compound+tag+"_name",label,cx,front-.22,base+3.05)
+                furnishing(compound+tag+"_desk","Operations desk","desk",cx-bw*.23,cy,base,(2,1,1.2),0)
+            if site["id"]=="south-base":
+                landmarks["aircraft_hangar"](box,landmark_mesh,door,cache,compound+"_motor_pool",
+                                             x-30,y+3,base,concrete,scale=1.35)
+                for i,title in enumerate(("BARRACKS","COMMAND","SUPPLY")):
+                    facility(f"_block_{i}",title,x+26,y-22+i*22,35,15,4)
+                district_mesh(compound+"_medevac","Abandoned military ambulance","MilitaryAmbulance",
+                              x-15,y-24,base,(5.4,2.2,2.7))
+                cache(compound+"_stores","Base stores",x+15,y+23,base,profile="MILITARY_ARMORY")
+            else:
+                facility("_control","CONTROL ROOM",x-w*.29,y-d*.20,22,14,5)
+                if site["id"]=="power-northeast":
+                    facility("_turbines","TURBINE HALL",x+12,y,42,24,9)
+                    rx,ry,bed,left,right=plan["hydro_intake"]
+                    crest=max(left,right)+2
+                    box(compound+"_weir","Headwater diversion dam",rx,ry,bed-1,36,5,crest-bed+1,material=concrete)
+                    length=math.hypot(x-28-rx,y+12-ry)
+                    box(compound+"_conduit","Intake conduit", (x-28+rx)/2,(y+12+ry)/2,
+                        min(crest,base)+.2,length,2.7,2,material=concrete,
+                        rotation=(0,math.degrees(math.atan2(ry-y-12,x-28-rx))))
+                    for i in range(3):
+                        box(f"{compound}_intake_{i}","River intake channel",x-28,y+8+i*4,
+                            base,30,2.8,1.5,material=concrete)
+                elif site["id"]=="water-treatment":
+                    facility("_pumps","PUMP HOUSE",x-22,y+12,19,12,4)
+                    for i in range(3):
+                        basin(compound+f"_tank_{i}",x+2+i*14,y+3,base,12,2,False)
+                else:
+                    facility("_turbines","GENERATOR HALL",x-25,y+15,48,20,9)
+                    core_x,core_y=x+1,y+1
+                    def dome(actor):
+                        sphere=unreal.load_asset("/Engine/BasicShapes/Sphere.Sphere")
+                        component=fitted_mesh(actor,sphere,(17,17,15))
+                        component.set_material(0,concrete)
+                    spawn(unreal.StaticMeshActor,compound+"_containment","Reactor containment",
+                          core_x,core_y,base+7.5,dome,relocate=True,reconfigure=True)
+                    for i in range(2):
+                        basin(compound+f"_tower_{i}",x+22,y+(i-.5)*33,base,26,24,True)
+                cache(compound+"_service","Maintenance parts",x-w*.29-6,y-d*.20+3,base,profile="BUILDING")
+            district_mesh(compound+"_watch","Abandoned watchtower","GuardTower",x-w/2+5,y-d/2+5,
+                          base,(6,6,10))
+            for side in (-1,1):
+                box(f"{compound}_side_{side}","Compound fence",x+side*(w/2-.3),y,base,.6,d,3.2,material=concrete)
+                box(f"{compound}_front_{side}","Checkpoint barrier",x+side*(w+8)/4,y-d/2,base,
+                    (w-8)/2,.8,3.2,material=concrete)
+            box(compound+"_back","Compound rear barrier",x,y+d/2,base,w,.8,3.2,material=concrete)
+            migrate_landmark(key,compound,(key+"_slab",))
+        elif site["id"] == "air-reserve":
+            apron=key+"_squadron"
+            field=plan["facilities"]["airport"]
+            ty=field["y"]+airfield_dimensions["TAXIWAY_Y"]
+            for i in range(3):
+                hx=x+(i-1)*48
+                landmarks["aircraft_hangar"](box,landmark_mesh,door,cache,f"{apron}_{i}",
+                                             hx,y,z+.22,concrete,scale=1.25)
+                ramp(f"{apron}_lane_{i}","Reserve squadron taxi lane",hx,ty,y-17,
+                     field["datum"]+(hx-field["x"])*field["slope"],z+.22,18,concrete)
+            migrate_landmark(key,apron,(key+"_slab",))
         elif site["id"] == "hangars":
             new_key = key+"_operations"
             landmarks["aircraft_hangar"](box, landmark_mesh, door, cache, new_key,
@@ -1255,6 +1347,11 @@ def place():
                 hx = x+side*45
                 ramp(f"{new_key}_taxilane_{side}", "Maintenance apron taxi lane", hx, taxi_y, y-32,
                      taxi["datum"]+(hx-taxi["x"])*taxi["slope"], z+.21, 42, concrete)
+            box(new_key+"_landside_wall","Restricted apron wall",x,y+39,z+.2,174,1,3.2,material=concrete)
+            district_mesh(new_key+"_overwatch","Air operations watchtower","GuardTower",x-81,y+38,
+                          z+.2,(5,5,9))
+            district_mesh(new_key+"_rescue","Flight line ambulance","MilitaryAmbulance",x+4,y+34,
+                          z+.2,(5.4,2.2,2.7))
             cache(new_key+"_armory", "Military weapon crate", x+45-21, y+14, z+.215,
                   profile="MILITARY_ARMORY")
             sign(new_key+"_sign", "JOINT AIR OPERATIONS", x, y+32, z+3)
@@ -1498,7 +1595,7 @@ def place():
             box(garage+"_bench","Maintenance workbench",gx,gy+3.6,z+.2,3.8,.85,.95,
                 material=style_materials["timber"])
             cache(garage+"_parts","Auto parts cabinet",gx-3,gy+3.4,z+.2,profile="BUILDING")
-        if site["kind"] == "industry" and site["id"] not in {"hangars", "warehouses", "east-factory", "west-factory"}:
+        if site["kind"] == "industry" and site["id"] not in {"hangars","air-reserve","water-treatment","power-southwest","power-northeast","warehouses", "east-factory", "west-factory"}:
             dress_industrial(key, x, y, z+.2, w*.90, d*.86, warehouse=site["id"] == "warehouses")
         if site["id"] == "city-towers":
             annex_x = x+19.5
@@ -1524,6 +1621,10 @@ def place():
         if site["id"] in {"winter-village", "hill-town", "north-lowlands"}:
             landmark_mesh(key+"_bus_stop", "Weathered roadside bus shelter", "WeatheredBusStop",
                           x+7.6, y-d/2-2.8, z+.05, collision=True)
+        if site["id"] in {"city-hospital","city-police"}:
+            for side in (-1,1):
+                communications_art(f"{key}_landmark_triage_{side}","Outbreak screening barrier","CheckpointWall",
+                                   x+side*8,y-d/2+1,z+.2,(8,1,1.6),health=240)
         if site["id"] in {"power-southwest", "power-northeast"}:
             landmark_mesh(key+"_yard_transformer", "Substation transformer", "YardTransformer",
                           x+20.0, y-d/2+4.0, z+.2, collision=True)
@@ -1560,6 +1661,51 @@ def place():
         for index,(start,end) in enumerate(zip(transmission["poles"][a]["phases"],
                                              transmission["poles"][b]["phases"], strict=True)):
             cable(f"CrossroadsCable_{a}_{b}_{index}",start,end)
+    mine_class=unreal.load_class(None,"/Script/Survival.SurvivalQuarantineMine")
+    if not mine_class:
+        raise RuntimeError("Build SurvivalEditor to load quarantine hazards.")
+    perimeter_keys=set()
+    resized_site="CrossroadsCordon"
+    for i,(x,y,bottom,top,span,dx,nx,ny,kind) in enumerate(plan["quarantine"]["sections"]):
+        tag=f"CrossroadsCordon_{i}"
+        yaw=0 if dx else 90
+        gate=kind=="gate"
+        box(tag+"_wall","Sealed checkpoint gate" if gate else "Quarantine wall",x,y,bottom,
+            span+.08,.95,top-bottom,material=style_materials["dark_trim"] if gate else concrete,
+            rotation=(0,yaw))
+        perimeter_keys.add(tag+"_wall")
+        if gate:
+            district_mesh(tag+"_tower","Abandoned checkpoint tower","GuardTower",x+nx*5,y+12,
+                          top-4.2,(5.5,5.5,10))
+            district_mesh(tag+"_ambulance","Military evacuation vehicle","MilitaryAmbulance",
+                          x+nx*12,y-7,top-4.2,(5.4,2.2,2.7),yaw=8)
+            sign(tag+"_order","QUARANTINE  /  GATE CLOSED",x+nx*.58,y,top-.8,
+                 yaw=0 if nx>0 else 180,size=30)
+            perimeter_keys.update(tag+s for s in ("_tower","_ambulance","_order"))
+        else:
+            for suffix,offset,base in (("_crest",0,top-.08),("_outer",2.4,bottom+1.2)):
+                def wire(actor):
+                    component=fitted_mesh(actor,district_meshes["QuarantineWire"],(span,.80,.85),
+                                          yaw,align_long_axis=True)
+                    component.set_material(0,style_materials["dark_trim"])
+                    component.set_collision_profile_name("NoCollision")
+                spawn(unreal.StaticMeshActor,tag+suffix,"Quarantine wire",x+nx*offset,y+ny*offset,
+                      base+.425,wire,relocate=True,reconfigure=True)
+                perimeter_keys.add(tag+suffix)
+    for i,(x,y,z) in enumerate(plan["quarantine"]["hazards"]):
+        tag=f"CrossroadsCordon_hazard_{i}"
+        def marker(actor):
+            mesh=actor.get_component_by_class(unreal.StaticMeshComponent)
+            mesh.set_static_mesh(cylinder)
+            mesh.set_relative_scale3d(unreal.Vector(.65,.65,.15))
+            mesh.set_material(0,style_materials["traffic"])
+        spawn(mine_class,tag,"Quarantine hazard",x,y,z+.1,marker,relocate=True,reconfigure=True)
+        perimeter_keys.add(tag)
+        if i%8==0 or i>=len(plan["quarantine"]["hazards"])-len(plan["quarantine"]["road_hazards"]):
+            sign(tag+"_warning","DANGER  /  QUARANTINE MINES",x,y+1,z+1.35,size=23)
+            perimeter_keys.add(tag+"_warning")
+    remove_generated(*(t for t in actor_tags if t.startswith("CrossroadsCordon_") and t not in perimeter_keys))
+    resized_site=None
     downtown["stamp_city"](plan["city_lots"],plan["city_barriers"],box,facade,
                            communications_art,door,cache,furnishing,tower,church,roof_ladder,style_materials,home)
     remove_generated(*(previous_infill - touched_infill))

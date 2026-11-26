@@ -57,3 +57,8 @@ The northern community pitch replaces the stadium placeholder. Take the local ap
 The communications compounds are the Lowlands, East Ridge, and Southwest cell repeaters, the Crossroads Radio Station, and the separate radio transmitter tower. The studio and service sheds have working doors, supplies, and zombie encounters. Eight abandoned checkpoints mark the city approaches and several outlying roads. Their concrete barriers, wire barricades, and spikes use the damageable world prop system. The middle of each checkpoint stays passable.
 
 The region overview labels the communications plots in purple and marks checkpoints with crosses.
+
+
+### Quarantine zone and strategic facilities
+
+The downtown cordon closes both highway approaches. Two damaged wall sections and two pedestrian gaps provide entry on foot. Yellow quarantine markers are one-shot player hazards. The reserve squadron apron and maintenance hangars share the civilian taxiway. The southern base contains a motor pool, barracks, command post and supply building. Headwaters Hydro serves the northern mountain river, Southern Nuclear Station feeds the southern grid, and the wastewater works occupies the southern industrial corridor.

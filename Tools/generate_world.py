@@ -7,6 +7,7 @@ from pathlib import Path
 import struct
 import zlib
 
+from quarantine_layout import near_boundary, perimeter
 from airfield_layout import facilities, RUNWAY_HALF, RUNWAY_Y, TAXIWAY_Y
 from civic_landmarks import CAMPUS_SIZE
 from communications_layout import bake_checkpoints, bake_communications
@@ -105,14 +106,14 @@ def generate(seed):
     road_segments = [(a, b, road["width_m"]) for road in plan["roads"] for a, b in segments(road["points_m"])]
 
     def available(px, py, clearance):
-        return (clearance < min(px, width-px, py, depth-py)
+        return (not near_boundary(px,py,clearance+9) and clearance < min(px, width-px, py, depth-py)
                 and water_distance(px, py) > clearance + 12
                 and all(segment_distance(px, py, a, b) > clearance + rw/2 for a, b, rw in road_segments)
                 and all(segment_distance(px, py, a, b) > clearance + span
                         for span, _, fault in fissures for a, b in fault)
                 and all(math.hypot(px-sx, py-sy) > clearance + sr for sx, sy, sr, _ in plots))
 
-    parcel_sizes = {"west-factory": (108, 54), "east-factory": (108, 54), "university": CAMPUS_SIZE, "warehouses": (154, 92), "hangars": (180, 90),
+    parcel_sizes = {"air-reserve":(150,60),"south-base":(122,82),"power-northeast":(94,52),"power-southwest":(118,78),"water-treatment":(84,52),"west-factory": (108, 54), "east-factory": (108, 54), "university": CAMPUS_SIZE, "warehouses": (154, 92), "hangars": (180, 90),
                     "west-entertainment": (106, 74), "east-entertainment": (106, 74)}
     pads = []
     for site in plan["sites"]:
@@ -296,6 +297,13 @@ def generate(seed):
         x, y = site.get("plot_xy_m", site["xy_m"])
         cells.setdefault((x//256, y//256), []).append(site["id"])
     plan["site_cells"] = [{"xy": key, "sites": ids} for key, ids in sorted(cells.items())]
+    plan["quarantine"] = perimeter(plan,height)
+    hydro = sites["power-northeast"]
+    hx,hy = hydro["plot_xy_m"]
+    inlet = next(r for r in plan["rivers"] if r["id"]=="great-lake-inlet")
+    river = min(inlet["points_m"],key=lambda pt:math.dist(pt,(hx,hy)))
+    plan["hydro_intake"] = [*river,height(*river),height(river[0]-16,river[1]),height(river[0]+16,river[1])]
+
     return plan, height
 
 
@@ -394,6 +402,10 @@ def write_map(path, plan):
         line = [track["segments"][0]["start"], *(s["end"] for s in track["segments"])]
         color = "#b987fd" if track["kind"] == "freight" else "#ff91c6"
         lines.append(f'<polyline points="{points(line)}" fill="none" stroke="{color}" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round"/>')
+    for x,y,_,_,span,dx,_,_,kind in plan["quarantine"]["sections"]:
+        a,b=svg_xy((x-dx*span/2,y-(1-dx)*span/2)),svg_xy((x+dx*span/2,y+(1-dx)*span/2))
+        color="#ffcc57" if kind=="gate" else "#c34453"
+        lines.append(f'<path d="M{a[0]:.1f} {a[1]:.1f}L{b[0]:.1f} {b[1]:.1f}" stroke="{color}" stroke-width="1.6"/>')
     for stop in plan["rail"]["stops"]:
         x,y = svg_xy(stop["position"][:2])
         lines.append(f'<circle cx="{x}" cy="{y}" r="3" fill="#341c34" stroke="#ff91c6"><title>{html.escape(stop["label"])}</title></circle>')
