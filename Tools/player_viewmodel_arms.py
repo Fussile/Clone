@@ -63,6 +63,10 @@ def dress_gltf(folder, name, path, glb):
     if len(candidates) != 1:
         raise ValueError(f"Expected one animated arms mesh in {name}")
     for section, texture, attrs, indices in fitted_sections(folder, name):
+        # These two holds put the open shoulder ends in front of the camera.
+        # The forearm surface already reaches the lower edge of the view.
+        if name in ("Sidearm", "ScrapRifle") and section == "ViewmodelUpperSleeves":
+            continue
         if texture not in textures:
             model["images"].append({"bufferView": view(texture.read_bytes()), "mimeType": "image/jpeg"})
             textures[texture] = len(model["textures"])
