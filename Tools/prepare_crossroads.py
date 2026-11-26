@@ -46,6 +46,9 @@ def import_asset(source, directory, asset_type, options=None, *, replace_existin
             task.set_editor_property("options", options)
         unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
         matching = [item for item in task.get_objects() if isinstance(item, asset_type)]
+        if not matching and source.suffix == ".usda":
+            matching = [asset for path in assets.list_assets(directory, recursive=True)
+                        if isinstance((asset := assets.load_asset(path)), asset_type)]
         if len(matching) != 1:
             raise RuntimeError(f"Expected one {asset_type.__name__} from {source}.")
         asset = matching[0]
@@ -425,11 +428,13 @@ def build_region():
 
 def prepare():
     failures = []
+    def import_arsenal():
+        runpy.run_path(str(TOOLS / "prepare_arsenal.py"))["prepare"](TOOLS, SOURCE, ART, import_asset)
     if os.environ.get("SURVIVAL_PREPARED_MARKER"):
         import equipment_art
         equipment_art.prepare()
     for label, action in (("viewmodel cloth", import_viewmodel_cloth),
-                          ("sidearm", import_sidearm), ("rifle", import_rifle),
+                          ("sidearm", import_sidearm), ("rifle", import_rifle), ("arsenal", import_arsenal),
                           ("characters", import_characters), ("interface", import_interface)):
         unreal.log(f"Crossroads: importing {label}.")
         try:

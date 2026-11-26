@@ -13,6 +13,7 @@
 #include "SurvivalHUD.h"
 #include "SurvivalGear.h"
 #include "SurvivalWeaponMods.h"
+#include "SurvivalArsenal.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Notifications/SProgressBar.h"
@@ -85,14 +86,14 @@ int32 CountSpareParts(const ASurvivalCharacter* Character, ESurvivalItem Weapon)
     return Count;
 }
 
-FText DescribeItem(const ASurvivalCharacter* Character, ESurvivalItem Item, int32 Quality, int32 StackCount)
+FText DescribeItem(const ASurvivalCharacter* Character, ESurvivalItem Item, int32 Quality, int32 StackCount, int32 WeaponId = INDEX_NONE)
 {
     if (!Character || Item == ESurvivalItem::None)
     {
         return FText::GetEmpty();
     }
     const int32 Carried = Character->GetItemCount(Item);
-    FString Text = SurvivalItemName(Item);
+    FString Text = WeaponId != INDEX_NONE ? Character->GetInstanceLabel(Item, WeaponId) : SurvivalItemName(Item);
     const auto Weapon = AssemblyWeapon(Item);
     if (const int32 Slot = FSurvivalWeaponAssembly::PartIndex(Item, Weapon); Slot != INDEX_NONE)
     {
@@ -280,7 +281,8 @@ public:
             const FSurvivalPackCell Cell = bBelt || !Player.IsValid() ? FSurvivalPackCell() : Player->GetPackCell(Index);
             if (Cell.GearIndex != INDEX_NONE) return FText::FromString(FString::Printf(TEXT("%s  ·  %s\nShift-click to equip"), SurvivalGear[Cell.GearIndex].Label, SurvivalGear[Cell.GearIndex].Slot));
             const int32 Count = bBelt && Player.IsValid() ? Player->GetToolbeltCount(Index) : Cell.Count;
-            return DescribeItem(Player.Get(), Item(), HasQuality() ? Quality() : Cell.Quality, Count);
+            return DescribeItem(Player.Get(), Item(), HasQuality() ? Quality() : Cell.Quality, Count,
+                bBelt && Player.IsValid() ? Player->GetToolbeltWeaponId(Index) : Cell.WeaponId);
         }));
         ChildSlot
         [
@@ -769,6 +771,7 @@ private:
 
     static const TCHAR* Name(const FSurvivalLootSlot& Slot)
     {
+        if (Slot.Item() == ESurvivalItem::Sidearm || Slot.Item() == ESurvivalItem::Rifle) return Arsenal[FirearmIndex(Slot.Item(), Slot.Firearm)].Label;
         return Slot.GearIndex != INDEX_NONE ? SurvivalGear[Slot.GearIndex].Label : SurvivalItemName(Slot.Item());
     }
 
@@ -1028,8 +1031,8 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                     const auto Weapon = Player->InspectedWeapon;
                     const auto& Assembly = Player->GetWeaponAssembly(Weapon);
                     return FText::FromString(Assembly.IsComplete()
-                        ? FString::Printf(TEXT("%s   ·   Quality %d"), SurvivalItemName(Weapon), Assembly.GetQuality())
-                        : FString::Printf(TEXT("%s   ·   Incomplete. Install all four parts to fire or reload."), SurvivalItemName(Weapon)));
+                        ? FString::Printf(TEXT("%s   ·   Quality %d"), Player->GetWeaponLabel(Weapon), Assembly.GetQuality())
+                        : FString::Printf(TEXT("%s   ·   Incomplete. Install all four parts to fire or reload."), Player->GetWeaponLabel(Weapon)));
                 })
             ]
             + SVerticalBox::Slot().FillHeight(1)
@@ -1188,8 +1191,8 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                         {
                                             const auto& Assembly = Character->GetWeaponAssembly(Weapon);
                                             return FText::FromString(Assembly.IsComplete()
-                                                ? FString::Printf(TEXT("%s assembly quality %d"), SurvivalItemName(Weapon), Assembly.GetQuality())
-                                                : FString::Printf(TEXT("%s is missing parts"), SurvivalItemName(Weapon)));
+                                                ? FString::Printf(TEXT("%s assembly quality %d"), Player->GetWeaponLabel(Weapon), Assembly.GetQuality())
+                                                : FString::Printf(TEXT("%s is missing parts"), Player->GetWeaponLabel(Weapon)));
                                         }
                                         return FText::GetEmpty();
                                     })

@@ -16,6 +16,7 @@
     }
   ],
   "Plugins": [
+    {"Name": "USDImporter", "Enabled": true, "TargetAllowList": ["Editor"]},
     {
       "Name": "PythonScriptPlugin",
       "Enabled": true,

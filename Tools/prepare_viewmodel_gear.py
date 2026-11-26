@@ -48,11 +48,15 @@ def add_index_accessor(model, binary, indices, component_type):
     return len(model["accessors"]) - 1
 
 
-def split_arms(model, binary):
-    node = next(node for node in model["nodes"] if "mesh" in node and "skin" in node)
+def split_arms(model, binary, arm_material="arms"):
+    def has_arms(node):
+        return "skin" in node and "mesh" in node and any(
+            model["materials"][p["material"]]["name"] == arm_material
+            for p in model["meshes"][node["mesh"]]["primitives"])
+    node = next(node for node in model["nodes"] if has_arms(node))
     hand_joints = find_hand_joints(model, node)
     primitives = model["meshes"][node["mesh"]]["primitives"]
-    arm = next(p for p in primitives if model["materials"][p["material"]]["name"] == "arms")
+    arm = next(p for p in primitives if model["materials"][p["material"]]["name"] == arm_material)
     attrs = arm["attributes"]
     joints = read_accessor(model, binary, attrs["JOINTS_0"], 4)
     weights = read_accessor(model, binary, attrs["WEIGHTS_0"], 4)

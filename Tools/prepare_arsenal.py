@@ -1,0 +1,186 @@
+"""Prepare source-branch firearm rigs and wearable weapon meshes in the editor."""
+import runpy
+import zipfile
+from pathlib import Path
+import os
+
+import unreal
+
+
+RIGS = {
+    "Makarov": ("makarov_pm_fps_animations.glb", {"Idle": "MK_Idle", "Walk": "MK_walk", "Fire": "MK_Shot", "Reload": "MK_ReloadFull"}),
+    "ScrapRifle": ("scrap_sniper_anim.glb", {"Idle": "SRifle_Idle", "Walk": "SRifle_Walk", "Fire": "SRifle_Shot_nosight", "Reload": "SRifle_Reload_Full"}),
+    "AK12": ("AK-12Animated.usdz", {}),
+    "HK416": ("HK_416_A7_FPS_ANIMATION.usdz", {}),
+    "MP7": ("MP7A1_Animations.usdz", {}),
+    "Scorpion": ("Scorpion__First_Person_Animations_2026_Remake.usdz", {}),
+    "Python357": ("revolver_animated.usdz", {}),
+}
+
+
+WORLD = {
+    "Makarov": "Makarov_PM.usdz", "Python357": "357_python_revolver_riggedgame_ready.glb",
+    "AK12": "ak-12.usdz", "HK416": "HK_416_A7_free_download.usdz", "MP7": "HK_MP7_A1_model.usdz",
+    "Scorpion": "CZ_Scorpion_Evo3_A1.usdz", "ScrapRifle": "scrap_sniper.glb",
+}
+
+
+def import_world(name, source, directory, generated, glb, flatten, import_asset):
+    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    if assets.does_asset_exist(directory + "/World"):
+        return
+    generated.mkdir(parents=True, exist_ok=True)
+    if source.suffix == ".glb":
+        path = generated / "World.glb"
+        flatten(glb, source, path)
+        import_asset(path, directory, unreal.StaticMesh)
+        return
+    # Expose one component-kind model to USD's mesh collapse translator.
+    path = generated / "World.usda"
+    reference = Path(os.path.relpath(source, generated)).as_posix()
+    overrides = ""
+    if name == "AK12":
+        for child in reversed(("SkinnedMeshes", "Sketchfab_model", "Root", "metarig", "metarig_rootJoint", "skin0")):
+            if child == "skin0":
+                overrides = 'def Xform "skin0" {\n over "skeleton" (active = false) {}\n}'
+            else:
+                overrides = f'over "{child}" {{\n{overrides}\n}}'
+    path.write_text('#usda 1.0\n(defaultPrim = "World")\n' +
+                    f'def Xform "World" (\n kind = "component"\n references = @{reference}@\n)\n' +
+                    '{\n' + overrides + '\n}\n', encoding="utf-8")
+    options = unreal.UsdStageImportOptions()
+    options.import_actors = False
+    options.import_skeletal_animations = False
+    options.kinds_to_collapse = 0x1f  # Include every model kind, including the wrapper component.
+    import_asset(path, directory, unreal.StaticMesh, options)
+
+
+def import_rig(source, directory, clips):
+    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    required = ["Rig0", "Presentation0", *clips]
+    if all(assets.does_asset_exist(f"{directory}/{name}") for name in required):
+        return
+    task = unreal.AssetImportTask()
+    task.filename = str(source)
+    task.destination_path = directory
+    if source.suffix in (".usdz", ".usda"):
+        options = unreal.UsdStageImportOptions()
+        options.import_actors = False
+        options.import_skeletal_animations = True
+        task.options = options
+    task.automated = True
+    task.save = True
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+    # USD imports can place meshes and clips in child package folders.
+    objects = [assets.load_asset(p) for p in sorted(assets.list_assets(directory, recursive=True))]
+    rigs = [obj for obj in objects if isinstance(obj, unreal.SkeletalMesh)]
+    animations = [obj for obj in objects if isinstance(obj, unreal.AnimSequence)]
+    if not rigs or not animations:
+        raise RuntimeError(f"No animated skeletal mesh imported from {source.name}")
+    def alias(obj, name):
+        target = f"{directory}/{name}"
+        if not assets.does_asset_exist(target) and not assets.duplicate_loaded_asset(obj, target):
+            raise RuntimeError(f"Could not create {target}")
+    rigs = [obj for obj in rigs if obj.get_name() not in {"Rig0", "Rig1"}]
+    for index, rig in enumerate(rigs):
+        matches = [clip for clip in animations if clip.get_editor_property("skeleton") == rig.get_editor_property("skeleton")]
+        if not matches:
+            raise RuntimeError(f"Missing animation for {rig.get_name()}")
+        alias(rig, f"Rig{index}")
+        roles = {}
+        for role, suffix in clips.items():
+            roles[role] = next(clip for clip in matches if suffix.lower() in clip.get_name().lower())
+            alias(roles[role], role if index == 0 else f"{role}{index}")
+        if source.stem in ("Python357", "HK_416_A7_FPS_ANIMATION"):
+            for role in ("Fire", "Reload"):
+                alias(matches[0], role if index == 0 else f"{role}{index}")
+        alias(roles.get("Idle", matches[0]), f"Presentation{index}")
+    assets.save_directory(directory)
+
+
+def prepare(tools, source, art, import_asset):
+    folder = source / "Arsenal"
+    dest = art + "/Arsenal"
+    generated = tools.parent / "Saved" / "GeneratedArt" / "Arsenal"
+    generated.mkdir(parents=True, exist_ok=True)
+    glb = runpy.run_path(str(tools / "prepare_sidearm_glb.py"))
+    for name, filename, parent in (
+        ("SuppressorPistol", "suppressors_10_pack.glb", "Ti-RANT45_1"),
+        ("SuppressorRifle", "suppressors_10_pack.glb", "Socom_4"),
+        ("MuzzleBrake", "free_weapon_accessories_pack.glb", "Compensator 1"),
+        ("VariableScope", "lpvo_orion_scope.glb", "upper_02"),
+        ("IRSight", "reap-ir.glb", "Reap_low"),
+    ):
+        assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+        if assets.does_asset_exist(f"{dest}/{name}/{name}"):
+            continue
+        model, binary = glb["read_glb"](folder / filename)
+        node = next(n for n in model["nodes"] if n.get("name") == parent)
+        children = [model["nodes"][i] for i in node["children"]]
+        if any(set(n) - {"name", "mesh", "extras"} for n in children):
+            raise ValueError(f"Unexpected local transform in {name}")
+        primitives = [p for child in children for p in model["meshes"][child["mesh"]]["primitives"]]
+        model["nodes"] = [{"name": name, "mesh": 0}]
+        model["meshes"] = [{"name": name, "primitives": primitives}]
+        model["scenes"] = [{"nodes": [0]}]
+        model["scene"] = 0
+        path = generated / (name + ".glb")
+        glb["write_glb"](path, model, binary)
+        import_asset(path, dest + "/" + name, unreal.StaticMesh)
+    # FBX material references use the original texture filenames.
+    for name, archive_name, source_name in (
+        ("PEQ15", "peq-15.zip", "source/PEG15_Close.fbx"),
+        ("ThermalSight", "holosun-drs-th.zip", "source/DRS-TH.fbx"),
+    ):
+        if assets.does_asset_exist(f"{dest}/{name}/{name}"):
+            continue
+        directory = generated / name
+        directory.mkdir(exist_ok=True)
+        path = directory / (name + ".fbx")
+        with zipfile.ZipFile(folder / archive_name) as archive:
+            path.write_bytes(archive.read(source_name))
+            for entry in archive.namelist():
+                if entry.startswith("textures/") and not entry.endswith("/"):
+                    (directory / Path(entry).name).write_bytes(archive.read(entry))
+        options = unreal.FbxImportUI()
+        options.import_as_skeletal = False
+        options.automated_import_should_detect_type = False
+        options.static_mesh_import_data.combine_meshes = True
+        options.import_textures = True
+        options.import_materials = True
+        import_asset(path, dest + "/" + name, unreal.StaticMesh, options)
+    mesh_tools = runpy.run_path(str(tools / "arsenal_world_mesh.py"))
+    if not assets.does_asset_exist(dest + "/SniperBare/SniperBare"):
+        bare = generated / "SniperBare.glb"
+        mesh_tools["remove_factory_scope"](tools, source / "Weapons", bare)
+        import_asset(bare, dest + "/SniperBare", unreal.StaticMesh)
+    for name, (filename, clips) in RIGS.items():
+        directory = dest + "/" + name
+        rig = folder / filename
+        if name in ("Makarov", "ScrapRifle"):
+            model, binary = glb["read_glb"](rig)
+            gear = runpy.run_path(str(tools / "prepare_viewmodel_gear.py"))
+            gear["split_arms"](model, binary, "material" if name == "Makarov" else "arms")
+            binary.extend(bytes(-len(binary) % 4))
+            rig = generated / (name + ".glb")
+            glb["write_glb"](rig, model, binary)
+        if name == "Python357":
+            # The source animates the cylinder and hammer as rigid scene nodes.
+            # This authored USD layer binds those nodes to a second animated rig.
+            with zipfile.ZipFile(folder / "Python357_stage.zip") as archive:
+                layer = archive.read("Python357.usda").decode("utf-8")
+            rig = generated / "Python357.usda"
+            relative = Path(os.path.relpath(folder / filename, generated)).as_posix()
+            rig.write_text(layer.replace(f"@{filename}@", f"@{relative}@"), encoding="utf-8")
+        if name == "Scorpion":
+            # The donor scene includes a skinned skybox. Exclude it before Unreal computes bounds.
+            rig = generated / "Scorpion.usda"
+            relative = Path(os.path.relpath(folder / filename, generated)).as_posix()
+            patch = 'over "Skybox_Baked_Skybox_0" (active = false) {}'
+            for parent in reversed("SkinnedMeshes/Sketchfab_model/CZ_Scorpion_Evo3_A1_Anim_fbx/Object_2/RootNode/rig/Object_8/_rootJoint/skin0".split("/")):
+                patch = f'over "{parent}" {{\n{patch}\n}}'
+            rig.write_text('#usda 1.0\n(defaultPrim = "Scene"\n timeCodesPerSecond = 120)\n' +
+                           f'def Xform "Scene" (references = @{relative}@) {{\n{patch}\n}}\n', encoding="utf-8")
+        import_rig(rig, directory, clips)
+        flatten = mesh_tools["flatten"]
+        import_world(name, folder / WORLD[name], directory + "/Geometry", generated / name, glb, flatten, import_asset)

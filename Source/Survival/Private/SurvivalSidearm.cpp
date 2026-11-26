@@ -81,10 +81,10 @@ void ASurvivalSidearm::BeginPlay()
     }
 }
 
-void ASurvivalSidearm::PlayShotSound()
+void ASurvivalSidearm::PlayShotSound(float Volume)
 {
     if (ShotSound)
     {
-        UGameplayStatics::PlaySoundAtLocation(this, ShotSound.Get(), GetActorLocation());
+        UGameplayStatics::PlaySoundAtLocation(this, ShotSound.Get(), GetActorLocation(), Volume);
     }
 }

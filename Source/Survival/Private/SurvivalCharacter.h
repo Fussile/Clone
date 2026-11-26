@@ -40,6 +40,8 @@ public:
     ESurvivalItem GetHotbarItem(int32 Slot) const { return Toolbelt[Slot].Item; }
     int32 GetToolbeltCount(int32 Slot) const { return Toolbelt[Slot].Count; }
     int32 GetToolbeltWeaponId(int32 Slot) const { return Toolbelt[Slot].WeaponId; }
+    const TCHAR* GetInstanceLabel(ESurvivalItem Weapon, int32 Id) const;
+    const TCHAR* GetWeaponLabel(ESurvivalItem Weapon) const;
     int32 GetWeaponQuality(int32 WeaponId) const;
     void SelectToolbeltItem(int32 Slot);
     void InspectWeapon(ESurvivalItem Weapon);
@@ -101,6 +103,7 @@ private:
         FSurvivalWeaponAssembly Assembly;
         int32 Ammo = 0;
         uint32 Mods = 0;
+        int32 Firearm = INDEX_NONE;
     };
     TArray<FWeaponInstance> WeaponItems;
     int32 SelectedWeaponId = INDEX_NONE;
@@ -113,6 +116,14 @@ private:
     TArray<TObjectPtr<USpotLightComponent>> AttachmentLights;
     bool bHighOpticZoom = false;
     void RefreshAttachments();
+    void UpdateFirearmModel();
+    int32 EquippedFirearm = INDEX_NONE;
+    float RifleADS = 0;
+    void PlaySecondaryClip(const TCHAR* Role, float Start, float Rate);
+    float ActionDuration(bool bReload, UAnimSequence* Clip, float Fallback) const;
+    int32 WeaponCapacity(ESurvivalItem Family) const;
+    UPROPERTY()
+    TObjectPtr<USkeletalMeshComponent> SecondaryRig;
     float WeaponRecoil(ESurvivalItem Weapon) const;
 public:
     int32 GearCount(int32 Index) const;

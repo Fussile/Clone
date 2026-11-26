@@ -69,6 +69,9 @@ struct FSurvivalLootSlot
     UPROPERTY()
     int32 GearIndex = INDEX_NONE;
 
+    UPROPERTY()
+    int32 Firearm = INDEX_NONE;
+
     ESurvivalItem Item() const { return static_cast<ESurvivalItem>(ItemId); }
     bool IsEmpty() const { return Count <= 0; }
     FSurvivalPackCell ToPackCell() const { return {Item(), Count, Quality, GearIndex}; }

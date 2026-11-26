@@ -34,8 +34,9 @@ inline const FWeaponModDefinition WeaponMods[] = {
     {TEXT("Light stock"), 2, {14,3,5}, -.8, -.1, .98f, EWeaponMount::Stock},
     {TEXT("CQB stock"), 2, {10,4,6}, -.8, -.1, .94f, EWeaponMount::Stock},
     {TEXT("Heavy stock"), 2, {18,5,7}, -.8, -.1, .80f, EWeaponMount::Stock},
+    {TEXT("DRS-TH thermal sight"), 3, {10,4,5}, 0, 1, 1.f, EWeaponMount::Optic},
 };
 enum EWeaponModIndex { GripWrap, BarrelWeight, IRSight, VariableScope, GreenLaser, RedLaser, IRLaser,
     Bipod, Suppressor, MuzzleBrake, ExtendedMagazine, QuickMagazine, Sling, FasterBolt, Flashlight, IRIlluminator,
-    LightStock, CloseQuartersStock, HeavyStock, WeaponModCount };
+    LightStock, CloseQuartersStock, HeavyStock, ThermalSight, WeaponModCount };
 static_assert(WeaponModCount == UE_ARRAY_COUNT(WeaponMods) && WeaponModCount <= 32);

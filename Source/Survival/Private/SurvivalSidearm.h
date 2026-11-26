@@ -13,7 +13,7 @@ class ASurvivalSidearm : public AActor
 
 public:
     ASurvivalSidearm();
-    void PlayShotSound();
+    void PlayShotSound(float Volume);
     UStaticMeshComponent* GetWeaponMesh() const { return ImportedVisual; }
 
 protected:
