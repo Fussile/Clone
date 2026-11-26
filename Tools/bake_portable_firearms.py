@@ -175,11 +175,15 @@ def bake(name, layer, dest):
         nodes[parent + 1].setdefault("children", []).append(i + 1)
     nodes.append({"name": "WeaponAndArms", "mesh": 0, "skin": 0})
     animated.doc["scenes"][0]["nodes"].append(len(nodes) - 1)
+    # Rest frames contain translation only. Keep the homogeneous row exactly
+    # (0, 0, 0, 1), as required for glTF inverse bind matrices.
+    inverse_rest = rest.copy()
+    inverse_rest[:, 3, :3] *= -1
     animated.doc["skins"] = [
         {
             "skeleton": 0,
             "joints": list(range(len(order) + 1)),
-            "inverseBindMatrices": animated.add(np.concatenate(([np.eye(4)], np.linalg.inv(rest))), "MAT4"),
+            "inverseBindMatrices": animated.add(np.concatenate(([np.eye(4)], inverse_rest)), "MAT4"),
         }
     ]
     primitives = []
