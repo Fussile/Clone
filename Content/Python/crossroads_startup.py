@@ -67,7 +67,7 @@ def prepare_if_needed():
         "/Game/Art/Crossroads/DressedSniper/SniperReload",
         "/Game/Art/Crossroads/StationZombie/SK_StationZombie",
         "/Game/Art/Crossroads/DressedSidearm/SK_SidearmViewmodel",
-        "/Game/Art/Crossroads/DressedSidearm/M_ViewmodelCloth",
+        "/Game/Art/Crossroads/DressedSidearm/M_PlayerArmCloth",
         "/Game/Art/Crossroads/Building/SM_CrossroadsSidearm",
         "/Game/Art/Crossroads/DressedSidearm/ViewmodelIdle",
         "/Game/Art/Crossroads/DressedSidearm/ViewmodelWalk",
@@ -102,10 +102,10 @@ def prepare_if_needed():
     )
     required += ("/Game/Art/Crossroads/Interface/T_UI_GearAtlas", "/Game/Art/Crossroads/Arsenal/M_RemovedPart")
     for model in ("Sidearm", "Sniper", "AK12", "HK416", "MP7", "Scorpion", "Python357", "Makarov", "ScrapRifle"):
-        directory = f"/Game/Art/Crossroads/Arsenal/{model}/Assembly"
+        directory = f"/Game/Art/Crossroads/Arsenal/{model}"
         rig, idle = {"Sidearm": ("SK_SidearmViewmodel", "ViewmodelIdle"),
                      "Sniper": ("SK_SniperViewmodel", "SniperHold")}.get(model, ("Rig0", "Presentation0"))
-        required += (f"{directory}/{rig}", f"{directory}/{idle}", f"{directory}/Geometry/World")
+        required += (f"{directory}/PlayerArms/{rig}", f"{directory}/PlayerArms/{idle}", f"{directory}/Assembly/Geometry/World")
     required += tuple(f"/Game/Art/Crossroads/World/Props/{name}/SM_{name}"
                       for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler"))
     required += tuple(f"/Game/Art/Crossroads/World/M_RegionFinish_{name}"

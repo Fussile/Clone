@@ -1094,7 +1094,7 @@ float ASurvivalCharacter::ActionDuration(bool bReload, UAnimSequence* Clip, floa
 void ASurvivalCharacter::PlaySecondaryClip(const TCHAR* ClipRole, float Start, float Rate)
 {
     if (!SecondaryRig || EquippedFirearm < 2) return;
-    const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/Assembly/%s1.%s1"),
+    const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/PlayerArms/%s1.%s1"),
         Arsenal[EquippedFirearm].Asset, ClipRole, ClipRole);
     if (auto* Sequence = LoadObject<UAnimSequence>(nullptr, *Path, nullptr, LOAD_NoWarn))
     {
@@ -1141,7 +1141,7 @@ void ASurvivalCharacter::UpdateFirearmModel()
     }
     const auto Path = [Model](const TCHAR* Name)
     {
-        return FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/Assembly/%s.%s"), Arsenal[Model].Asset, Name, Name);
+        return FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/PlayerArms/%s.%s"), Arsenal[Model].Asset, Name, Name);
     };
     auto* Rig = LoadObject<USkeletalMesh>(nullptr, *Path(TEXT("Rig0")), nullptr, LOAD_NoWarn);
     const auto Clip = [&](const TCHAR* Name) { return LoadObject<UAnimSequence>(nullptr, *Path(Name), nullptr, LOAD_NoWarn); };
@@ -1237,7 +1237,7 @@ void ASurvivalCharacter::UpdateFirearmModel()
 
 void ASurvivalCharacter::LoadSidearmViewmodel()
 {
-    constexpr TCHAR MeshPath[] = TEXT("/Game/Art/Crossroads/Arsenal/Sidearm/Assembly/SK_SidearmViewmodel.SK_SidearmViewmodel");
+    constexpr TCHAR MeshPath[] = TEXT("/Game/Art/Crossroads/Arsenal/Sidearm/PlayerArms/SK_SidearmViewmodel.SK_SidearmViewmodel");
     USkeletalMesh* Arms = LoadObject<USkeletalMesh>(nullptr, MeshPath, nullptr, LOAD_NoWarn);
     if (!Arms)
     {
@@ -1253,7 +1253,7 @@ void ASurvivalCharacter::LoadSidearmViewmodel()
     }
     const auto LoadClip = [](const TCHAR* Name)
     {
-        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/Sidearm/Assembly/%s.%s"), Name, Name);
+        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/Sidearm/PlayerArms/%s.%s"), Name, Name);
         return LoadObject<UAnimSequence>(nullptr, *Path);
     };
     ViewmodelIdle = LoadClip(TEXT("ViewmodelIdle"));
@@ -1295,7 +1295,7 @@ void ASurvivalCharacter::LoadSidearmViewmodel()
     SidearmViewmodel->SetRelativeRotation(CameraAlignment);
     const FVector CameraOffset = CameraAlignment.RotateVector(Eye.GetLocation() * Scale);
     const FVector GripFromEye = CameraAlignment.RotateVector(Reach * Scale);
-    ViewmodelHip = FVector(40, 12, -13) - CameraAlignment.RotateVector(Grip.GetLocation() * Scale);
+    ViewmodelHip = FVector(36, 12, -19) - CameraAlignment.RotateVector(Grip.GetLocation() * Scale);
     SidearmAimRotation = SidearmHipRotation;
     ViewmodelAim = FVector(10, -GripFromEye.Y, -GripFromEye.Z - 11) - CameraOffset;
     UpdateSidearmSightAlignment();
@@ -1601,7 +1601,7 @@ void ASurvivalCharacter::LoadRifleViewmodel()
 {
     RifleWorldMesh->SetStaticMesh(FirearmWorldMesh(1));
     USkeletalMesh* Arms = LoadObject<USkeletalMesh>(nullptr,
-        TEXT("/Game/Art/Crossroads/Arsenal/Sniper/Assembly/SK_SniperViewmodel.SK_SniperViewmodel"));
+        TEXT("/Game/Art/Crossroads/Arsenal/Sniper/PlayerArms/SK_SniperViewmodel.SK_SniperViewmodel"));
     if (!Arms)
     {
         return;
@@ -1610,7 +1610,7 @@ void ASurvivalCharacter::LoadRifleViewmodel()
     RefreshViewmodelGear(RifleViewmodel);
     const auto LoadClip = [](const TCHAR* Name)
     {
-        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/Sniper/Assembly/%s.%s"), Name, Name);
+        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/Sniper/PlayerArms/%s.%s"), Name, Name);
         return LoadObject<UAnimSequence>(nullptr, *Path);
     };
     RifleWalk = nullptr;
@@ -1641,7 +1641,7 @@ void ASurvivalCharacter::LoadRifleViewmodel()
     RifleViewmodel->SetRelativeRotation(Alignment);
     RifleViewmodel->SetRelativeScale3D(FVector(Scale));
     // Place the animated breech in the lower-right quadrant at hip height.
-    RifleHip = FVector(4, 12, -14) - Alignment.RotateVector(Rear * Scale);
+    RifleHip = FVector(14, 12, -14) - Alignment.RotateVector(Rear * Scale);
     // The magnified view is screen-centered independently of the rifle mesh.
     // Draw the rifle into the shoulder with a small lift so the stock stays below the lens.
     RifleAim = RifleHip + FVector(-12, -12, 5);
@@ -2753,9 +2753,13 @@ void ASurvivalCharacter::RefreshViewmodelGear(USkeletalMeshComponent* Viewmodel)
     for (int32 Index = 0; Index < Materials.Num(); ++Index)
     {
         const auto& Slot = Materials[Index];
-        const FString Name = Slot.MaterialSlotName.ToString();
+        FString Name = Slot.MaterialSlotName.ToString();
+        if (!Name.Contains(TEXT("Viewmodel")) && Slot.MaterialInterface)
+            Name = Slot.MaterialInterface->GetName();
         const FSurvivalGearDefinition* Layer = nullptr;
-        if (Name.Contains(TEXT("ViewmodelSleeves")) || Name.Contains(TEXT("Cloths"))) Layer = OuterLayer ? OuterLayer : BodyLayer;
+        if (Name.Contains(TEXT("ViewmodelUpperSleeves"))) Layer = OuterLayer ? OuterLayer : BodyLayer;
+        else if (Name.Contains(TEXT("ViewmodelSleeves")))
+            Layer = OuterLayer && !OuterLayer->bShortSleeves ? OuterLayer : BodyLayer;
         else if (Name.Contains(TEXT("Gloves"))) Layer = Gloves;
         else continue;
 
@@ -2766,7 +2770,7 @@ void ASurvivalCharacter::RefreshViewmodelGear(USkeletalMeshComponent* Viewmodel)
         }
         if (!Cloth)
             Cloth = LoadObject<UMaterialInterface>(nullptr,
-                TEXT("/Game/Art/Crossroads/DressedSidearm/M_ViewmodelCloth.M_ViewmodelCloth"), nullptr, LOAD_NoWarn);
+                TEXT("/Game/Art/Crossroads/DressedSidearm/M_PlayerArmCloth.M_PlayerArmCloth"), nullptr, LOAD_NoWarn);
         if (!Cloth) return;
         auto* Material = Cast<UMaterialInstanceDynamic>(Viewmodel->GetMaterial(Index));
         if (!Material)
@@ -2775,6 +2779,7 @@ void ASurvivalCharacter::RefreshViewmodelGear(USkeletalMeshComponent* Viewmodel)
         {
             Material->SetVectorParameterValue(TEXT("GearColor"), Layer->ViewmodelColor);
             Material->SetScalarParameterValue(TEXT("Camo"), Layer->ViewmodelCamo);
+            Material->SetScalarParameterValue(TEXT("ThicknessCm"), Layer == Gloves ? .15f : .55f);
         }
     }
 }

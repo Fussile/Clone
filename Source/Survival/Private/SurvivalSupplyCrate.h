@@ -200,6 +200,7 @@ private:
     void RememberState();
     void UpdateLootState();
     void PopulateSlots(const FSurvivalLoot& Loot);
+    bool IsStarterWeaponCase() const;
     int32 GetSlotCapacity() const;
 
     bool bDropped = false;
