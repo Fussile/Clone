@@ -44,4 +44,5 @@ private:
     TSharedPtr<SWidget> LootWidget;
     TSharedPtr<SWidget> MenuRoot;
     bool bMenuInputActive = false;
+    bool bMenuBlocksMovement = false;
 };

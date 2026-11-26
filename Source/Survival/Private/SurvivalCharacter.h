@@ -82,7 +82,7 @@ public:
     const FSurvivalLootSlot* GetContainerSlot(int32 Index) const;
     int32 GetContainerSlotCount() const { return ContainerSlots.Num(); }
     int32 GetContainerRevision() const { return ContainerRevision; }
-    bool HasOpenContainer() const { return LootContainer.IsValid(); }
+    bool HasOpenContainer() const { return !ContainerSlots.IsEmpty(); }
     float GetSearchSecondsLeft() const;
     void CloseContainer();
     void TakeContainerLoot(int32 Index = INDEX_NONE, int32 PackTarget = INDEX_NONE);
