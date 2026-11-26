@@ -1,6 +1,7 @@
 #include "SurvivalLootBudget.h"
 
 #include "SurvivalGear.h"
+#include "SurvivalArsenal.h"
 
 namespace
 {
@@ -290,6 +291,14 @@ TArray<FSurvivalLootSlot> SurvivalLootBudget::Roll(ESurvivalLootProfile Profile,
         }
         if (Group != INDEX_NONE && ++Copies[Group] == DuplicateLimit && Budget > 0 && Result.Num() < Capacity)
             RecalculateValues();
+    }
+    for (auto& Slot : Result)
+    {
+        if (Slot.Item() != EItem::Sidearm && Slot.Item() != EItem::Rifle) continue;
+        TArray<int32, TInlineAllocator<10>> Candidates;
+        for (int32 Index = 0; Index < UE_ARRAY_COUNT(Arsenal); ++Index)
+            if (Arsenal[Index].Family == Slot.Item()) Candidates.Add(Index);
+        Slot.Firearm = Candidates[Random.RandRange(0, Candidates.Num() - 1)];
     }
     return Result;
 }
