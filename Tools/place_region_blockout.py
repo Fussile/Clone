@@ -129,7 +129,7 @@ def place():
     detail_meshes = {}
     for name in ("QuarantineMine","ShopRegister","ShopCounter","ShopCooler"):
         mesh = import_asset(source_art/"RegionDetail"/f"SM_{name}.glb",
-                            f"{world_art}/RegionDetail/{name}", unreal.StaticMesh)
+                            f"{world_art}/RegionDetail/{name}", unreal.StaticMesh, refresh_if_source_changed=True)
         detail_meshes[name] = mesh
         if name != "QuarantineMine":
             district_meshes[name] = mesh
