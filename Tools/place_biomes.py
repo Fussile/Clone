@@ -1,5 +1,6 @@
 """Bake Crossroads ground and vegetation into ordinary Landscape and World Partition assets."""
 from collections import defaultdict
+import math
 
 import unreal
 
@@ -59,7 +60,7 @@ def ground_material(plan, mask_path, source, import_asset, west, north):
         node=editing.create_material_expression(mat,unreal.MaterialExpressionTextureSample,-520,y)
         node.set_editor_property("texture",texture)
         node.set_editor_property("sampler_type",kind)
-        connect(uv,"",node,"Coordinates")
+        connect(uv,"",node,"UVs")
         return node
 
     sampler=unreal.MaterialSamplerType
@@ -111,6 +112,98 @@ def ground_material(plan, mask_path, source, import_asset, west, north):
     return mat
 
 
+def water_geometry(plan, height):
+    lakes = []
+    for lake in plan["lakes"]:
+        x,y = lake["xy_m"]
+        rx,ry = lake["radii_m"]
+        level = height(x,y)+3
+        lakes.append((x,y,rx,ry,level))
+        yield lake["id"], "Cylinder", x,y,level-.025, 2*rx,2*ry,.05,0,0
+
+    def surface(x,y):
+        # Match the level basin at a river mouth before following the channel inland.
+        bed = height(x,y)+2.4
+        shore,level = min(((math.hypot((x-cx)/rx,(y-cy)/ry)-1)*min(rx,ry),z)
+                          for cx,cy,rx,ry,z in lakes)
+        blend = min(1,max(0,shore/24))
+        return level+(bed-level)*blend
+
+    for river in plan["rivers"]:
+        width = river["width_m"]
+        points = river["points_m"]
+        for i,(a,b) in enumerate(zip(points,points[1:])):
+            dx,dy = b[0]-a[0],b[1]-a[1]
+            length = math.hypot(dx,dy)
+            if not length:
+                continue
+            count = math.ceil(length/20)
+            run = length/count
+            yaw = math.degrees(math.atan2(-dy,dx))
+            z = surface(*a)
+            for j in range(count):
+                x,y = a[0]+dx*(j+1)/count,a[1]+dy*(j+1)/count
+                end = surface(x,y)
+                yield (f"{river['id']}_{i}_{j}", "Plane", x-dx/(2*count),y-dy/(2*count),
+                       (z+end)/2,math.hypot(run,end-z)+.04,width,1,
+                       math.degrees(math.atan2(end-z,run)),yaw)
+                z=end
+            if i+1<len(points)-1:
+                yield f"{river['id']}_bend_{i}", "Cylinder", *b,z-.03,width,width,.05,0,0
+
+
+def place_water(plan,height,actors,existing,west,north,base_z,make_material):
+    mat = make_material(PACKAGE,"M_SurfaceWater",(),tint=unreal.LinearColor(.025,.095,.11,1),
+                        scalars=[(.15,unreal.MaterialProperty.MP_ROUGHNESS)])
+    editing = unreal.MaterialEditingLibrary
+    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    if not assets.get_metadata_tag(mat,"WaterRipples"):
+        pos=editing.create_material_expression(mat,unreal.MaterialExpressionWorldPosition,-800,200)
+        time=editing.create_material_expression(mat,unreal.MaterialExpressionTime,-800,340)
+        ripple=editing.create_material_expression(mat,unreal.MaterialExpressionCustom,-400,200)
+        inputs=[]
+        for name in ("P","T"):
+            pin=unreal.CustomInput()
+            pin.set_editor_property("input_name",unreal.Name(name))
+            inputs.append(pin)
+        ripple.set_editor_property("inputs",inputs)
+        ripple.set_editor_property("output_type",unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+        ripple.set_editor_property("code","return normalize(float3(.085*sin(dot(P.xy,float2(.021,.013))+T),.06*cos(dot(P.xy,float2(-.011,.025))-.7*T),1));")
+        if not (editing.connect_material_expressions(pos,"",ripple,"P") and
+                editing.connect_material_expressions(time,"",ripple,"T") and
+                editing.connect_material_property(ripple,"",unreal.MaterialProperty.MP_NORMAL)):
+            raise RuntimeError("Could not connect the water ripple material")
+        editing.recompile_material(mat)
+        assets.set_metadata_tag(mat,"WaterRipples","1")
+        if not assets.save_loaded_asset(mat):
+            raise RuntimeError("Could not save water material")
+    meshes={n:unreal.load_asset(f"/Engine/BasicShapes/{n}.{n}") for n in ("Plane","Cylinder")}
+    groups=defaultdict(list)
+    for key,shape,x,y,z,w,d,h,pitch,yaw in water_geometry(plan,height):
+        i,j=int(x//256),int(y//256)
+        pos=unreal.Vector((x-i*256)*100,(j*256-y)*100,z*100)
+        groups[i,j,shape].append(unreal.Transform(pos,unreal.Rotator(pitch=pitch,yaw=yaw),unreal.Vector(w,d,h)))
+    old={str(t):a for a in existing for t in a.tags if str(t).startswith("CrossroadsSurfaceWater_")}
+    cls=unreal.load_class(None,"/Script/Survival.SurvivalFacade")
+    for (i,j,shape),instances in groups.items():
+        key=f"CrossroadsSurfaceWater_{i}_{j}_{shape}"
+        at=unreal.Vector(west+i*25600,north+(plan["size_m"][1]-j*256)*100,base_z)
+        actor=old.pop(key,None)
+        if actor is None:
+            actor=actors.spawn_actor_from_class(cls,at)
+            actor.set_editor_property("tags",[unreal.Name(key)])
+            actor.set_actor_label(f"Surface water ({i}, {j})")
+        else:
+            actor.set_actor_location(at,False,False)
+        actor.set_static_instances(meshes[shape],instances)
+        component=actor.get_component_by_class(unreal.InstancedStaticMeshComponent)
+        component.set_material(0,mat)
+        component.set_collision_profile_name("NoCollision")
+        component.set_editor_property("cast_shadow",False)
+    for actor in old.values():
+        actors.destroy_actor(actor)
+
+
 def place(plan, raw, output, source, import_asset, make_material):
     height=Surface(raw,plan)
     cover=Cover(plan)
@@ -140,6 +233,7 @@ def place(plan, raw, output, source, import_asset, make_material):
             terrain.set_editor_property("landscape_material",material)
     root=next(a for a in existing if isinstance(a,unreal.Landscape))
     origin=root.get_actor_location()
+    place_water(plan,height,actors,existing,west,north,origin.z,make_material)
     meshes={name:import_asset(source/f"SM_{name}.glb",f"{PACKAGE}/{name}",unreal.StaticMesh,
                               refresh_if_source_changed=True) for name in NAMES}
     for name in ("Boulder","Stones"):
