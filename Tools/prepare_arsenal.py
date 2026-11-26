@@ -3,6 +3,7 @@ import runpy
 import zipfile
 from pathlib import Path
 import os
+import gzip
 
 import unreal
 
@@ -23,6 +24,15 @@ WORLD = {
     "AK12": "ak-12.usdz", "HK416": "HK_416_A7_free_download.usdz", "MP7": "HK_MP7_A1_model.usdz",
     "Scorpion": "CZ_Scorpion_Evo3_A1.usdz", "ScrapRifle": "scrap_sniper.glb",
 }
+
+
+def part_layer(tools, generated, name, kind, source):
+    binding = tools / "ArsenalBindings" / (name + kind + ".usda.gz")
+    relative = Path(os.path.relpath(source, generated)).as_posix()
+    layer = generated / (name + kind + ".usda")
+    with gzip.open(binding, "rt", encoding="utf-8") as file:
+        layer.write_text(file.read().replace("SOURCE_LAYER", relative), encoding="utf-8")
+    return layer
 
 
 def import_world(name, source, directory, generated, glb, flatten, import_asset):
@@ -49,6 +59,8 @@ def import_world(name, source, directory, generated, glb, flatten, import_asset)
                     f'def Xform "World" (\n kind = "component"\n references = @{reference}@\n)\n' +
                     '{\n' + overrides + '\n}\n', encoding="utf-8")
     options = unreal.UsdStageImportOptions()
+    options.reuse_identical_assets = False
+    options.merge_identical_material_slots = False
     options.import_actors = False
     options.import_skeletal_animations = False
     options.kinds_to_collapse = 0x1f  # Include every model kind, including the wrapper component.
@@ -57,14 +69,21 @@ def import_world(name, source, directory, generated, glb, flatten, import_asset)
 
 def import_rig(source, directory, clips):
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    model_name = directory.split("/")[-2]
     required = ["Rig0", "Presentation0", *clips]
+    if model_name in ("HK416", "Python357"):
+        required.extend(("Rig1", "Presentation1", "Fire", "Fire1", "Reload", "Reload1"))
     if all(assets.does_asset_exist(f"{directory}/{name}") for name in required):
         return
     task = unreal.AssetImportTask()
     task.filename = str(source)
-    task.destination_path = directory
+    imported_folder = directory + "/Source"
+    task.destination_path = imported_folder
+    task.replace_existing = True
     if source.suffix in (".usdz", ".usda"):
         options = unreal.UsdStageImportOptions()
+        options.reuse_identical_assets = False
+        options.merge_identical_material_slots = False
         options.import_actors = False
         options.import_skeletal_animations = True
         task.options = options
@@ -72,11 +91,13 @@ def import_rig(source, directory, clips):
     task.save = True
     unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
     # USD imports can place meshes and clips in child package folders.
-    objects = [assets.load_asset(p) for p in sorted(assets.list_assets(directory, recursive=True))]
+    objects = [assets.load_asset(p) for p in sorted(assets.list_assets(imported_folder, recursive=True))]
     rigs = [obj for obj in objects if isinstance(obj, unreal.SkeletalMesh)]
     animations = [obj for obj in objects if isinstance(obj, unreal.AnimSequence)]
-    if not rigs or not animations:
-        raise RuntimeError(f"No animated skeletal mesh imported from {source.name}")
+    if not rigs:
+        raise RuntimeError(f"No skeletal mesh imported from {source.name}")
+    if not animations:
+        raise RuntimeError(f"No animation sequence imported from {source.name}")
     def alias(obj, name):
         target = f"{directory}/{name}"
         if not assets.does_asset_exist(target) and not assets.duplicate_loaded_asset(obj, target):
@@ -91,24 +112,37 @@ def import_rig(source, directory, clips):
         for role, suffix in clips.items():
             roles[role] = next(clip for clip in matches if suffix.lower() in clip.get_name().lower())
             alias(roles[role], role if index == 0 else f"{role}{index}")
-        if source.stem in ("Python357", "HK_416_A7_FPS_ANIMATION"):
+        if model_name in ("Python357", "HK416"):
             for role in ("Fire", "Reload"):
                 alias(matches[0], role if index == 0 else f"{role}{index}")
         alias(roles.get("Idle", matches[0]), f"Presentation{index}")
     assets.save_directory(directory)
 
 
-def prepare(tools, source, art, import_asset):
+def prepare(tools, source, art, import_asset, import_skeletal_pack):
     folder = source / "Arsenal"
     dest = art + "/Arsenal"
     generated = tools.parent / "Saved" / "GeneratedArt" / "Arsenal"
     generated.mkdir(parents=True, exist_ok=True)
     glb = runpy.run_path(str(tools / "prepare_sidearm_glb.py"))
+    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    if not assets.does_asset_exist(dest + "/M_RemovedPart"):
+        hidden = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
+            "M_RemovedPart", dest, unreal.Material, unreal.MaterialFactoryNew())
+        hidden.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
+        hidden.set_editor_property("used_with_skeletal_mesh", True)
+        mask = unreal.MaterialEditingLibrary.create_material_expression(hidden, unreal.MaterialExpressionConstant, -200, 0)
+        mask.set_editor_property("r", 0.0)
+        unreal.MaterialEditingLibrary.connect_material_property(mask, "", unreal.MaterialProperty.MP_OPACITY_MASK)
+        unreal.MaterialEditingLibrary.recompile_material(hidden)
+        if not assets.save_loaded_asset(hidden):
+            raise RuntimeError("Could not save removed-part material")
     for name, filename, parent in (
         ("SuppressorPistol", "suppressors_10_pack.glb", "Ti-RANT45_1"),
         ("SuppressorRifle", "suppressors_10_pack.glb", "Socom_4"),
         ("MuzzleBrake", "free_weapon_accessories_pack.glb", "Compensator 1"),
         ("VariableScope", "lpvo_orion_scope.glb", "upper_02"),
+        ("ReflexSight", "free_weapon_accessories_pack.glb", "Sight 1"),
         ("IRSight", "reap-ir.glb", "Reap_low"),
     ):
         assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
@@ -127,6 +161,12 @@ def prepare(tools, source, art, import_asset):
         path = generated / (name + ".glb")
         glb["write_glb"](path, model, binary)
         import_asset(path, dest + "/" + name, unreal.StaticMesh)
+    for name in ("Bipod", "Flashlight", "Stock"):
+        options = unreal.FbxImportUI()
+        options.import_as_skeletal = False
+        options.automated_import_should_detect_type = False
+        options.static_mesh_import_data.combine_meshes = True
+        import_asset(source / "Workbench" / (name + ".fbx"), dest + "/" + name, unreal.StaticMesh, options)
     # FBX material references use the original texture filenames.
     for name, archive_name, source_name in (
         ("PEQ15", "peq-15.zip", "source/PEG15_Close.fbx"),
@@ -150,17 +190,45 @@ def prepare(tools, source, art, import_asset):
         options.import_materials = True
         import_asset(path, dest + "/" + name, unreal.StaticMesh, options)
     mesh_tools = runpy.run_path(str(tools / "arsenal_world_mesh.py"))
-    if not assets.does_asset_exist(dest + "/SniperBare/SniperBare"):
-        bare = generated / "SniperBare.glb"
-        mesh_tools["remove_factory_scope"](tools, source / "Weapons", bare)
-        import_asset(bare, dest + "/SniperBare", unreal.StaticMesh)
+    section_tools = runpy.run_path(str(tools / "weapon_sections.py"))
+    gear = runpy.run_path(str(tools / "prepare_viewmodel_gear.py"))
+    weapons = source / "Weapons"
+    for name, rig_name, takes, donor, prop, extra in (
+        ("Sidearm", "SK_SidearmViewmodel", ("ViewmodelIdle", "ViewmodelWalk", "ViewmodelFire", "ViewmodelReload", "ViewmodelReloadEmpty"),
+         "fps_pistol_animations.glb", "SM_CrossroadsSidearm.glb", (weapons / "SM_CrossroadsSidearm.glb", weapons / "SM_Magazine.glb")),
+        ("Sniper", "SK_SniperViewmodel", ("SniperHold", "SniperFire", "SniperReload"),
+         "SK_SniperViewmodel.glb", "SM_CrossroadsSniper.glb", ()),
+    ):
+        directory = f"{dest}/{name}/Assembly"
+        if all(assets.does_asset_exist(f"{directory}/{asset}") for asset in (rig_name, *takes, "Geometry/World")):
+            continue
+        output = generated / name
+        output.mkdir(exist_ok=True)
+        dressed = output / "Dressed" / (rig_name + ".glb")
+        gear["prepare_viewmodel_gear"](weapons / donor, dressed, *extra)
+        section_tools["base_models"](name, weapons / prop, dressed, output)
+        import_skeletal_pack(directory, (rig_name, *takes), output / dressed.name)
+        import_asset(output / "World.glb", directory + "/Geometry", unreal.StaticMesh)
+
     for name, (filename, clips) in RIGS.items():
-        directory = dest + "/" + name
+        directory = dest + "/" + name + "/Assembly"
         rig = folder / filename
         if name in ("Makarov", "ScrapRifle"):
             model, binary = glb["read_glb"](rig)
-            gear = runpy.run_path(str(tools / "prepare_viewmodel_gear.py"))
             gear["split_arms"](model, binary, "material" if name == "Makarov" else "arms")
+            if name == "Makarov":
+                # The second mesh is a preinstalled donor accessory, separate from its iron sights.
+                for node in model["nodes"]:
+                    if node.get("mesh") == 1:
+                        del node["mesh"]
+                        node.pop("skin", None)
+            section_tools["split_props"](model, binary, name, view=True)
+            joint_name = "Body_015" if name == "Makarov" else "Body_057"
+            joint = next(i for i, node in enumerate(model["nodes"]) if node.get("name") == joint_name)
+            markers = ((0,.056,-.06), (0,.056,.10), (0,.077,-.06)) if name == "Makarov" else (
+                (0,.055,-.11), (0,.055,.74), (0,.11,-.11))
+            for marker, point in zip(("GunRear", "GunFront", "GunTop"), markers):
+                glb["add_sight"](model, binary, joint, marker, point)
             binary.extend(bytes(-len(binary) % 4))
             rig = generated / (name + ".glb")
             glb["write_glb"](rig, model, binary)
@@ -181,6 +249,18 @@ def prepare(tools, source, art, import_asset):
                 patch = f'over "{parent}" {{\n{patch}\n}}'
             rig.write_text('#usda 1.0\n(defaultPrim = "Scene"\n timeCodesPerSecond = 120)\n' +
                            f'def Xform "Scene" (references = @{relative}@) {{\n{patch}\n}}\n', encoding="utf-8")
+        if rig.suffix in (".usdz", ".usda"):
+            rig = part_layer(tools, generated, name, "Rig", rig)
         import_rig(rig, directory, clips)
-        flatten = mesh_tools["flatten"]
-        import_world(name, folder / WORLD[name], directory + "/Geometry", generated / name, glb, flatten, import_asset)
+        geometry = directory + "/Geometry"
+        if assets.does_asset_exist(geometry + "/World"):
+            continue
+        prop = folder / WORLD[name]
+        if prop.suffix == ".glb":
+            model, binary = glb["read_glb"](prop)
+            section_tools["split_props"](model, binary, name)
+            prop = generated / (name + "Sections.glb")
+            glb["write_glb"](prop, model, binary)
+        else:
+            prop = part_layer(tools, generated, name, "World", prop)
+        import_world(name, prop, geometry, generated / name, glb, mesh_tools["flatten"], import_asset)

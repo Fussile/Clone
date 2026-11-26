@@ -1,7 +1,7 @@
 #include "SurvivalLootBudget.h"
 
 #include "SurvivalGear.h"
-#include "SurvivalArsenal.h"
+#include "SurvivalWeaponMods.h"
 
 namespace
 {
@@ -21,8 +21,32 @@ constexpr FItemValue Values[] = {
     {EItem::Rifle, 165, 3}, {EItem::RifleRounds, 2, 0}, {EItem::BuilderGuide, 23, 0},
     {EItem::ScavengerNotes, 25, 0}, {EItem::DressingSchematic, 28, 0}, {EItem::FieldDressing, 24, 0},
     {EItem::RifleStock, 28, 12}, {EItem::RifleReceiver, 50, 12}, {EItem::RifleBarrel, 36, 12},
-    {EItem::RifleOptic, 35, 12}, {EItem::SidearmGrip, 18, 12}, {EItem::SidearmFrame, 33, 12},
+    {EItem::RifleMagazine, 35, 12}, {EItem::SidearmGrip, 18, 12}, {EItem::SidearmFrame, 33, 12},
     {EItem::SidearmBarrel, 27, 12}, {EItem::SidearmSlide, 24, 12},
+    {EItem::GripWrap, 10, 0},
+    {EItem::BarrelWeight, 18, 0},
+    {EItem::IRSight, 90, 0},
+    {EItem::VariableScope, 75, 0},
+    {EItem::GreenLaser, 23, 0},
+    {EItem::RedLaser, 20, 0},
+    {EItem::IRLaser, 35, 0},
+    {EItem::Bipod, 32, 0},
+    {EItem::Suppressor, 60, 0},
+    {EItem::MuzzleBrake, 28, 0},
+    {EItem::ExtendedMagazine, 36, 0},
+    {EItem::QuickMagazine, 30, 0},
+    {EItem::Sling, 12, 0},
+    {EItem::FasterBolt, 45, 0},
+    {EItem::Flashlight, 18, 0},
+    {EItem::IRIlluminator, 42, 0},
+    {EItem::LightStock, 36, 0},
+    {EItem::CloseQuartersStock, 42, 0},
+    {EItem::HeavyStock, 50, 0},
+    {EItem::ThermalSight, 110, 0},
+    {EItem::FactoryScope, 55, 0},
+    {EItem::ReflexSight, 35, 0},
+    {EItem::BurstTrigger, 65, 0},
+    {EItem::AutoTrigger, 85, 0},
 };
 static_assert(UE_ARRAY_COUNT(Values) == static_cast<int32>(EItem::None));
 static_assert([]{
@@ -78,7 +102,7 @@ constexpr FPoolEntry Police[] = {
 };
 constexpr FPoolEntry Armory[] = {
     {EItem::Rifle, 85}, {EItem::Sidearm, 62}, {EItem::Rounds, 20, 50}, {EItem::RifleRounds, 25, 55},
-    {EItem::RifleReceiver, 13}, {EItem::RifleBarrel, 12}, {EItem::RifleStock, 10}, {EItem::RifleOptic, 10},
+    {EItem::RifleReceiver, 13}, {EItem::RifleBarrel, 12}, {EItem::RifleStock, 10}, {EItem::RifleMagazine, 10},
     {EItem::Bandage, 9, 5}, {EItem::FieldDressing, 8, 3}, {EItem::Cloth, 6, 20}, {EItem::None, 14}
 };
 
@@ -162,7 +186,11 @@ int32 SurvivalLootBudget::GetUnitValue(const FSurvivalLootSlot& Slot)
 
     const auto& Value = Values[Slot.ItemId];
     const int32 Quality = FMath::Clamp(Slot.Quality, 1, FSurvivalWeaponAssembly::MaxQuality);
-    return Value.BaseValue + (Value.QualitySteps > 0 ? (Quality - 1) / Value.QualitySteps : 0);
+    int32 Price = Value.BaseValue + (Value.QualitySteps > 0 ? (Quality - 1) / Value.QualitySteps : 0);
+    for (int32 Mod = 0; Slot.InstalledMods && Mod < WeaponModCount; ++Mod)
+        if (Mod != FactoryScope && (Slot.InstalledMods & (1u << Mod)))
+            Price += Values[static_cast<int32>(AttachmentItem(Mod))].BaseValue;
+    return Price;
 }
 
 TArray<FSurvivalLootSlot> SurvivalLootBudget::Roll(ESurvivalLootProfile Profile, int32 GameStage,
@@ -238,6 +266,15 @@ TArray<FSurvivalLootSlot> SurvivalLootBudget::Roll(ESurvivalLootProfile Profile,
         }
     }
 
+    if (Profile == ESurvivalLootProfile::MilitaryArmory || Profile == ESurvivalLootProfile::PoliceArmory)
+    {
+        for (int32 Mod = 0; Mod < WeaponModCount; ++Mod)
+        {
+            if (Profile == ESurvivalLootProfile::PoliceArmory && !FirearmAccepts(0, Mod)) continue;
+            AddChoice(Choices, MakeStack(AttachmentItem(Mod), 1, 0), 2, Budget);
+        }
+    }
+
     TArray<int32> SlotsNeeded;
     const auto RecalculateValues = [&]
     {
@@ -300,5 +337,26 @@ TArray<FSurvivalLootSlot> SurvivalLootBudget::Roll(ESurvivalLootProfile Profile,
             if (Arsenal[Index].Family == Slot.Item()) Candidates.Add(Index);
         Slot.Firearm = Candidates[Random.RandRange(0, Candidates.Num() - 1)];
     }
+    // A loose accessory can arrive fitted. Its price was already charged during the roll.
+    for (auto& Weapon : Result)
+    {
+        if (Weapon.Firearm == INDEX_NONE) continue;
+        if (Weapon.Firearm == 1) Weapon.InstalledMods = 1u << FactoryScope;
+        for (auto& Accessory : Result)
+        {
+            if (!IsAttachmentItem(Accessory.Item()) || Accessory.IsEmpty()) continue;
+            const int32 Mod = Accessory.ItemId - static_cast<int32>(EItem::GripWrap);
+            if (!FirearmAccepts(Weapon.Firearm, Mod) || Weapon.Quality < MountQuality[static_cast<int32>(WeaponMods[Mod].Slot)]) continue;
+            bool Occupied = false;
+            for (int32 Installed = 0; Installed < WeaponModCount; ++Installed)
+                if ((Weapon.InstalledMods & (1u << Installed)) && WeaponMods[Installed].Slot == WeaponMods[Mod].Slot) Occupied = true;
+            if (!Occupied && Random.FRand() < .5f)
+            {
+                Weapon.InstalledMods |= 1u << Mod;
+                Accessory.Count = 0;
+            }
+        }
+    }
+    Result.RemoveAll([](const auto& Slot){ return Slot.IsEmpty(); });
     return Result;
 }

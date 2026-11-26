@@ -31,6 +31,7 @@ def prepare_if_needed():
     project = Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()))
     stamp = project / "Saved" / "CrossroadsPreparation.sha256"
     sources = list(path for path in (project / "Tools").iterdir() if path.suffix in (".py", ".json"))
+    sources.extend((project / "Tools" / "ArsenalBindings").glob("*.usda.gz"))
     sources.extend(path for path in (project / "Source" / "SurvivalWorldEditor").rglob("*") if path.is_file())
     sources.extend(path for path in (project / "SourceArt" / "Crossroads").rglob("*") if path.is_file())
     medicine_sheet = project / "SourceArt" / "Local" / "MedicineSheet.png"
@@ -99,7 +100,12 @@ def prepare_if_needed():
         f"/Game/Art/Crossroads/Interface/{icon.stem}"
         for icon in (project / "SourceArt" / "Crossroads" / "Interface").glob("T_UI_*.png")
     )
-    required += ("/Game/Art/Crossroads/Interface/T_UI_GearAtlas",)
+    required += ("/Game/Art/Crossroads/Interface/T_UI_GearAtlas", "/Game/Art/Crossroads/Arsenal/M_RemovedPart")
+    for model in ("Sidearm", "Sniper", "AK12", "HK416", "MP7", "Scorpion", "Python357", "Makarov", "ScrapRifle"):
+        directory = f"/Game/Art/Crossroads/Arsenal/{model}/Assembly"
+        rig, idle = {"Sidearm": ("SK_SidearmViewmodel", "ViewmodelIdle"),
+                     "Sniper": ("SK_SniperViewmodel", "SniperHold")}.get(model, ("Rig0", "Presentation0"))
+        required += (f"{directory}/{rig}", f"{directory}/{idle}", f"{directory}/Geometry/World")
     required += tuple(f"/Game/Art/Crossroads/World/Props/{name}/SM_{name}"
                       for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler"))
     required += tuple(f"/Game/Art/Crossroads/World/M_RegionFinish_{name}"

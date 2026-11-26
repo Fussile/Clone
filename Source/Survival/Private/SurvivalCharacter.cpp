@@ -57,8 +57,9 @@ constexpr int32 SidearmCapacity = 12;
 constexpr double SidearmEyeRelief = 47.0;
 UStaticMesh* FirearmWorldMesh(int32 Model)
 {
-    if (Model < 2 || Model >= UE_ARRAY_COUNT(Arsenal)) return nullptr;
-    const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/Geometry/World.World"), Arsenal[Model].Asset);
+    if (Model < 0 || Model >= UE_ARRAY_COUNT(Arsenal)) return nullptr;
+    const TCHAR* AssetName = Model == 0 ? TEXT("Sidearm") : Model == 1 ? TEXT("Sniper") : Arsenal[Model].Asset;
+    const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/Assembly/Geometry/World.World"), AssetName);
     return LoadObject<UStaticMesh>(nullptr, *Path, nullptr, LOAD_NoWarn);
 }
 const FName SniperMuzzle(TEXT("ViewMuzzle"));
@@ -189,6 +190,16 @@ void ASurvivalCharacter::Tick(float DeltaSeconds)
     }
     if (HasAuthority() && (bSearchingContainer || bViewingContainer))
         UpdateContainerSearch(DeltaSeconds);
+    if (TriggerWeapon != INDEX_NONE && GetWorld()->GetTimeSeconds() >= NextShotAt)
+    {
+        if (Toolbelt[ActiveHotbarSlot].WeaponId != TriggerWeapon || !IsSidearmSelected() || IsReloading() ||
+            GetAmmo() <= 0 || HealthPoints <= 0 || bBuildMode || bInventoryOpen || HasOpenContainer()) ReleaseTrigger();
+        else
+        {
+            PrimaryAction();
+            if (BurstRemaining > 0 && --BurstRemaining == 0) ReleaseTrigger();
+        }
+    }
     UpdateVitals(DeltaSeconds);
     UpdateRifle();
     UpdateSurvivorAnimation(DeltaSeconds);
@@ -276,7 +287,8 @@ void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
     PlayerInputComponent->BindAction(TEXT("PreviousPiece"), IE_Pressed, this, &ASurvivalCharacter::PreviousPiece);
     PlayerInputComponent->BindAction(TEXT("AimWeapon"), IE_Pressed, this, &ASurvivalCharacter::PressAim);
     PlayerInputComponent->BindAction(TEXT("AimWeapon"), IE_Released, this, &ASurvivalCharacter::ReleaseAim);
-    PlayerInputComponent->BindAction(TEXT("PrimaryAction"), IE_Pressed, this, &ASurvivalCharacter::PrimaryAction);
+    PlayerInputComponent->BindAction(TEXT("PrimaryAction"), IE_Pressed, this, &ASurvivalCharacter::PressTrigger);
+    PlayerInputComponent->BindAction(TEXT("PrimaryAction"), IE_Released, this, &ASurvivalCharacter::ReleaseAutomatic);
     PlayerInputComponent->BindAction(TEXT("RemovePlan"), IE_Pressed, this, &ASurvivalCharacter::RemovePlan);
     PlayerInputComponent->BindAction(TEXT("Dismantle"), IE_Pressed, this, &ASurvivalCharacter::Dismantle);
     PlayerInputComponent->BindAction(TEXT("ToggleView"), IE_Pressed, this, &ASurvivalCharacter::ToggleView);
@@ -769,6 +781,8 @@ void ASurvivalCharacter::ClientReceiveLoot_Implementation(const TArray<FSurvival
             const int32 Quality = Loot.Quality > 0 ? Loot.Quality : FSurvivalWeaponAssembly::FactoryQuality;
             FWeaponInstance Instance{Item, {}, Item == ESurvivalItem::Sidearm ? SidearmCapacity : 1, 0};
             Instance.Firearm = FirearmIndex(Item, Loot.Firearm);
+            Instance.Mods = Loot.InstalledMods;
+            if (Instance.Firearm == 1) Instance.Mods |= 1u << FactoryScope;
             Instance.Ammo = Item == ESurvivalItem::Sidearm ? Arsenal[Instance.Firearm].Capacity : 1;
             for (int32 Slot = 0; Slot < FSurvivalWeaponAssembly::PartCount; ++Slot)
                 Instance.Assembly.SwapPart(Slot, Quality);
@@ -788,7 +802,7 @@ void ASurvivalCharacter::ClientReceiveLoot_Implementation(const TArray<FSurvival
         bool bPlaced = PlaceLootStack(Pack, Loot, PackTarget, WeaponId);
         if (!bPlaced && PackTarget != INDEX_NONE) bPlaced = PlaceLootStack(Pack, Loot, INDEX_NONE, WeaponId);
         if (Loot.GearIndex != INDEX_NONE) continue;
-        if (SurvivalItemHasQuality(Item) || WeaponId != INDEX_NONE)
+        if (IsAttachmentItem(Item) || SurvivalItemHasQuality(Item) || WeaponId != INDEX_NONE)
         {
             if (!bPlaced)
             {
@@ -1080,7 +1094,7 @@ float ASurvivalCharacter::ActionDuration(bool bReload, UAnimSequence* Clip, floa
 void ASurvivalCharacter::PlaySecondaryClip(const TCHAR* ClipRole, float Start, float Rate)
 {
     if (!SecondaryRig || EquippedFirearm < 2) return;
-    const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/%s1.%s1"),
+    const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/Assembly/%s1.%s1"),
         Arsenal[EquippedFirearm].Asset, ClipRole, ClipRole);
     if (auto* Sequence = LoadObject<UAnimSequence>(nullptr, *Path, nullptr, LOAD_NoWarn))
     {
@@ -1127,7 +1141,7 @@ void ASurvivalCharacter::UpdateFirearmModel()
     }
     const auto Path = [Model](const TCHAR* Name)
     {
-        return FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/%s.%s"), Arsenal[Model].Asset, Name, Name);
+        return FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/Assembly/%s.%s"), Arsenal[Model].Asset, Name, Name);
     };
     auto* Rig = LoadObject<USkeletalMesh>(nullptr, *Path(TEXT("Rig0")), nullptr, LOAD_NoWarn);
     const auto Clip = [&](const TCHAR* Name) { return LoadObject<UAnimSequence>(nullptr, *Path(Name), nullptr, LOAD_NoWarn); };
@@ -1160,6 +1174,7 @@ void ASurvivalCharacter::UpdateFirearmModel()
     {
         RifleHip = Hip;
         RifleAim = Hip + FVector(0,-8,5);
+        RifleWalk = Clip(TEXT("Walk"));
         RifleHold = Presentation;
         RifleFire = Clip(TEXT("Fire"));
         RifleReload = Clip(TEXT("Reload"));
@@ -1179,11 +1194,50 @@ void ASurvivalCharacter::UpdateFirearmModel()
         if (Model == 3) SecondaryRig->SetPlayRate(0.f);
         SecondaryRig->SetHiddenInGame(bThirdPerson || bInventoryOpen || bBuildMode || HealthPoints <= 0);
     }
+    const float HoldTime = Model == 5 || Model == 8 ? Presentation->GetPlayLength() : Model == 6 ? .5f : 0.f;
+    View->PlayAnimation(Presentation, false);
+    for (USkeletalMeshComponent* Layer : {View, SecondaryRig.Get()})
+    {
+        if (!Layer) continue;
+        Layer->SetPosition(HoldTime, false);
+        Layer->TickAnimation(0.f, false);
+        Layer->RefreshBoneTransforms(nullptr);
+    }
+    USkeletalMeshComponent* Receiver = View->DoesSocketExist(TEXT("GunRear")) ? View : SecondaryRig.Get();
+    if (Receiver && Receiver->DoesSocketExist(TEXT("GunFront")))
+    {
+        const FVector Rear = Receiver->GetSocketTransform(TEXT("GunRear"), RTS_Component).GetLocation();
+        const FVector Front = Receiver->GetSocketTransform(TEXT("GunFront"), RTS_Component).GetLocation();
+        const FVector Top = Receiver->GetSocketTransform(TEXT("GunTop"), RTS_Component).GetLocation();
+        const FVector Barrel = Front - Rear;
+        const FVector Up = Top - Rear;
+        if (!FVector::CrossProduct(Barrel, Up).IsNearlyZero())
+        {
+            const FQuat Alignment = FRotationMatrix::MakeFromXZ(Barrel, Up).ToQuat().Inverse();
+            const double Lengths[] = {0, 0, 16, 22, 77, 59, 60, 30, 41};
+            const double FitScale = Lengths[Model] / Barrel.Size();
+            const FVector HipPose = FVector(bPistol ? 37 : 18, 12, -13) - Alignment.RotateVector(Rear * FitScale);
+            const FVector AimPose = FVector(bPistol ? 42 : 16, 0, 0) - Alignment.RotateVector(Top * FitScale);
+            View->SetRelativeTransform(FTransform(Alignment, HipPose, FVector(FitScale)));
+            if (bPistol)
+            {
+                SidearmHipRotation = SidearmAimRotation = Alignment;
+                ViewmodelHip = HipPose;
+                ViewmodelAim = AimPose;
+            }
+            else
+            {
+                RifleHip = HipPose;
+                RifleAim = AimPose;
+            }
+        }
+    }
+
 }
 
 void ASurvivalCharacter::LoadSidearmViewmodel()
 {
-    constexpr TCHAR MeshPath[] = TEXT("/Game/Art/Crossroads/DressedSidearm/SK_SidearmViewmodel.SK_SidearmViewmodel");
+    constexpr TCHAR MeshPath[] = TEXT("/Game/Art/Crossroads/Arsenal/Sidearm/Assembly/SK_SidearmViewmodel.SK_SidearmViewmodel");
     USkeletalMesh* Arms = LoadObject<USkeletalMesh>(nullptr, MeshPath, nullptr, LOAD_NoWarn);
     if (!Arms)
     {
@@ -1196,6 +1250,21 @@ void ASurvivalCharacter::LoadSidearmViewmodel()
     if (!SidearmViewmodel->DoesSocketExist(CameraBone) || !SidearmViewmodel->DoesSocketExist(ViewmodelGripBone))
     {
         return;
+    }
+    const auto LoadClip = [](const TCHAR* Name)
+    {
+        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/Sidearm/Assembly/%s.%s"), Name, Name);
+        return LoadObject<UAnimSequence>(nullptr, *Path);
+    };
+    ViewmodelIdle = LoadClip(TEXT("ViewmodelIdle"));
+    ViewmodelWalk = LoadClip(TEXT("ViewmodelWalk"));
+    ViewmodelFire = LoadClip(TEXT("ViewmodelFire"));
+    ViewmodelReload = LoadClip(TEXT("ViewmodelReload"));
+    ViewmodelReloadEmpty = LoadClip(TEXT("ViewmodelReloadEmpty"));
+    if (ViewmodelIdle)
+    {
+        SidearmViewmodel->PlayAnimation(ViewmodelIdle, true);
+        SidearmViewmodel->TickAnimation(0.f, false);
     }
     SidearmViewmodel->RefreshBoneTransforms(nullptr);
     const FTransform Eye = SidearmViewmodel->GetSocketTransform(CameraBone, RTS_Component);
@@ -1226,35 +1295,26 @@ void ASurvivalCharacter::LoadSidearmViewmodel()
     SidearmViewmodel->SetRelativeRotation(CameraAlignment);
     const FVector CameraOffset = CameraAlignment.RotateVector(Eye.GetLocation() * Scale);
     const FVector GripFromEye = CameraAlignment.RotateVector(Reach * Scale);
-    ViewmodelHip = FVector(10, 0, -44) - CameraOffset;
+    ViewmodelHip = FVector(40, 12, -13) - CameraAlignment.RotateVector(Grip.GetLocation() * Scale);
     SidearmAimRotation = SidearmHipRotation;
     ViewmodelAim = FVector(10, -GripFromEye.Y, -GripFromEye.Z - 11) - CameraOffset;
     UpdateSidearmSightAlignment();
     SidearmViewmodel->SetRelativeLocation(ViewmodelHip);
 
-    const auto LoadClip = [](const TCHAR* Name)
-    {
-        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/DressedSidearm/%s.%s"), Name, Name);
-        return LoadObject<UAnimSequence>(nullptr, *Path);
-    };
-    ViewmodelIdle = LoadClip(TEXT("ViewmodelIdle"));
-    ViewmodelWalk = LoadClip(TEXT("ViewmodelWalk"));
-    ViewmodelFire = LoadClip(TEXT("ViewmodelFire"));
-    ViewmodelReload = LoadClip(TEXT("ViewmodelReload"));
-    ViewmodelReloadEmpty = LoadClip(TEXT("ViewmodelReloadEmpty"));
     bViewmodelReady = ViewmodelIdle != nullptr;
     UpdateSidearmAnimation();
 }
 
 void ASurvivalCharacter::PlaySidearmAnimation(UAnimSequence* Sequence, bool bLoop)
 {
-    if (bViewmodelReady && Sequence && (!bLoop || Sequence != CurrentViewmodelAnimation.Get()))
+    if (bViewmodelReady && Sequence && (!bLoop || !bPlayingSidearmLoop || Sequence != CurrentViewmodelAnimation.Get()))
     {
+        bPlayingSidearmLoop = bLoop;
         CurrentViewmodelAnimation = Sequence;
         const bool bLoopClip = bLoop && EquippedFirearm != 3;
         SidearmViewmodel->PlayAnimation(Sequence, bLoopClip);
-        const bool bReloadClip = Sequence == ViewmodelReload.Get() || Sequence == ViewmodelReloadEmpty.Get();
-        const bool bFireClip = Sequence == ViewmodelFire.Get();
+        const bool bReloadClip = !bLoop && IsReloading();
+        const bool bFireClip = !bLoop && !bReloadClip;
         const auto Range = ActionRange(EquippedFirearm, bReloadClip);
         const float Start = (bFireClip || bReloadClip) ? Range.Start : 0;
         const float Rate = EquippedFirearm == 3 && !bFireClip && !bReloadClip ? 0.f : 1.f;
@@ -1274,7 +1334,7 @@ void ASurvivalCharacter::UpdateSidearmAnimation()
         Items.Rounds -= Transfer;
         ReloadCompleteAt = -1.0;
     }
-    if (!IsReloading() && Now >= NextShotAt)
+    if (IsSidearmSelected() && !IsReloading() && Now >= NextShotAt)
     {
         const bool bMoving = GetVelocity().SizeSquared2D() > FMath::Square(20.0);
         PlaySidearmAnimation(bMoving && !IsAimingSidearm() && ViewmodelWalk
@@ -1333,10 +1393,10 @@ void ASurvivalCharacter::UpdateSidearmSightAlignment()
 
 void ASurvivalCharacter::UpdateWeaponAim(float DeltaSeconds)
 {
-    const bool bHipShotPlaying = ViewmodelFire && CurrentViewmodelAnimation == ViewmodelFire;
+    const bool bHipShotPlaying = GetWorld()->GetTimeSeconds() < NextShotAt && ViewmodelFire && CurrentViewmodelAnimation == ViewmodelFire;
     const bool bPistolAiming = IsAimingSidearm() && !bHipShotPlaying;
     const bool bThermal = HasWeaponMod(GetHotbarItem(ActiveHotbarSlot), ThermalSight) || HasWeaponMod(GetHotbarItem(ActiveHotbarSlot), IRSight);
-    const bool bMagnified = bThermal || EquippedFirearm == 1 || HasWeaponMod(ESurvivalItem::Rifle, VariableScope) || HasWeaponMod(ESurvivalItem::Rifle, IRSight);
+    const bool bMagnified = bThermal || HasWeaponMod(ESurvivalItem::Rifle, FactoryScope) || HasWeaponMod(ESurvivalItem::Rifle, VariableScope) || HasWeaponMod(ESurvivalItem::Rifle, IRSight);
     const bool bScopeAiming = bMagnified && IsAimingRifle() && IsLocallyControlled() && GetWorld()->GetTimeSeconds() >= RifleReadyAt;
     const float PreviousAim = AimBlend;
     AimBlend = FMath::FInterpConstantTo(AimBlend, bPistolAiming ? 1.0f : 0.0f, DeltaSeconds, 7.0f);
@@ -1432,6 +1492,22 @@ bool ASurvivalCharacter::ShowHitMarker() const
     return GetWorld()->GetTimeSeconds() < HitMarkerUntil;
 }
 
+void ASurvivalCharacter::PressTrigger()
+{
+    if (TriggerWeapon != INDEX_NONE) return;
+    const int32 Before = GetAmmo();
+    PrimaryAction();
+    if (!IsSidearmSelected() || GetAmmo() >= Before) return;
+    if (HasWeaponMod(ESurvivalItem::Sidearm, BurstTrigger)) BurstRemaining = 2;
+    if (BurstRemaining > 0 || HasWeaponMod(ESurvivalItem::Sidearm, AutoTrigger))
+        TriggerWeapon = Toolbelt[ActiveHotbarSlot].WeaponId;
+}
+
+void ASurvivalCharacter::ReleaseAutomatic()
+{
+    if (BurstRemaining == 0) ReleaseTrigger();
+}
+
 void ASurvivalCharacter::PrimaryAction()
 {
     if (HealthPoints <= 0 || bInventoryOpen || HasOpenContainer())
@@ -1469,7 +1545,8 @@ void ASurvivalCharacter::PrimaryAction()
     }
 
     --WeaponItems[Toolbelt[ActiveHotbarSlot].WeaponId].Ammo;
-    NextShotAt = Now + ActionDuration(false, ViewmodelFire, .23f);
+    const bool bFastTrigger = HasWeaponMod(ESurvivalItem::Sidearm, AutoTrigger) || HasWeaponMod(ESurvivalItem::Sidearm, BurstTrigger);
+    NextShotAt = Now + (bFastTrigger ? .12f : ActionDuration(false, ViewmodelFire, .23f));
     const bool bAimedShot = bViewmodelReady && IsAimingSidearm();
     if (bAimedShot)
     {
@@ -1522,16 +1599,29 @@ bool ASurvivalCharacter::FireRound(const FVector& Origin, double Range, bool bRi
 
 void ASurvivalCharacter::LoadRifleViewmodel()
 {
-    RifleWorldMesh->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,
-        TEXT("/Game/Art/Crossroads/SniperSurface/SM_CrossroadsSniper.SM_CrossroadsSniper")));
+    RifleWorldMesh->SetStaticMesh(FirearmWorldMesh(1));
     USkeletalMesh* Arms = LoadObject<USkeletalMesh>(nullptr,
-        TEXT("/Game/Art/Crossroads/DressedSniper/SK_SniperViewmodel.SK_SniperViewmodel"));
+        TEXT("/Game/Art/Crossroads/Arsenal/Sniper/Assembly/SK_SniperViewmodel.SK_SniperViewmodel"));
     if (!Arms)
     {
         return;
     }
     RifleViewmodel->SetSkeletalMesh(Arms);
     RefreshViewmodelGear(RifleViewmodel);
+    const auto LoadClip = [](const TCHAR* Name)
+    {
+        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/Sniper/Assembly/%s.%s"), Name, Name);
+        return LoadObject<UAnimSequence>(nullptr, *Path);
+    };
+    RifleWalk = nullptr;
+    RifleHold = LoadClip(TEXT("SniperHold"));
+    RifleFire = LoadClip(TEXT("SniperFire"));
+    RifleReload = LoadClip(TEXT("SniperReload"));
+    if (RifleHold)
+    {
+        RifleViewmodel->PlayAnimation(RifleHold, true);
+        RifleViewmodel->TickAnimation(0.f, false);
+    }
     RifleViewmodel->RefreshBoneTransforms(nullptr);
     const FName Breech(TEXT("ViewBreech"));
     if (!RifleViewmodel->DoesSocketExist(SniperMuzzle) || !RifleViewmodel->DoesSocketExist(Breech))
@@ -1550,21 +1640,12 @@ void ASurvivalCharacter::LoadRifleViewmodel()
     const FRotator Alignment(0, -Barrel.Rotation().Yaw, 0);
     RifleViewmodel->SetRelativeRotation(Alignment);
     RifleViewmodel->SetRelativeScale3D(FVector(Scale));
-    // Keep the breech behind the camera and frame the grip and forward section.
-    RifleHip = FVector(-4, 3, -24) - Alignment.RotateVector(Rear * Scale);
+    // Place the animated breech in the lower-right quadrant at hip height.
+    RifleHip = FVector(4, 12, -14) - Alignment.RotateVector(Rear * Scale);
     // The magnified view is screen-centered independently of the rifle mesh.
     // Draw the rifle into the shoulder with a small lift so the stock stays below the lens.
-    RifleAim = RifleHip + FVector(-22, -3, 4);
+    RifleAim = RifleHip + FVector(-12, -12, 5);
     RifleViewmodel->SetRelativeLocation(RifleHip);
-
-    const auto LoadClip = [](const TCHAR* Name)
-    {
-        const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/DressedSniper/%s.%s"), Name, Name);
-        return LoadObject<UAnimSequence>(nullptr, *Path);
-    };
-    RifleHold = LoadClip(TEXT("SniperHold"));
-    RifleFire = LoadClip(TEXT("SniperFire"));
-    RifleReload = LoadClip(TEXT("SniperReload"));
 }
 
 void ASurvivalCharacter::UpdateRifleView()
@@ -1619,7 +1700,9 @@ void ASurvivalCharacter::UpdateRifle()
         WeaponItems[Toolbelt[ActiveHotbarSlot].WeaponId].Ammo += Transfer;
         RifleReloadAt = -1.0;
     }
-    UAnimSequence* Desired = RifleHold.Get();
+    if (!IsRifleSelected()) return;
+    const bool bWalk = RifleWalk && !IsAimingRifle() && GetVelocity().SizeSquared2D() > FMath::Square(20.0);
+    UAnimSequence* Desired = bWalk ? RifleWalk.Get() : RifleHold.Get();
     if (IsRifleReloading() && RifleReload)
     {
         Desired = RifleReload.Get();
@@ -1628,17 +1711,19 @@ void ASurvivalCharacter::UpdateRifle()
     {
         Desired = RifleFire.Get();
     }
-    if (Desired && Desired != CurrentRifleAnimation)
+    const int32 Phase = IsRifleReloading() ? 2 : Now < RifleReadyAt ? 1 : 0;
+    if (Desired && (Desired != CurrentRifleAnimation || Phase != RifleAnimationPhase))
     {
+        RifleAnimationPhase = Phase;
         CurrentRifleAnimation = Desired;
-        RifleViewmodel->PlayAnimation(Desired, Desired == RifleHold.Get() && EquippedFirearm < 5);
-        const bool bFire = Desired == RifleFire.Get();
-        const bool bReload = Desired == RifleReload.Get();
+        RifleViewmodel->PlayAnimation(Desired, Phase == 0 && EquippedFirearm < 5);
+        const bool bFire = Phase == 1 && RifleFire;
+        const bool bReload = Phase == 2 && RifleReload;
         const float Rate = bFire && HasWeaponMod(ESurvivalItem::Rifle, FasterBolt) ? 1.25f :
             bReload && HasWeaponMod(ESurvivalItem::Rifle, QuickMagazine) ? 1.35f :
-            (EquippedFirearm == 6 && !bFire && !bReload) ? 0.f : 1.f;
+            (EquippedFirearm >= 5 && !bFire && !bReload) ? 0.f : 1.f;
         const float Start = bFire || bReload ? ActionRange(EquippedFirearm, bReload).Start :
-            EquippedFirearm == 6 ? .5f : 0.f;
+            EquippedFirearm == 6 ? .5f : (EquippedFirearm == 5 || EquippedFirearm == 8) ? Desired->GetPlayLength() : 0.f;
         RifleViewmodel->SetPosition(Start, false);
         RifleViewmodel->SetPlayRate(Rate);
         PlaySecondaryClip(bReload ? TEXT("Reload") : bFire ? TEXT("Fire") : TEXT("Presentation"), Start, Rate);
@@ -1833,6 +1918,7 @@ void ASurvivalCharacter::ToggleInventory()
 
 void ASurvivalCharacter::SetInventoryOpen(bool bOpen)
 {
+    ReleaseTrigger();
     if (bInventoryOpen == bOpen)
     {
         return;
@@ -1859,7 +1945,7 @@ void ASurvivalCharacter::SetInventoryOpen(bool bOpen)
 
 int32 ASurvivalCharacter::GetItemCount(ESurvivalItem Item) const
 {
-    if (SurvivalItemHasQuality(Item))
+    if (IsAttachmentItem(Item) || SurvivalItemHasQuality(Item))
     {
         // Parts exist only as pack cells, because each carries its own quality.
         int32 Count = 0;
@@ -2236,7 +2322,7 @@ void ASurvivalCharacter::SyncPack()
     for (int32 Index = 0; Index < static_cast<int32>(ESurvivalItem::None); ++Index)
     {
         const ESurvivalItem Item = static_cast<ESurvivalItem>(Index);
-        if (SurvivalItemHasQuality(Item) || IsWeaponLoot(Item))
+        if (IsAttachmentItem(Item) || SurvivalItemHasQuality(Item) || IsWeaponLoot(Item))
         {
             continue;
         }
@@ -2776,6 +2862,7 @@ void ASurvivalCharacter::ServerDropGear_Implementation(int32 Index)
 bool ASurvivalCharacter::CanDropSelection() const
 {
     FSurvivalLoot Loot;
+    if (HasAuthority() && bInventoryOpen && IsAttachmentItem(GetPackItem(SelectedPackSlot))) return true;
     return HasAuthority() && bInventoryOpen && Pack.IsValidIndex(SelectedPackSlot)
         && !Pack[SelectedPackSlot].IsEmpty() && !SurvivalItemHasQuality(Pack[SelectedPackSlot].Item)
         && Loot.StackCount(Pack[SelectedPackSlot].Item);
@@ -2787,10 +2874,11 @@ void ASurvivalCharacter::DropSelection()
     const FSurvivalPackCell Cell = Pack[SelectedPackSlot];
     FSurvivalLoot Loot;
     const int32 Amount = FMath::Min(Cell.Count, GetItemCount(Cell.Item));
-    *Loot.StackCount(Cell.Item) = Amount;
+    if (IsAttachmentItem(Cell.Item)) Loot.LooseAttachment = static_cast<uint8>(Cell.Item);
+    else *Loot.StackCount(Cell.Item) = Amount;
     if (Amount > 0 && ASurvivalSupplyCrate::Drop(*this, Loot))
     {
-        ChangeItemCount(Cell.Item, -Amount);
+        if (!IsAttachmentItem(Cell.Item)) ChangeItemCount(Cell.Item, -Amount);
         Pack[SelectedPackSlot] = {};
         SyncPack();
         SetSelectedInventoryItem(ESurvivalItem::None);
@@ -2824,6 +2912,7 @@ void ASurvivalCharacter::SelectToolbeltItem(int32 Slot)
 void ASurvivalCharacter::CancelWeaponReloadOnSwitch(int32 PreviousWeaponId)
 {
     if (PreviousWeaponId == Toolbelt[ActiveHotbarSlot].WeaponId) return;
+    ReleaseTrigger();
     ReloadCompleteAt = -1.0;
     RifleReloadAt = -1.0;
 }
@@ -2867,25 +2956,53 @@ bool ASurvivalCharacter::HasWeaponMod(ESurvivalItem Weapon, int32 Mod) const
         && (WeaponItems[Id].Mods & (1 << Mod));
 }
 
-bool ASurvivalCharacter::CanToggleWeaponMod(ESurvivalItem Weapon, int32 Mod) const
+bool ASurvivalCharacter::SupportsAttachment(int32 Mod) const
 {
-    if (!CanInspectWeapon(Weapon) || !WeaponItems.IsValidIndex(GetWeaponId(Weapon)) || Mod < 0 || Mod >= UE_ARRAY_COUNT(WeaponMods)) return false;
-    const auto Family = Weapon == ESurvivalItem::Sidearm ? EWeaponFamily::Sidearm : EWeaponFamily::Rifle;
-    return (WeaponMods[Mod].Families & static_cast<uint8>(Family)) &&
-        (HasWeaponMod(Weapon, Mod) || GetWeaponQuality(GetWeaponId(Weapon)) >= MountQuality[static_cast<uint8>(WeaponMods[Mod].Slot)]);
+    return WeaponItems.IsValidIndex(InspectedWeaponId) &&
+        FirearmAccepts(FirearmIndex(InspectedWeapon, WeaponItems[InspectedWeaponId].Firearm), Mod);
 }
 
-void ASurvivalCharacter::ToggleWeaponMod(ESurvivalItem Weapon, int32 Mod)
+int32 ASurvivalCharacter::InstalledOnMount(int32 Mount) const
 {
-    if (!CanToggleWeaponMod(Weapon, Mod)) return;
-    const bool bRemove = HasWeaponMod(Weapon, Mod);
-    auto& Installed = WeaponItems[GetWeaponId(Weapon)].Mods;
-    for (int32 Index = 0; Index < UE_ARRAY_COUNT(WeaponMods); ++Index)
-        if (WeaponMods[Index].Slot == WeaponMods[Mod].Slot)
-            Installed &= ~(1u << Index);
-    if (!bRemove) Installed |= 1u << Mod;
-    SyncPack();
+    for (int32 Mod = 0; Mod < WeaponModCount; ++Mod)
+        if (static_cast<int32>(WeaponMods[Mod].Slot) == Mount && HasWeaponMod(InspectedWeapon, Mod)) return Mod;
+    return INDEX_NONE;
+}
+
+bool ASurvivalCharacter::FitAttachment(int32 PackSlot, int32 Mount)
+{
+    if (!Pack.IsValidIndex(PackSlot) || !CanInspectWeapon(InspectedWeapon)) return false;
+    auto& Cell = Pack[PackSlot];
+    if (!IsAttachmentItem(Cell.Item) || Cell.Count != 1) return false;
+    const int32 Mod = static_cast<int32>(Cell.Item) - static_cast<int32>(ESurvivalItem::GripWrap);
+    const int32 Target = static_cast<int32>(WeaponMods[Mod].Slot);
+    if (!SupportsAttachment(Mod) || (Mount != INDEX_NONE && Mount != Target) ||
+        GetWeaponQuality(InspectedWeaponId) < MountQuality[Target]) return false;
+    auto& Installed = WeaponItems[InspectedWeaponId].Mods;
+    const int32 Previous = InstalledOnMount(Target);
+    if (Previous == Mod) return false;
+    Cell = {};
+    if (Previous != INDEX_NONE)
+    {
+        Installed &= ~(1u << Previous);
+        Cell = {AttachmentItem(Previous), 1};
+    }
+    Installed |= 1u << Mod;
     RefreshAttachments();
+    return true;
+}
+
+bool ASurvivalCharacter::RemoveAttachment(int32 Mount)
+{
+    if (!WeaponItems.IsValidIndex(InspectedWeaponId) || !CanInspectWeapon(InspectedWeapon)) return false;
+    const int32 Mod = InstalledOnMount(Mount);
+    if (Mod == INDEX_NONE) return false;
+    const int32 Slot = FindFreePackCell();
+    if (Slot == INDEX_NONE) return false;
+    Pack[Slot] = {AttachmentItem(Mod), 1};
+    WeaponItems[InspectedWeaponId].Mods &= ~(1u << Mod);
+    RefreshAttachments();
+    return true;
 }
 
 float ASurvivalCharacter::WeaponRecoil(ESurvivalItem Weapon) const
@@ -2912,18 +3029,46 @@ void ASurvivalCharacter::RefreshAttachments()
     UStaticMeshComponent* Model = bPreview ? InspectionWeapon.Get() : WorldMesh;
     if (!Model || !Model->GetStaticMesh()) return;
     const int32 InstanceId = GetWeaponId(Weapon);
-    if (bRifle && WeaponItems.IsValidIndex(InstanceId) && FirearmIndex(Weapon, WeaponItems[InstanceId].Firearm) == 1)
+    if (!WeaponItems.IsValidIndex(InstanceId)) return;
+    const auto& Assembly = WeaponItems[InstanceId].Assembly;
+    const bool bFactoryScope = HasWeaponMod(Weapon, FactoryScope);
+    // Material sections retain the authored skin weights and move with the animation.
+    const auto ApplySections = [&](UMeshComponent* Component)
     {
-        const bool bReplacement = HasWeaponMod(Weapon, VariableScope) || HasWeaponMod(Weapon, IRSight) || HasWeaponMod(Weapon, ThermalSight);
-        const TCHAR* Surface = bReplacement ? TEXT("/Game/Art/Crossroads/Arsenal/SniperBare/SniperBare.SniperBare") :
-            TEXT("/Game/Art/Crossroads/SniperSurface/SM_CrossroadsSniper.SM_CrossroadsSniper");
-        if (auto* Receiver = LoadObject<UStaticMesh>(nullptr, Surface, nullptr, LOAD_NoWarn))
-            Model->SetStaticMesh(Receiver);
-        if (!bPreview && RifleViewmodel->DoesSocketExist(TEXT("Sniper_scope")))
+        if (!Component) return;
+        UMaterialInterface* Hidden = LoadObject<UMaterialInterface>(nullptr,
+            TEXT("/Game/Art/Crossroads/Arsenal/M_RemovedPart.M_RemovedPart"), nullptr, LOAD_NoWarn);
+        if (!Hidden) return;
+        const auto Names = Component->GetMaterialSlotNames();
+        for (int32 Index = 0; Index < Names.Num(); ++Index)
         {
-            if (bReplacement) RifleViewmodel->HideBoneByName(TEXT("Sniper_scope"), EPhysBodyOp::PBO_None);
-            else RifleViewmodel->UnHideBoneByName(TEXT("Sniper_scope"));
+            FString Name = Names[Index].ToString();
+            if (!Name.Contains(TEXT("GunPart")))
+            {
+                // USD meshes can preserve the material asset name but use a numbered slot.
+                const UMaterialInterface* Original = nullptr;
+                if (const auto* Static = Cast<UStaticMeshComponent>(Component); Static && Static->GetStaticMesh())
+                    Original = Static->GetStaticMesh()->GetMaterial(Index);
+                if (const auto* Skinned = Cast<USkeletalMeshComponent>(Component); Skinned && Skinned->GetSkeletalMeshAsset())
+                {
+                    const auto& Materials = Skinned->GetSkeletalMeshAsset()->GetMaterials();
+                    if (Materials.IsValidIndex(Index)) Original = Materials[Index].MaterialInterface;
+                }
+                if (Original) Name = Original->GetName();
+            }
+            const int32 Prefix = Name.Find(TEXT("GunPart"));
+            if (Prefix == INDEX_NONE || Name.Len() <= Prefix + 7) continue;
+            const int32 Slot = Name[Prefix + 7] - '0';
+            if (Slot < 0 || Slot > 4) continue;
+            const bool bInstalled = Slot == 4 ? bFactoryScope : Assembly.GetPartQuality(Slot) > 0;
+            Component->SetMaterial(Index, bInstalled ? nullptr : Hidden);
         }
+    };
+    ApplySections(Model);
+    if (!bPreview)
+    {
+        ApplySections(bRifle ? RifleViewmodel.Get() : SidearmViewmodel.Get());
+        ApplySections(SecondaryRig.Get());
     }
     const FBoxSphereBounds Bounds = Model->GetStaticMesh()->GetBounds();
     const FVector Axis = Bounds.BoxExtent.X >= Bounds.BoxExtent.Y ? FVector::ForwardVector : FVector::RightVector;
@@ -2936,6 +3081,7 @@ void ASurvivalCharacter::RefreshAttachments()
         FName Bone = NAME_None;
         FVector Location = Bounds.Origin + Axis * (Along*Half) + FVector::UpVector * (Height*Bounds.BoxExtent.Z);
         FVector Dimensions = Size * Unit;
+        FQuat MountRotation = Axis.Rotation().Quaternion();
         if (bViewmodel)
         {
             Parent = bRifle ? RifleViewmodel.Get() : SidearmViewmodel.Get();
@@ -2943,23 +3089,40 @@ void ASurvivalCharacter::RefreshAttachments()
             Location = FVector((Along - (bRifle ? 1.0 : 0.0)) * (bRifle ? 44.3 : 12.0),0, Height*4.0)
                 / FMath::Max(.001, Parent->GetComponentScale().GetAbsMax());
             Dimensions = Size / FMath::Max(.001, Parent->GetComponentScale().GetAbsMax());
-            if (EquippedFirearm >= 2)
+            MountRotation = FQuat::Identity;
+            if (bRifle && RifleViewmodel->DoesSocketExist(TEXT("ViewBreech")) && RifleViewmodel->DoesSocketExist(SniperMuzzle))
+            {
+                Bone = TEXT("ViewBreech");
+                const FTransform Breech = RifleViewmodel->GetSocketTransform(Bone);
+                const FVector Rear = Breech.GetLocation();
+                const FVector Front = RifleViewmodel->GetSocketLocation(SniperMuzzle);
+                const FVector Forward = (Front - Rear).GetSafeNormal();
+                const FQuat Frame = FRotationMatrix::MakeFromXZ(Forward, FirstPersonCamera->GetUpVector()).ToQuat();
+                const FVector Rail = RifleViewmodel->GetSocketLocation(TEXT("ViewScopeEye"));
+                const FVector Point = Height >= .99 && Along == 0 ? Rail + Forward * (Size.X * .5) :
+                    FMath::Lerp(Rear, Front, (Along + 1.) * .5) + Frame.GetUpVector() * (Height * 4.);
+                Location = Breech.InverseTransformPosition(Point);
+                Dimensions = Size / FMath::Max(.001, Breech.GetScale3D().GetAbsMax());
+                MountRotation = Breech.GetRotation().Inverse() * Frame;
+            }
+            else
             {
                 USkeletalMeshComponent* Rig = bRifle ? RifleViewmodel.Get() : SidearmViewmodel.Get();
-                static const FName ReceiverBones[] = {NAME_None, NAME_None, TEXT("Body_015"), TEXT("J1"),
-                    TEXT("Body_057"), TEXT("n69"), TEXT("n56"), TEXT("n177"), TEXT("n1072")};
-                Bone = ReceiverBones[EquippedFirearm];
-                if (!Rig->DoesSocketExist(Bone) && SecondaryRig && SecondaryRig->DoesSocketExist(Bone))
-                {
-                    Rig = SecondaryRig.Get();
-                    Parent = Rig;
-                }
-                if (!Rig->DoesSocketExist(Bone)) Bone = NAME_None;
-                const auto RigBounds = Rig->GetSkeletalMeshAsset()->GetBounds();
-                Location = RigBounds.Origin + FVector(Along * RigBounds.BoxExtent.GetMax() * .7, 0,
-                    Height * RigBounds.BoxExtent.Z * .6);
-                if (Bone != NAME_None)
-                    Location = Rig->GetSocketTransform(Bone, RTS_Component).InverseTransformPosition(Location);
+                const bool bBasePistol = Rig->DoesSocketExist(TEXT("RearSight"));
+                Bone = bBasePistol ? FName(TEXT("RearSight")) : FName(TEXT("GunRear"));
+                if (!Rig->DoesSocketExist(Bone)) Rig = SecondaryRig.Get();
+                if (!Rig || !Rig->DoesSocketExist(Bone)) return;
+                Parent = Rig;
+                const FTransform Rear = Rig->GetSocketTransform(Bone);
+                const FVector Front = Rig->GetSocketLocation(bBasePistol ? TEXT("FrontSight") : TEXT("GunFront"));
+                const FVector Top = Rig->GetSocketLocation(bBasePistol ? TEXT("SightUp") : TEXT("GunTop"));
+                const FVector Forward = (Front - Rear.GetLocation()).GetSafeNormal();
+                const FQuat Frame = FRotationMatrix::MakeFromXZ(Forward, Top - Rear.GetLocation()).ToQuat();
+                const FVector Point = FMath::Lerp(Rear.GetLocation(), Front, (Along + 1.) * .5)
+                    + Frame.GetUpVector() * (Height * (bBasePistol ? 1.5 : 4.));
+                Location = Rear.InverseTransformPosition(Point);
+                MountRotation = Rear.GetRotation().Inverse() * Frame;
+                Dimensions = Size / FMath::Max(.001, Rear.GetScale3D().GetAbsMax());
             }
         }
         auto* Part = NewObject<UStaticMeshComponent>(this);
@@ -2975,7 +3138,7 @@ void ASurvivalCharacter::RefreshAttachments()
                 Part->SetMaterial(0,Finish);
         }
         Part->SetRelativeLocation(Location);
-        Part->SetRelativeRotation(bViewmodel ? FRotator::ZeroRotator : Axis.Rotation());
+        Part->SetRelativeRotation(MountRotation);
         if (ArtMesh)
         {
             const auto ArtBounds = ArtMesh->GetBounds();
@@ -2998,12 +3161,17 @@ void ASurvivalCharacter::RefreshAttachments()
     for (int32 Index=0; Index<UE_ARRAY_COUNT(WeaponMods); ++Index)
         if (HasWeaponMod(Weapon,Index))
         {
+            if (Index == FactoryScope || Index == BurstTrigger || Index == AutoTrigger) continue;
             const auto& Mod = WeaponMods[Index];
             const TCHAR* Art = nullptr;
             if (Index == Suppressor) Art = bRifle ? TEXT("SuppressorRifle") : TEXT("SuppressorPistol");
             else if (Index == MuzzleBrake) Art = TEXT("MuzzleBrake");
             else if (Index == VariableScope) Art = TEXT("VariableScope");
             else if (Index == IRSight) Art = TEXT("IRSight");
+            else if (Index == Flashlight) Art = TEXT("Flashlight");
+            else if (Index == Bipod) Art = TEXT("Bipod");
+            else if (Mod.Slot == EWeaponMount::Stock) Art = TEXT("Stock");
+            else if (Index == ReflexSight) Art = TEXT("ReflexSight");
             else if (Index == ThermalSight) Art = TEXT("ThermalSight");
             else if (Mod.Slot == EWeaponMount::Laser || Index == IRIlluminator) Art = TEXT("PEQ15");
             Mount(Mod.Dimensions, Mod.AlongWeapon, Mod.Height, Art);
@@ -3028,12 +3196,5 @@ void ASurvivalCharacter::RefreshAttachments()
                 (bLaser || bInfrared) ? FLinearColor::Green : FLinearColor::White);
             Light->RegisterComponent();
             AttachmentLights.Add(Light);
-        }
-    if (bRifle)
-        for (int32 Slot=0; Slot<FSurvivalWeaponAssembly::PartCount; ++Slot)
-        {
-            const int32 Quality = GetWeaponAssembly(ESurvivalItem::Rifle).GetPartQuality(Slot);
-            if (Quality > 0 && Quality != FSurvivalWeaponAssembly::FactoryQuality)
-                Mount(FVector(3 + Quality * .0055, 5, 5), -.72 + .43*Slot, .25);
         }
 }

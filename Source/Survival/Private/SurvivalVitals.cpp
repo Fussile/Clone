@@ -1,7 +1,9 @@
 #include "SurvivalVitals.h"
+#include "SurvivalWeaponMods.h"
 
 const TCHAR* SurvivalItemName(ESurvivalItem Item)
 {
+    if (IsAttachmentItem(Item)) return WeaponMods[static_cast<int32>(Item) - static_cast<int32>(ESurvivalItem::GripWrap)].Name;
     switch (Item)
     {
     case ESurvivalItem::Sidearm: return TEXT("Sidearm");
@@ -22,7 +24,7 @@ const TCHAR* SurvivalItemName(ESurvivalItem Item)
     case ESurvivalItem::RifleStock: return TEXT("Rifle stock");
     case ESurvivalItem::RifleReceiver: return TEXT("Rifle receiver");
     case ESurvivalItem::RifleBarrel: return TEXT("Rifle barrel");
-    case ESurvivalItem::RifleOptic: return TEXT("Rifle optic");
+    case ESurvivalItem::RifleMagazine: return TEXT("Rifle magazine");
     case ESurvivalItem::SidearmGrip: return TEXT("Sidearm grip");
     case ESurvivalItem::SidearmFrame: return TEXT("Sidearm frame");
     case ESurvivalItem::SidearmBarrel: return TEXT("Sidearm barrel");
@@ -33,7 +35,7 @@ const TCHAR* SurvivalItemName(ESurvivalItem Item)
 
 const TCHAR* FSurvivalWeaponAssembly::PartName(int32 Slot, ESurvivalItem Weapon)
 {
-    const TCHAR* Names[] = {TEXT("Stock"), TEXT("Receiver"), TEXT("Barrel"), TEXT("Optic")};
+    const TCHAR* Names[] = {TEXT("Stock"), TEXT("Receiver"), TEXT("Barrel"), TEXT("Magazine")};
     static_assert(UE_ARRAY_COUNT(Names) == PartCount);
     const TCHAR* SidearmNames[] = {TEXT("Grip"), TEXT("Frame"), TEXT("Barrel"), TEXT("Slide")};
     return Weapon == ESurvivalItem::Sidearm ? SidearmNames[Slot] : Names[Slot];

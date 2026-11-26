@@ -8,8 +8,16 @@
 enum class ESurvivalItem : uint8
 {
     Sidearm, Food, Water, Bandage, Timber, Stone, Cloth, Rounds, TimberDoor, Rifle, RifleRounds, BuilderGuide, ScavengerNotes, DressingSchematic, FieldDressing,
-    RifleStock, RifleReceiver, RifleBarrel, RifleOptic, SidearmGrip, SidearmFrame, SidearmBarrel, SidearmSlide, None
+    RifleStock, RifleReceiver, RifleBarrel, RifleMagazine, SidearmGrip, SidearmFrame, SidearmBarrel, SidearmSlide,
+    GripWrap, BarrelWeight, IRSight, VariableScope, GreenLaser, RedLaser, IRLaser, Bipod,
+    Suppressor, MuzzleBrake, ExtendedMagazine, QuickMagazine, Sling, FasterBolt, Flashlight, IRIlluminator,
+    LightStock, CloseQuartersStock, HeavyStock, ThermalSight, FactoryScope, ReflexSight, BurstTrigger, AutoTrigger, None
 };
+
+inline constexpr bool IsAttachmentItem(ESurvivalItem Item)
+{
+    return Item >= ESurvivalItem::GripWrap && Item < ESurvivalItem::None;
+}
 
 const TCHAR* SurvivalItemName(ESurvivalItem Item);
 
@@ -41,7 +49,7 @@ struct FSurvivalWeaponAssembly
 private:
     int32 Parts[PartCount] = {FactoryQuality, FactoryQuality, FactoryQuality, FactoryQuality};
 };
-static_assert(FSurvivalWeaponAssembly::PartIndex(ESurvivalItem::RifleOptic) == FSurvivalWeaponAssembly::PartCount - 1);
+static_assert(FSurvivalWeaponAssembly::PartIndex(ESurvivalItem::RifleMagazine) == FSurvivalWeaponAssembly::PartCount - 1);
 
 // One backpack cell. Plain items stack up to SurvivalItemMaxStack. Parts carry their own quality and never stack.
 struct FSurvivalPackCell
