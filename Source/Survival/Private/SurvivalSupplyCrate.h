@@ -98,6 +98,10 @@ public:
     int32 GetLootSeed() const { return LootSeed; }
     bool HasBeenSearched() const { return bWasSearched; }
     bool IsDroppedLoot() const { return bDropped; }
+    bool IsDepleted() const
+    {
+        return LootProfile != ESurvivalLootProfile::Storage && HasBeenSearched() && !HasSupplies();
+    }
     FString GetLootName() const;
     float GetSearchDuration() const;
     bool FinishSearch(int32 GameStage);

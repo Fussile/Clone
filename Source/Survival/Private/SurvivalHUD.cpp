@@ -434,7 +434,8 @@ void ASurvivalHUD::DrawHUD()
     {
         const TCHAR* Status = !Crate->HasBeenSearched() ? TEXT(" (untouched)") :
             (Crate->HasSupplies() ? TEXT("") : TEXT(" (empty)"));
-        DrawText(FString::Printf(TEXT("Press E to search %s%s"), *Crate->GetLootName(), Status),
+        const TCHAR* Action = Crate->IsDepleted() ? TEXT("") : TEXT("Press E to search ");
+        DrawText(FString::Printf(TEXT("%s%s%s"), Action, *Crate->GetLootName(), Status),
             FLinearColor::White, CenterX + 14.0f, CenterY + 12.0f);
     }
     else if (const FSurvivalFinishedPiece* Piece = Character->FindFinishedPiece())
