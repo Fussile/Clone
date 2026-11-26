@@ -272,12 +272,14 @@ public:
         SLATE_ARGUMENT(bool, Belt)
         SLATE_ARGUMENT(int32, Index)
         SLATE_ARGUMENT(const FSlateBrush*, Icons)
+        SLATE_ARGUMENT(const FSlateBrush*, FirearmIcons)
         SLATE_ARGUMENT(const FSlateBrush*, GearIcons)
     SLATE_END_ARGS()
 
     void Construct(const FArguments& Args)
     {
         Player = Args._Player;
+        FirearmIcons = Args._FirearmIcons;
         GearIcons = Args._GearIcons;
         bBelt = Args._Belt;
         Index = Args._Index;
@@ -445,10 +447,13 @@ private:
     {
         const int32 Id = Gear();
         if (Id != INDEX_NONE) return GearIcons[Id].GetResourceObject() ? GearIcons + Id : nullptr;
+        const int32 Model = Player.IsValid() ? Player->GetFirearmModel(bBelt ? Player->GetToolbeltWeaponId(Index) : Player->GetPackCell(Index).WeaponId) : INDEX_NONE;
+        if (Model >= 0 && Model < UE_ARRAY_COUNT(Arsenal)) return FirearmIcons + Model;
         const auto Value = Item();
         return Value == ESurvivalItem::None ? nullptr : Icons + static_cast<int32>(Value);
     }
 
+    const FSlateBrush* FirearmIcons = nullptr;
     const FSlateBrush* GearIcons = nullptr;
     TWeakObjectPtr<ASurvivalCharacter> Player;
     const FSlateBrush* Icons = nullptr;
@@ -699,6 +704,18 @@ private:
     int32 PackSlot = INDEX_NONE;
 };
 
+void LoadFirearmBrushes(TArray<FSlateBrush>& Brushes, const ASurvivalHUD& HUD)
+{
+    Brushes.SetNum(UE_ARRAY_COUNT(Arsenal));
+    for (int32 Model = 0; Model < Brushes.Num(); ++Model)
+    {
+        auto& Brush = Brushes[Model];
+        Brush.SetResourceObject(HUD.GetItemIcon(Arsenal[Model].Family, Model));
+        Brush.SetUVRegion(HUD.GetItemIconUV(Arsenal[Model].Family, Model));
+        Brush.DrawAs = ESlateBrushDrawType::Image;
+    }
+}
+
 void LoadGearBrushes(TArray<FSlateBrush>& GearIcons, TStrongObjectPtr<UTexture2D>& AtlasTexture)
 {
     GearIcons.SetNum(UE_ARRAY_COUNT(SurvivalGear));
@@ -738,6 +755,7 @@ public:
         SLATE_ARGUMENT(ASurvivalCharacter*, Character)
         SLATE_ARGUMENT(int32, Index)
         SLATE_ARGUMENT(const FSlateBrush*, Icons)
+        SLATE_ARGUMENT(const FSlateBrush*, FirearmIcons)
         SLATE_ARGUMENT(const FSlateBrush*, GearIcons)
     SLATE_END_ARGS()
 
@@ -746,6 +764,7 @@ public:
         Player = Args._Character;
         Index = Args._Index;
         Icons = Args._Icons;
+        FirearmIcons = Args._FirearmIcons;
         GearIcons = Args._GearIcons;
         SetToolTipText(TAttribute<FText>::CreateLambda([this]{
             const auto* Slot = Entry();
@@ -827,12 +846,15 @@ private:
     {
         const FSurvivalLootSlot* Slot = Entry();
         if (!Slot || Slot->IsEmpty()) return nullptr;
+        if (Slot->Item() == ESurvivalItem::Sidearm || Slot->Item() == ESurvivalItem::Rifle)
+            return FirearmIcons + FirearmIndex(Slot->Item(), Slot->Firearm);
         const FSlateBrush& Brush = Slot->GearIndex != INDEX_NONE ? GearIcons[Slot->GearIndex] : Icons[Slot->ItemId];
         return Brush.GetResourceObject() ? &Brush : nullptr;
     }
 
     TWeakObjectPtr<ASurvivalCharacter> Player;
     const FSlateBrush* Icons = nullptr;
+    const FSlateBrush* FirearmIcons = nullptr;
     const FSlateBrush* GearIcons = nullptr;
     int32 Index = INDEX_NONE;
 };
@@ -848,6 +870,7 @@ public:
     void Construct(const FArguments& Args)
     {
         Player = Args._Character;
+        LoadFirearmBrushes(FirearmIcons, *Args._HUD);
         LoadGearBrushes(GearIcons, GearAtlas);
         for (int32 Index = 0; Index < UE_ARRAY_COUNT(Icons); ++Index)
         {
@@ -861,7 +884,7 @@ public:
         auto Grid = SNew(SUniformGridPanel).SlotPadding(FMargin(2));
         for (int32 Index = 0; Index < Count; ++Index)
             Grid->AddSlot(Index % Columns, Index / Columns)
-                [SNew(SLootSlot).Character(Player.Get()).Index(Index).Icons(Icons).GearIcons(GearIcons.GetData())];
+                [SNew(SLootSlot).Character(Player.Get()).Index(Index).Icons(Icons).FirearmIcons(FirearmIcons.GetData()).GearIcons(GearIcons.GetData())];
 
         ChildSlot
         [
@@ -905,6 +928,7 @@ public:
     }
 private:
     TWeakObjectPtr<ASurvivalCharacter> Player;
+    TArray<FSlateBrush> FirearmIcons;
     TStrongObjectPtr<UTexture2D> GearAtlas;
     TArray<FSlateBrush> GearIcons;
     FSlateBrush Icons[static_cast<int32>(ESurvivalItem::None)];
@@ -933,6 +957,7 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
 {
     Player = Args._Player;
     Page = Player.IsValid() && Player->HasOpenContainer() ? EPage::Pack : EPage::Crafting;
+    LoadFirearmBrushes(FirearmIcons, *Args._HUD);
     LoadGearBrushes(GearIcons, GearAtlas);
     for (const TCHAR* Name : {TEXT("Combat"), TEXT("Construction"), TEXT("Athletics"),
          TEXT("Workshop"), TEXT("Backpack"), TEXT("Skills"), TEXT("Scavenging")})
@@ -966,14 +991,14 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
             {
                 return Player.IsValid() && Index < Player->GetPackSlotCount() ? EVisibility::Visible : EVisibility::Collapsed;
             })
-            [SNew(SPackCell).Player(Player.Get()).Index(Index).Belt(false).Icons(Icons).GearIcons(GearIcons.GetData())]
+            [SNew(SPackCell).Player(Player.Get()).Index(Index).Belt(false).Icons(Icons).FirearmIcons(FirearmIcons.GetData()).GearIcons(GearIcons.GetData())]
         ];
     }
     TSharedRef<SHorizontalBox> Slots = SNew(SHorizontalBox);
     for (int32 Slot = 0; Slot < ASurvivalCharacter::HotbarSize; ++Slot)
     {
         Slots->AddSlot().FillWidth(1).Padding(2)
-        [SNew(SPackCell).Player(Player.Get()).Index(Slot).Belt(true).Icons(Icons).GearIcons(GearIcons.GetData())];
+        [SNew(SPackCell).Player(Player.Get()).Index(Slot).Belt(true).Icons(Icons).FirearmIcons(FirearmIcons.GetData()).GearIcons(GearIcons.GetData())];
     }
 
     TSharedRef<SHorizontalBox> Tabs = SNew(SHorizontalBox);

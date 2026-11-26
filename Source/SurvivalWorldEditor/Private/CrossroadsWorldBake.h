@@ -19,6 +19,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
     static bool SetStaticMeshCollision(UStaticMesh* Mesh);
 
+    UFUNCTION(BlueprintCallable, Category = "Crossroads Weapon Bake")
+    static bool PrepareWeaponMounts(UObject* WeaponMesh, bool bPistol);
+
     UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
     static TArray<UMaterialInterface*> GetLandmarkMaterials(AActor* Source);
 

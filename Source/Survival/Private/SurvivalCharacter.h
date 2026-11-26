@@ -39,6 +39,7 @@ public:
     static constexpr int32 HotbarSize = 6;
     ESurvivalItem GetHotbarItem(int32 Slot) const { return Toolbelt[Slot].Item; }
     int32 GetToolbeltCount(int32 Slot) const { return Toolbelt[Slot].Count; }
+    int32 GetFirearmModel(int32 Id) const { return WeaponItems.IsValidIndex(Id) ? WeaponItems[Id].Firearm : INDEX_NONE; }
     int32 GetToolbeltWeaponId(int32 Slot) const { return Toolbelt[Slot].WeaponId; }
     const TCHAR* GetInstanceLabel(ESurvivalItem Weapon, int32 Id) const;
     const TCHAR* GetWeaponLabel(ESurvivalItem Weapon) const;
@@ -121,6 +122,10 @@ private:
     void UpdateFirearmModel();
     int32 RifleAnimationPhase = INDEX_NONE;
     int32 EquippedFirearm = INDEX_NONE;
+    UPROPERTY()
+    TObjectPtr<UStaticMeshComponent> HeldWeaponSurface;
+    FVector HeldSurfaceHip = FVector::ZeroVector;
+    FVector HeldSurfaceAim = FVector::ZeroVector;
     float RifleADS = 0;
     void PlaySecondaryClip(const TCHAR* ClipRole, float Start, float Rate);
     float ActionDuration(bool bReload, UAnimSequence* Clip, float Fallback) const;

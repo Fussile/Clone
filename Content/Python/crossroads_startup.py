@@ -105,7 +105,8 @@ def prepare_if_needed():
         directory = f"/Game/Art/Crossroads/Arsenal/{model}"
         rig, idle = {"Sidearm": ("SK_SidearmViewmodel", "ViewmodelIdle"),
                      "Sniper": ("SK_SniperViewmodel", "SniperHold")}.get(model, ("Rig0", "Presentation0"))
-        required += (f"{directory}/PlayerArms/{rig}", f"{directory}/PlayerArms/{idle}", f"{directory}/Assembly/Geometry/World")
+        geometry = "WeaponSurface" if model in ("Makarov", "Python357") else "Assembly/Geometry"
+        required += (f"{directory}/PlayerArms/{rig}", f"{directory}/PlayerArms/{idle}", f"{directory}/{geometry}/World")
     required += tuple(f"/Game/Art/Crossroads/World/Props/{name}/SM_{name}"
                       for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler"))
     required += tuple(f"/Game/Art/Crossroads/World/M_RegionFinish_{name}"

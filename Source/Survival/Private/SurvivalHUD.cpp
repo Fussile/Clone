@@ -9,6 +9,7 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "SurvivalBuildChunk.h"
+#include "SurvivalArsenal.h"
 #include "SurvivalCharacter.h"
 #include "SurvivalGameMode.h"
 #include "SurvivalInventoryMenu.h"
@@ -30,6 +31,7 @@ const FLinearColor Blocked(1.0f, 0.51f, 0.36f);
 void ASurvivalHUD::BeginPlay()
 {
     Super::BeginPlay();
+    FirearmAtlas = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Art/Crossroads/Interface/T_UI_Firearms.T_UI_Firearms"));
     ItemAtlas = LoadObject<UTexture2D>(nullptr,
         TEXT("/Game/Art/Crossroads/Interface/T_UI_ItemAtlas.T_UI_ItemAtlas"), nullptr, LOAD_NoWarn);
     static const TCHAR* Names[] = {
@@ -47,8 +49,9 @@ void ASurvivalHUD::BeginPlay()
     }
 }
 
-UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item) const
+UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item, int32 Model) const
 {
+    if (FirearmAtlas && Model >= 0 && Model < UE_ARRAY_COUNT(Arsenal)) return FirearmAtlas.Get();
     if (ItemAtlas && Item < ESurvivalItem::RifleMagazine && Item != ESurvivalItem::TimberDoor
         && Item != ESurvivalItem::RifleStock && Item != ESurvivalItem::RifleReceiver && Item != ESurvivalItem::RifleBarrel)
     {
@@ -58,8 +61,13 @@ UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item) const
     return ItemIcons.IsValidIndex(Index) ? ItemIcons[Index].Get() : nullptr;
 }
 
-FBox2f ASurvivalHUD::GetItemIconUV(ESurvivalItem Item) const
+FBox2f ASurvivalHUD::GetItemIconUV(ESurvivalItem Item, int32 Model) const
 {
+    if (FirearmAtlas && Model >= 0 && Model < UE_ARRAY_COUNT(Arsenal))
+    {
+        const FVector2f Start((Model % 4) * .25f, (Model / 4) * .25f);
+        return FBox2f(Start, Start + FVector2f(.25f, .25f));
+    }
     if (ItemAtlas && GetItemIcon(Item) == ItemAtlas.Get())
     {
         const int32 Cell = static_cast<int32>(Item);
@@ -172,9 +180,10 @@ void ASurvivalHUD::DrawHotbar(const ASurvivalCharacter& Character)
         DrawRect(Panel, X, Y, SlotSize, SlotSize);
         const ESurvivalItem Item = Character.GetHotbarItem(Index);
         const int32 Count = Character.GetToolbeltCount(Index);
-        if (UTexture2D* Icon = GetItemIcon(Item))
+        const int32 Model = Character.GetFirearmModel(Character.GetToolbeltWeaponId(Index));
+        if (UTexture2D* Icon = GetItemIcon(Item, Model))
         {
-            const FBox2f UV = GetItemIconUV(Item);
+            const FBox2f UV = GetItemIconUV(Item, Model);
             const FVector2f Size = UV.GetSize();
             DrawTexture(Icon, X + 7.0f, Y + 7.0f, 40.0f, 40.0f, UV.Min.X, UV.Min.Y, Size.X, Size.Y,
                 FLinearColor(1, 1, 1, Count > 0 ? 1.0f : 0.25f));
@@ -185,7 +194,8 @@ void ASurvivalHUD::DrawHotbar(const ASurvivalCharacter& Character)
             DrawText(FString::FromInt(Count), FLinearColor::White, X + 35.0f, Y + 36.0f);
         }
     }
-    const FString Active = SurvivalItemName(Character.GetHotbarItem(Character.GetActiveHotbarSlot()));
+    const int32 ActiveSlot = Character.GetActiveHotbarSlot();
+    const FString Active = Character.GetInstanceLabel(Character.GetHotbarItem(ActiveSlot), Character.GetToolbeltWeaponId(ActiveSlot));
     float LabelWidth = 0.0f;
     float LabelHeight = 0.0f;
     GetTextSize(Active, LabelWidth, LabelHeight);
