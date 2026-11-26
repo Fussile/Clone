@@ -262,6 +262,7 @@ void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
     PlayerInputComponent->BindAction(TEXT("Crouch"), IE_Pressed, this, &ASurvivalCharacter::ToggleCrouch);
     PlayerInputComponent->BindAction(TEXT("Prone"), IE_Pressed, this, &ASurvivalCharacter::ToggleProne);
     PlayerInputComponent->BindAction(TEXT("Interact"), IE_Pressed, this, &ASurvivalCharacter::Interact);
+    PlayerInputComponent->BindAction(TEXT("CloseLoot"), IE_Pressed, this, &ASurvivalCharacter::CloseContainer);
     PlayerInputComponent->BindAction(TEXT("Inventory"), IE_Pressed, this, &ASurvivalCharacter::ToggleInventory);
     PlayerInputComponent->BindAction(TEXT("HotbarOne"), IE_Pressed, this, &ASurvivalCharacter::HotbarOne);
     PlayerInputComponent->BindAction(TEXT("HotbarTwo"), IE_Pressed, this, &ASurvivalCharacter::HotbarTwo);
@@ -535,7 +536,6 @@ void ASurvivalCharacter::UpdateContainerSearch(float DeltaSeconds)
         if (!CanReachLoot(Crate, SearchImpactPoint) || !Crate->HasBeenSearched())
         {
             ServerCloseContainer_Implementation();
-            ClientShowContainer(nullptr, TArray<FSurvivalLootSlot>{}, 0, false);
         }
         else if (Crate->GetLootRevision() != ServerSeenLootRevision)
             ShowContainer(*Crate, false);
@@ -591,30 +591,35 @@ void ASurvivalCharacter::ShowContainer(ASurvivalSupplyCrate& Crate, bool bOpenMe
 void ASurvivalCharacter::ClientShowContainer_Implementation(ASurvivalSupplyCrate* Crate,
     const TArray<FSurvivalLootSlot>& Slots, int32 Revision, bool bOpenMenu)
 {
-    if (HealthPoints <= 0 || (!bOpenMenu && !LootContainer.IsValid() && Crate)) return;
-    const bool bWasOpen = !ContainerSlots.IsEmpty();
+    if (Crate && (HealthPoints <= 0 || (!bOpenMenu && LootContainer.Get() != Crate))) return;
+    const bool bWasOpen = HasOpenContainer();
     LootContainer = Crate;
-    ContainerSlots = Slots;
-    ContainerRevision = Revision;
-    if (!ContainerSlots.IsEmpty()) bAimHeld = false;
-    if (bWasOpen != !ContainerSlots.IsEmpty())
+    if (Crate) ContainerSlots = Slots;
+    else ContainerSlots.Reset();
+    ContainerRevision = Crate ? Revision : 0;
+    const bool bIsOpen = HasOpenContainer();
+    if (bIsOpen) bAimHeld = false;
+    if (bWasOpen != bIsOpen)
     {
         if (APlayerController* Player = Cast<APlayerController>(GetController()))
             if (ASurvivalHUD* HUD = Cast<ASurvivalHUD>(Player->GetHUD()))
-                HUD->SetLootVisible(*this, !ContainerSlots.IsEmpty());
+                HUD->SetLootVisible(*this, bIsOpen);
     }
 }
 
 void ASurvivalCharacter::CloseContainer()
 {
+    if (!HasOpenContainer() && !bViewingContainer) return;
+    if (!HasAuthority())
+        ClientShowContainer_Implementation(nullptr, TArray<FSurvivalLootSlot>{}, 0, false);
     ServerCloseContainer();
-    ClientShowContainer_Implementation(nullptr, TArray<FSurvivalLootSlot>{}, 0, false);
 }
 
 void ASurvivalCharacter::ServerCloseContainer_Implementation()
 {
     ServerContainer.Reset();
     bViewingContainer = false;
+    ClientShowContainer(nullptr, TArray<FSurvivalLootSlot>{}, 0, false);
 }
 
 const FSurvivalLootSlot* ASurvivalCharacter::GetContainerSlot(int32 Index) const
@@ -724,7 +729,6 @@ void ASurvivalCharacter::ServerTakeContainerLoot_Implementation(ASurvivalSupplyC
     else
     {
         ServerCloseContainer_Implementation();
-        ClientShowContainer(nullptr, TArray<FSurvivalLootSlot>{}, 0, false);
     }
 }
 
@@ -883,12 +887,13 @@ void ASurvivalCharacter::ServerUseRoofLadder_Implementation(AActor* Ladder, FVec
 
 void ASurvivalCharacter::Interact()
 {
-    if (HealthPoints <= 0 || bInventoryOpen) return;
+    if (HealthPoints <= 0) return;
     if (HasOpenContainer())
     {
         CloseContainer();
         return;
     }
+    if (bInventoryOpen) return;
     FHitResult LadderHit;
     if (FindWorldAimHit(InteractReach, LadderHit) && IsValid(LadderHit.GetActor()) &&
         LadderHit.GetActor()->ActorHasTag(TEXT("CrossroadsRoofLadder")))
@@ -1764,7 +1769,7 @@ void ASurvivalCharacter::TakeSurvivalDamage(int32 Amount)
     HealthPoints = FMath::Max(0, HealthPoints - Amount);
     if (HealthPoints == 0)
     {
-        if (HasOpenContainer()) CloseContainer();
+        CloseContainer();
         SetInventoryOpen(false);
         bBuildMode = false;
         ReloadCompleteAt = -1.0;

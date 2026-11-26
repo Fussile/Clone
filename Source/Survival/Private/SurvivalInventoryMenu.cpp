@@ -820,8 +820,23 @@ public:
             SNew(SBorder).BorderImage(WhiteBrush()).BorderBackgroundColor(PanelColor).Padding(8)
             [SNew(SVerticalBox)
                 + SVerticalBox::Slot().AutoHeight()[Grid]
-                + SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0,6,0,0)
-                [SNew(STextBlock).Text(FText::FromString(TEXT("Press R to take all")))]]
+                + SVerticalBox::Slot().AutoHeight().Padding(0,6,0,0)
+                [
+                    SNew(SHorizontalBox)
+                    + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center).Padding(0,0,8,0)
+                    [SNew(STextBlock).Text(FText::FromString(TEXT("Press R to take all")))]
+                    + SHorizontalBox::Slot().AutoWidth()
+                    [
+                        SNew(SButton).ButtonStyle(&MenuButtonStyle()).ButtonColorAndOpacity(Tile)
+                        .Text(FText::FromString(TEXT("×")))
+                        .ToolTipText(FText::FromString(TEXT("Close loot (Esc)")))
+                        .OnClicked_Lambda([this] {
+                            if (ASurvivalCharacter* Character = Player.Get()) Character->CloseContainer();
+                            return FReply::Handled();
+                        })
+                    ]
+                ]
+            ]
         ];
     }
     bool SupportsKeyboardFocus() const override { return true; }
@@ -1827,6 +1842,19 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeDetails()
                 ]
             ]
         ];
+}
+
+FReply SSurvivalInventoryMenu::OnPreviewKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)
+{
+    if (Event.GetKey() == EKeys::Escape)
+    {
+        if (ASurvivalCharacter* Character = Player.Get(); Character && Character->HasOpenContainer())
+        {
+            if (!Event.IsRepeat()) Character->CloseContainer();
+            return FReply::Handled();
+        }
+    }
+    return SCompoundWidget::OnPreviewKeyDown(Geometry, Event);
 }
 
 FReply SSurvivalInventoryMenu::OnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)

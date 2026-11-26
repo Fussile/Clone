@@ -119,7 +119,13 @@ void ASurvivalHUD::RefreshMenuRoot(const TSharedPtr<SWidget>& Focus)
         bMenuInputActive = bVisible;
         PlayerOwner->bShowMouseCursor = bVisible;
         PlayerOwner->SetIgnoreLookInput(bVisible);
-        PlayerOwner->SetIgnoreMoveInput(bVisible);
+    }
+
+    const bool bBlockMovement = InventoryWidget.IsValid() && !LootWidget.IsValid();
+    if (bMenuBlocksMovement != bBlockMovement)
+    {
+        bMenuBlocksMovement = bBlockMovement;
+        PlayerOwner->SetIgnoreMoveInput(bBlockMovement);
     }
 }
 
@@ -136,10 +142,15 @@ void ASurvivalHUD::RemoveMenuRoot()
 void ASurvivalHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     RemoveMenuRoot();
-    if (bMenuInputActive && PlayerOwner)
+    if (PlayerOwner)
     {
-        PlayerOwner->SetIgnoreLookInput(false);
-        PlayerOwner->SetIgnoreMoveInput(false);
+        if (bMenuInputActive)
+        {
+            PlayerOwner->bShowMouseCursor = false;
+            PlayerOwner->SetIgnoreLookInput(false);
+            PlayerOwner->SetInputMode(FInputModeGameOnly());
+        }
+        if (bMenuBlocksMovement) PlayerOwner->SetIgnoreMoveInput(false);
     }
     Super::EndPlay(EndPlayReason);
 }

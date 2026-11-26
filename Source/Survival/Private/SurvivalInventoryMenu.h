@@ -21,6 +21,7 @@ public:
 
     void Construct(const FArguments& Args);
     virtual bool SupportsKeyboardFocus() const override { return true; }
+    virtual FReply OnPreviewKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
     virtual FReply OnKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
 
 private:
