@@ -10,6 +10,7 @@ struct FSurvivalGearDefinition
     const TCHAR* MeshOverride = nullptr;
     FLinearColor ViewmodelColor{0, 0, 0, 0};
     float ViewmodelCamo = 0.0f;
+    bool bShortSleeves = false;
 };
 
 inline constexpr FSurvivalGearDefinition SurvivalGear[] = {
@@ -37,8 +38,8 @@ inline constexpr FSurvivalGearDefinition SurvivalGear[] = {
     {TEXT("motorcycle_helmet_full_face"), TEXT("Motorcycle helmet"), TEXT("Helmet"), 45},
     {TEXT("nvg_phosphor"), TEXT("Night-vision goggles"), TEXT("Eyes"), 95},
     {TEXT("police_sam_browne_gun_belt"), TEXT("Duty belt"), TEXT("Belt"), 26},
-    {TEXT("polo_shirt"), TEXT("Polo shirt"), TEXT("Torso"), 12},
-    {TEXT("poncho"), TEXT("Poncho"), TEXT("Torso"), 25},
+    {TEXT("polo_shirt"), TEXT("Polo shirt"), TEXT("Torso"), 12, nullptr, {0.045f, 0.075f, 0.13f}, 0.f, true},
+    {TEXT("poncho"), TEXT("Poncho"), TEXT("Torso"), 25, nullptr, {0.14f, 0.17f, 0.10f}, 0.f, true},
     {TEXT("prom_suit"), TEXT("Formal suit"), TEXT("Body"), 27, TEXT("ww2_soviet_uniform"), {0.035f, 0.04f, 0.05f}},
     {TEXT("quad_night_vision_goggle"), TEXT("Quad night-vision goggles"), TEXT("Eyes"), 110},
     {TEXT("russian_soviet_helmet"), TEXT("Soviet helmet"), TEXT("Helmet"), 37},

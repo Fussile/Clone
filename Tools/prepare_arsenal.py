@@ -120,6 +120,8 @@ def import_rig(source, directory, clips):
 
 
 def prepare(tools, source, art, import_asset, import_skeletal_pack):
+    arms = runpy.run_path(str(tools / "player_viewmodel_arms.py"))
+    skin = source / "PlayerArms"
     folder = source / "Arsenal"
     dest = art + "/Arsenal"
     generated = tools.parent / "Saved" / "GeneratedArt" / "Arsenal"
@@ -199,19 +201,21 @@ def prepare(tools, source, art, import_asset, import_skeletal_pack):
         ("Sniper", "SK_SniperViewmodel", ("SniperHold", "SniperFire", "SniperReload"),
          "SK_SniperViewmodel.glb", "SM_CrossroadsSniper.glb", ()),
     ):
-        directory = f"{dest}/{name}/Assembly"
-        if all(assets.does_asset_exist(f"{directory}/{asset}") for asset in (rig_name, *takes, "Geometry/World")):
+        directory = f"{dest}/{name}/PlayerArms"
+        geometry = f"{dest}/{name}/Assembly/Geometry"
+        if assets.does_asset_exist(geometry + "/World") and all(assets.does_asset_exist(f"{directory}/{asset}") for asset in (rig_name, *takes)):
             continue
         output = generated / name
         output.mkdir(exist_ok=True)
         dressed = output / "Dressed" / (rig_name + ".glb")
         gear["prepare_viewmodel_gear"](weapons / donor, dressed, *extra)
         section_tools["base_models"](name, weapons / prop, dressed, output)
+        arms["dress_gltf"](skin, name, output / dressed.name, glb)
         import_skeletal_pack(directory, (rig_name, *takes), output / dressed.name)
-        import_asset(output / "World.glb", directory + "/Geometry", unreal.StaticMesh)
+        import_asset(output / "World.glb", geometry, unreal.StaticMesh)
 
     for name, (filename, clips) in RIGS.items():
-        directory = dest + "/" + name + "/Assembly"
+        directory = dest + "/" + name + "/PlayerArms"
         rig = folder / filename
         if name in ("Makarov", "ScrapRifle"):
             model, binary = glb["read_glb"](rig)
@@ -247,12 +251,15 @@ def prepare(tools, source, art, import_asset, import_skeletal_pack):
             patch = 'over "Skybox_Baked_Skybox_0" (active = false) {}'
             for parent in reversed("SkinnedMeshes/Sketchfab_model/CZ_Scorpion_Evo3_A1_Anim_fbx/Object_2/RootNode/rig/Object_8/_rootJoint/skin0".split("/")):
                 patch = f'over "{parent}" {{\n{patch}\n}}'
-            rig.write_text('#usda 1.0\n(defaultPrim = "Scene"\n timeCodesPerSecond = 120)\n' +
+            rig.write_text('#usda 1.0\n(defaultPrim = "Scene"\n endTimeCode = 399.6000061035156\n timeCodesPerSecond = 120)\n' +
                            f'def Xform "Scene" (references = @{relative}@) {{\n{patch}\n}}\n', encoding="utf-8")
         if rig.suffix in (".usdz", ".usda"):
             rig = part_layer(tools, generated, name, "Rig", rig)
+            rig = arms["dress_usd"](skin, name, rig)
+        else:
+            arms["dress_gltf"](skin, name, rig, glb)
         import_rig(rig, directory, clips)
-        geometry = directory + "/Geometry"
+        geometry = f"{dest}/{name}/Assembly/Geometry"
         if assets.does_asset_exist(geometry + "/World"):
             continue
         prop = folder / WORLD[name]

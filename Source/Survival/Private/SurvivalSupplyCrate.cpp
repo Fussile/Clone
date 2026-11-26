@@ -1,5 +1,6 @@
 #include "SurvivalSupplyCrate.h"
 #include "SurvivalGear.h"
+#include "SurvivalWeaponMods.h"
 
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -176,8 +177,14 @@ FString ASurvivalSupplyCrate::GetLootName() const
     }
 }
 
+bool ASurvivalSupplyCrate::IsStarterWeaponCase() const
+{
+    return ActorHasTag(TEXT("CrossroadsRegion_south-services_sidearm")) || ActorHasTag(TEXT("CrossroadsStationSidearm"));
+}
+
 int32 ASurvivalSupplyCrate::GetSlotCapacity() const
 {
+    if (IsStarterWeaponCase()) return MaxLootSlots;
     if (bDropped) return 4;
     if (LootProfile == ESurvivalLootProfile::Mailbox) return 4;
     if (LootProfile == ESurvivalLootProfile::Vehicle) return MaxLootSlots;
@@ -198,6 +205,32 @@ void ASurvivalSupplyCrate::PopulateSlots(const FSurvivalLoot& Loot)
 {
     State.Slots.SetNum(GetSlotCapacity());
     int32 NextSlot = 0;
+    if (IsStarterWeaponCase())
+    {
+        static_assert(UE_ARRAY_COUNT(Arsenal) + WeaponModCount + 2 <= MaxLootSlots);
+        for (int32 Model = 0; Model < UE_ARRAY_COUNT(Arsenal); ++Model)
+        {
+            auto& Entry = State.Slots[NextSlot++];
+            Entry.ItemId = static_cast<uint8>(Arsenal[Model].Family);
+            Entry.Count = 1;
+            Entry.Quality = FSurvivalWeaponAssembly::MaxQuality;
+            Entry.Firearm = Model;
+            Entry.InstalledMods = Model == 1 ? (1u << FactoryScope) : 0;
+        }
+        for (int32 Mod = 0; Mod < WeaponModCount; ++Mod)
+        {
+            auto& Entry = State.Slots[NextSlot++];
+            Entry.ItemId = static_cast<uint8>(AttachmentItem(Mod));
+            Entry.Count = 1;
+        }
+        for (const auto Ammo : {ESurvivalItem::Rounds, ESurvivalItem::RifleRounds})
+        {
+            auto& Entry = State.Slots[NextSlot++];
+            Entry.ItemId = static_cast<uint8>(Ammo);
+            Entry.Count = SurvivalItemMaxStack(Ammo);
+        }
+        return;
+    }
     for (uint8 Id = 0; Id <= static_cast<uint8>(ESurvivalItem::None) && NextSlot < State.Slots.Num(); ++Id)
     {
         const auto Item = static_cast<ESurvivalItem>(Id);

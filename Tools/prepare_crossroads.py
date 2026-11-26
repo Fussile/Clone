@@ -327,7 +327,7 @@ def prepare_legacy_map():
 
 def import_viewmodel_cloth():
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
-    name = "M_ViewmodelCloth"
+    name = "M_PlayerArmCloth"
     if assets.does_asset_exist(f"{VIEWMODEL}/{name}"):
         return
 
@@ -358,9 +358,16 @@ def import_viewmodel_cloth():
         float pattern = lerp(0.55, 1.25, smoothstep(-0.2, 0.2, patches));
         return Tint.rgb * weave * lerp(1.0, pattern, Camo);
     """)
+    normal = edit.create_material_expression(material, unreal.MaterialExpressionVertexNormalWS, -500, 540)
+    thickness = edit.create_material_expression(material, unreal.MaterialExpressionScalarParameter, -500, 660)
+    thickness.set_editor_property("parameter_name", unreal.Name("ThicknessCm"))
+    offset = edit.create_material_expression(material, unreal.MaterialExpressionMultiply, -200, 540)
     roughness = edit.create_material_expression(material, unreal.MaterialExpressionConstant, -200, 240)
     roughness.set_editor_property("r", 0.88)
-    if not (edit.connect_material_expressions(uv, "", cloth, "UV")
+    if not (edit.connect_material_expressions(normal, "", offset, "A")
+            and edit.connect_material_expressions(thickness, "", offset, "B")
+            and edit.connect_material_property(offset, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
+            and edit.connect_material_expressions(uv, "", cloth, "UV")
             and edit.connect_material_expressions(color, "", cloth, "Tint")
             and edit.connect_material_expressions(camo, "", cloth, "Camo")
             and edit.connect_material_property(cloth, "", unreal.MaterialProperty.MP_BASE_COLOR)
