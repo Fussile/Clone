@@ -22,5 +22,5 @@ def facilities(airport, stadium, height):
     sx, sy = stadium["plot_xy_m"]
     # The source scan has uneven margins. Its walkable base sits above the existing terrain.
     pitch = {"x": sx, "y": sy, "floor": round(max(
-        height(sx+dx, sy+dy) for dx in range(-33,34,2) for dy in range(-24,25,2))+.12, 3)}
+        height(sx+dx, sy+dy) for dx in range(-75,76,5) for dy in range(-66,67,5))+.12, 3)}
     return {"airport": runway, "stadium": pitch}

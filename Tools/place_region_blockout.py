@@ -14,6 +14,7 @@ def place():
     if plan.get("version", 0) != 8:
         raise RuntimeError("Rebake Saved/WorldBake/world.json with Tools/generate_world.py before stamping the region.")
     site_tools = runpy.run_path(str(root / "Tools" / "place_region_sites.py"))
+    northern = runpy.run_path(str(root / "Tools" / "northern_landmarks.py"))
     civic = runpy.run_path(str(root / "Tools" / "civic_landmarks.py"))
     interiors = runpy.run_path(str(root / "Tools" / "place_region_interiors.py"))
     communications = runpy.run_path(str(root / "Tools" / "communications_layout.py"))
@@ -70,7 +71,8 @@ def place():
     }
     landmark_names = sorted(landmark_collision | {"RunwayMarkings"})
     landmark_meshes = {
-        name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Landmarks/{name}", unreal.StaticMesh)
+        name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Landmarks/{name}", unreal.StaticMesh,
+                           refresh_if_source_changed=name == "CommunityPitch")
         for name in landmark_names if name not in {"RuinedTerminal", "RuinedAirportShop"}
     }
     crate_mesh, pump_mesh = (
@@ -134,6 +136,10 @@ def place():
         if name != "QuarantineMine":
             district_meshes[name] = mesh
             district_solids.add(name)
+    for name in ("StoneDisplay", "MetalDisplay"):
+        district_meshes[name] = import_asset(source_art/"Storefronts"/f"SM_{name}.glb",
+            f"{world_art}/Storefronts/{name}", unreal.StaticMesh, refresh_if_source_changed=True)
+        district_solids.add(name)
     district_meshes["PanelHousingExterior"] = survey_mesh("PanelHousingExterior")
     district_meshes["SubstationHouse"] = survey_mesh("SubstationHouse")
     district_meshes["AbandonedVan"] = import_asset(source_art / "SM_AbandonedVan.glb",
@@ -370,6 +376,29 @@ def place():
             actor.fit_panels(panel, width*100, depth*100, height*100,
                              ground_height*100, entrance_width*100, panel_materials[name])
         spawn(facade_class, key, "City facade panels", x, y, z, configure)
+
+    def display(key, variant, x, y, floor, width, height, yaw=0):
+        name = ("StoneDisplay", "MetalDisplay")[variant % 2]
+        district_mesh(key, "Shop display window", name, x, y, floor,
+                      (width, .48, height), yaw=yaw)
+
+    def glazed_shell(key, x, y, floor, width, depth, height, entrance, variant):
+        def shell_part(tag, label, *args, **kwargs):
+            if label != "Entrance jamb":
+                box(tag, label, *args, **kwargs)
+        front = site_tools["building_shell"](shell_part,key,x,y,floor,width,depth,height,entrance,
+                                             style_materials["StationBrick"],concrete)
+        span = (width-entrance)/2
+        count = max(1,round(span/5))
+        bay = span/count
+        display_height = min(height-.5, 4.1)
+        for side in (-1,1):
+            for i in range(count):
+                cx = x+side*(entrance/2+(i+.5)*bay)
+                display(f"{key}_shopglass_{side}_{i}",variant,cx,front,floor,bay,display_height)
+            box(f"{key}_clerestory_{side}","Shopfront header",x+side*(width+entrance)/4,
+                front,floor+display_height,span,.3,height-display_height,material=style_materials["StationBrick"])
+        return front
 
     def campus_art(key,role,x,y,floor,width,depth,height,story,yaw,opening):
         # The Poly Haven mesh contains exactly one three-metre window bay.
@@ -1297,6 +1326,7 @@ def place():
             "stadium", "hangars", "city-hospital", "warehouses", "city-nightlife"
         } else None
         if site["kind"] in {"retail_strip", "hardware"} or site["id"] in {
+            "mall", "car-lot", "school", "stadium",
             "airport", "hangars", "warehouses", "airport-services", "south-base"
         }:
             resized_site = key
@@ -1314,6 +1344,16 @@ def place():
                                   new_key, plan["facilities"]["airport"], z+.2, style_materials, asphalt, concrete,
                                   airfield_dimensions)
             migrate_landmark(key, new_key, (key+"_slab",))
+        elif site["id"] in {"mall", "car-lot", "school"}:
+            tag = key+"_district"
+            shared = (tag, x, y, z+.2, site_tools["building_shell"], site_tools["double_door"], door, box)
+            if site["id"] == "mall":
+                northern["regional_mall"](*shared, display, sign, furnishing, cache, style_materials)
+            elif site["id"] == "car-lot":
+                northern["dealership"](*shared, glazed_shell, sign, furnishing, cache, wreck, style_materials)
+            else:
+                northern["school"](*shared, storefront_window, sign, furniture, cache, style_materials)
+            migrate_landmark(key, tag, (key+"_slab",))
         elif site["id"] in {"south-base","water-treatment","power-northeast","power-southwest"}:
             compound=key+"_compound"
             base=z+.2
@@ -1523,14 +1563,9 @@ def place():
                     # Front-row clearances are 50 m between adjacent side walls.
                     dx,dy=((-83,-41),(0,-41),(82.5,-41),(-39,33),(39,33))[index]
                     cx,cy=x+dx,y+dy
-                front = site_tools["building_shell"](box,unit,cx,cy,z+.2,width,depth,roof,2.5,
-                                                     style_materials["StationBrick"],concrete)
+                front = glazed_shell(unit,cx,cy,z+.2,width,depth,roof,2.5,index)
                 site_tools["double_door"](door,unit+"_entry",title+" entrance",cx,front-.04,z+.2,
                                           2.5,2.35,"petrol")
-                remove_generated(unit+"_skin")
-                for side in (-1,1):
-                    for bay in range(max(1,int((width/2-2)/3.25))):
-                        storefront_window(f"{unit}_bay_{side}_{bay}",cx+side*(3.25+bay*3.25),front,z+.2)
                 box(unit+"_canopy","Shop entrance canopy",cx,front-1.35,z+3.3,
                     width*.68,2.9,.22,material=style_materials["dark_trim"])
                 box(unit+"_fascia","Store fascia",cx,front-.25,z+3.68,width*.78,.4,.88,
@@ -1660,17 +1695,13 @@ def place():
             remove_blockout(key)
         else:
             shop_x, shop_w = x, w
-            if site["id"] in {"car-lot", "dock-strip"}:
+            if site["id"] == "dock-strip":
                 shop_x, shop_w = x-w*.19, w*.58
                 yard_x = x+w*.29
-                if site["id"] == "car-lot":
-                    for i, vehicle in enumerate(("BurnedSedan", "BurnedCompact", "AbandonedVan")):
-                        wreck(f"{key}_display_car_{i}", yard_x, y+(i-1)*5, z+.2, 12, vehicle)
-                else:
-                    wreck(key+"_delivery", yard_x, y-4.5, z+.2, 90, "RustedTruck")
-                    for i in range(3):
-                        box(f"{key}_cargo_{i}", "Weathered cargo crate", yard_x+(i-1)*2.1, y+4,
-                            z+.2, 1.4, 1.15, 1.1)
+                wreck(key+"_delivery", yard_x, y-4.5, z+.2, 90, "RustedTruck")
+                for i in range(3):
+                    box(f"{key}_cargo_{i}", "Weathered cargo crate", yard_x+(i-1)*2.1, y+4,
+                        z+.2, 1.4, 1.15, 1.1)
             interiors["place_site"](box, door, ramp, cache, encounter, sign, storefront_window,
                 treatment_bed, furniture, site_tools["building_shell"], site_tools["double_door"], key,
                 site, shop_x, y, z+.2, shop_w, d, style_materials, scatter_caches)
@@ -1717,7 +1748,7 @@ def place():
             positions, weights = city_cache_layouts[site["id"]]
             scatter_caches(key+"_district", x, y, z+.2, positions, weights, 95)
 
-        if site["id"] in {"city-towers", "city-hospital", "city-hall", "university", "city-police", "airport", "hangars",
+        if site["kind"] in {"retail_strip","hardware"} or site["id"] in {"stadium", "city-towers", "city-hospital", "city-hall", "university", "city-police", "airport", "hangars",
                           "east-entertainment", "west-entertainment"}:
             remove_generated(*(tag for tag in actor_tags if tag.startswith(key+"_") and tag not in site_keys))
         if site["id"] in {"winter-village", "hill-town", "north-lowlands"}:
@@ -1811,7 +1842,7 @@ def place():
             mesh.set_static_mesh(asset)
             ext=asset.get_bounding_box().max-asset.get_bounding_box().min
             mesh.set_relative_scale3d(unreal.Vector(72/ext.x,72/ext.y,16/ext.z))
-            mesh.set_relative_location(unreal.Vector(0,0,4))
+            mesh.set_relative_location(unreal.Vector(0,0,4), False, False)
             for slot in range(mesh.get_num_materials()):
                 mesh.set_material(slot,asset.get_material(slot))
         spawn(mine_class,tag,"Quarantine hazard",x,y,z+.1,marker,relocate=True,reconfigure=True)
@@ -1837,6 +1868,12 @@ def place():
         cache(f'CrossroadsCheckpoint_{checkpoint["id"]}_supplies', "Checkpoint supply crate",
               x-dy/length*offset, y+dx/length*offset, z, profile="SECURITY", chance=65)
 
+    parcel_tags = {"CrossroadsInfill_"+lot["id"]+"_base" for lot in plan["city_lots"]}
+    missing = parcel_tags - touched_infill
+    if missing or not parcel_tags:
+        raise RuntimeError(f"Incomplete city bake: stamped {len(parcel_tags)-len(missing)} of {len(parcel_tags)} lots.")
+    homes = sum(tag.endswith("_residence") for tag in site_keys | touched_infill)
+    unreal.log(f"Crossroads: stamped {len(parcel_tags)} infill lots and {homes} authored residences.")
     spawn(unreal.TargetPoint, "CrossroadsRegionReady", "Crossroads region bake complete",
           sx, sy, 0, lambda actor: None, always_loaded=True)
     if not levels.save_current_level():

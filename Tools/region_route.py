@@ -64,13 +64,13 @@ def bake_route(plan, ground_height, terrain_height):
         }
 
     for site_id, road_id, offset, width in (
-        ("stadium", "school-road", 25.5, 5),
+        ("stadium", "school-road", -68, 6),
         ("airport", "terminal-access", 17.5, 8),
     ):
         design = plan["facilities"][site_id]
         x, y = design["x"], design["y"]
         entry = (x, y+offset)
-        approach = (x, entry[1]+8)
+        approach = (x, entry[1]+(8 if offset>0 else -8))
         connection = nearest_on_road(approach, roads[road_id])
         site = next(s for s in plan["sites"] if s["id"] == site_id)
         roads[site_id+"_access"] = {

@@ -113,7 +113,8 @@ def generate(seed):
                         for span, _, fault in fissures for a, b in fault)
                 and all(math.hypot(px-sx, py-sy) > clearance + sr for sx, sy, sr, _ in plots))
 
-    parcel_sizes = {"air-reserve":(150,60),"south-base":(122,82),"power-northeast":(94,52),"power-southwest":(118,78),"water-treatment":(84,52),"west-factory": (108, 54), "east-factory": (108, 54), "university": CAMPUS_SIZE, "warehouses": (154, 92), "hangars": (180, 90),
+    parcel_sizes = {"mall": (136, 96), "car-lot": (88, 66), "school": (114, 84),
+                    "stadium": (156, 138), "air-reserve":(150,60),"south-base":(122,82),"power-northeast":(94,52),"power-southwest":(118,78),"water-treatment":(84,52),"west-factory": (108, 54), "east-factory": (108, 54), "university": CAMPUS_SIZE, "warehouses": (154, 92), "hangars": (180, 90),
                     "west-entertainment": (106, 74), "east-entertainment": (106, 74)}
     pads = []
     for site in plan["sites"]:
@@ -354,6 +355,7 @@ def write_map(path, plan):
                "repeater": "#d990f3", "radio": "#d990f3", "transmitter": "#d990f3", "substation": "#64e2c1"}
     labels = {"crater-town", "winter-village", "north-industry", "hill-town", "city-hospital",
               "city-police", "city-towers", "west-factory", "university", "airport", "south-base",
+              "stadium", "mall", "car-lot", "school",
               "south-services", "warehouses", "west-entertainment", "east-clinic", "farms", "western-estates", "east-factory"}
     lines = ['<svg xmlns="http://www.w3.org/2000/svg" width="1064" height="1182" viewBox="-32 0 1064 1182">',
              '<rect x="-32" width="1064" height="1182" fill="#131b20"/>',
@@ -429,7 +431,7 @@ def write_map(path, plan):
         lines.append(f'<circle cx="{x}" cy="{y}" r="3.2" fill="{color}" stroke="#1b2524"/>')
         if site["id"] in labels or site["kind"] in {"repeater", "radio", "transmitter", "substation"}:
             label = html.escape(site["name"])
-            align = "end" if x>900 or site["kind"] == "radio" else "start"
+            align = "end" if x>900 or site["kind"] == "radio" or site["id"] in {"school", "car-lot"} else "start"
             offset = -6 if align == "end" else 6
             lines.append(f'<text x="{x+offset}" y="{y-5}" text-anchor="{align}" fill="#f7faed" stroke="#24312f" stroke-width="2" paint-order="stroke" font-family="sans-serif" font-size="12">{label}</text>')
     lines += ['<g fill="#e1e8dc" font-family="sans-serif" font-size="14">',

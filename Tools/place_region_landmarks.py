@@ -4,17 +4,30 @@ import math
 
 def pitch(box, mesh, key, design, palette, concrete):
     x, y, floor = design["x"], design["y"], design["floor"]
-    # Mesh detail follows a sealed collision base so the photogrammetry edges don't snag movement.
-    box(key+"_pitch_pad", "Community pitch ground", x, y, floor-1.4, 66, 50, 1.4,
+    box(key+"_pitch_pad", "Stadium grounds", x, y, floor-1.4, 156, 138, 1.4,
         material=palette["grass"], ground=True)
-    mesh(key+"_pitch", "Community soccer field", "CommunityPitch", x, y, floor-.025,
-         scale=(.79, .70, 1), collision=True, align_long_axis=True)
-    mesh(key+"_pitch_sign", "Soccer field entrance sign", "PitchEntranceSign", x+7, y+24.5, floor)
-    box(key+"_path", "Pitch entrance path", x, y+24, floor-.24, 5, 3, .24,
+    mesh(key+"_pitch", "105 m football pitch", "CommunityPitch", x, y, floor+.01,
+         collision=True, align_long_axis=True)
+    mesh(key+"_pitch_sign", "Stadium entrance sign", "PitchEntranceSign", x+7, y-64, floor)
+    box(key+"_path", "Stadium entrance concourse", x, y-61, floor, 8, 15, .12,
         material=concrete, ground=True)
     for side in (-1, 1):
-        box(f"{key}_bench_{side}", "Sideline bench", x+side*17, y+21, floor,
-            3.6, .55, .45, material=palette["timber"])
+        # The photogrammetry is shallow. Give each goal a player-scale frame.
+        for post in (-1, 1):
+            box(f"{key}_goal_{side}_{post}", "Goal upright", x+side*52.5, y+post*3.66,
+                floor+.45, .12, .12, 2.44, material=palette["linen"])
+        box(f"{key}_crossbar_{side}", "Goal crossbar", x+side*52.5, y, floor+2.89,
+            .12, 7.44, .12, material=palette["linen"])
+        # Split stands leave a central pedestrian aisle on both touchlines.
+        for end in (-1, 1):
+            for tier in range(6):
+                rise = .5+tier*.38
+                box(f"{key}_terrace_{side}_{end}_{tier}", "Concrete grandstand terrace",
+                    x+end*23, y+side*(43+tier*.95), floor, 39, .96, rise,
+                    material=concrete)
+                box(f"{key}_seat_{side}_{end}_{tier}", "Grandstand bench",
+                    x+end*23, y+side*(43+tier*.95+.12), floor+rise, 38.4, .44, .12,
+                    material=palette["timber"])
 
 
 def aircraft_hangar(box, mesh, door, cache, key, x, y, floor, concrete, scale=2.4):
