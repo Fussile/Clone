@@ -119,7 +119,7 @@ def generate(seed):
     for site in plan["sites"]:
         if site["kind"] not in FOOTPRINTS:
             continue
-        w, d = parcel_sizes.get(site["id"], (98, 64) if site["kind"] == "suburbs" else FOOTPRINTS[site["kind"]])
+        w, d = parcel_sizes.get(site["id"], (186, 104) if site["kind"] == "suburbs" else FOOTPRINTS[site["kind"]])
         clearance = math.hypot(w, d)/2 + 5
         x, y = site["xy_m"]
 
@@ -147,7 +147,7 @@ def generate(seed):
         ("south","Southern Depot",(2870,555)))]
     track_segments = [pair for line in (*FREIGHT.values(),*TRAM.values()) for pair in segments(line)]
     for ident,title,anchor,strip in retail:
-        w,d = (76,32) if strip else (22,24)
+        w,d = (210,138) if strip else (38,38)
         clearance = math.hypot(w,d)/2+3
         candidates = []
         for road in plan["roads"]:

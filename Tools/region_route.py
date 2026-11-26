@@ -30,7 +30,7 @@ def bake_route(plan, ground_height, terrain_height):
         "city-hospital": "hospital-arterial", "city-police": "downtown-loop",
         "city-parking": "east-west-highway", "city-nightlife": "east-west-highway",
         "power-northeast":"headworks-road","water-treatment":"southern-industrial-road",
-        "university": "airport-road", "school":"school-road", "north-clinic":"school-road",
+        "south-base":"garrison-road", "university": "airport-road", "school":"school-road", "north-clinic":"school-road",
         "north-police":"school-road", "mall":"school-road", "car-lot":"school-road",
         "north-services":"winter-approach", "winter-village":"winter-approach",
         "western-estates":"estate-avenue",
@@ -51,9 +51,15 @@ def bake_route(plan, ground_height, terrain_height):
             approach = (x, entrance[1]+8)
         road = roads[links[site["id"]]]
         connection = nearest_on_road(approach, road)
+        points=[entrance,approach,connection]
+        if site["id"]=="south-base":
+            # Bring the road around the west wall rather than diagonally through the compound.
+            west=x-site["footprint_m"][0]/2-10
+            points=[entrance,approach,(west,approach[1]),(west,connection[1]),connection]
+            points=[pt for i,pt in enumerate(points) if not i or math.dist(pt,points[i-1])>.01]
         roads[site["id"]+"_access"] = {
             "id": site["id"]+"_access", "width_m": 8 if site["id"] == "university" else 7,
-            "points_m": [entrance, approach, connection],
+            "points_m": points,
             "start_z": site["foundation_z_m"]+.2,
         }
 

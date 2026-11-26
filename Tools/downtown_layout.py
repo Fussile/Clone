@@ -91,7 +91,7 @@ def bake_city(routes, height, available, seed):
     for frontage, suffix, spacing, sizes in (
         (city_routes, "", 39, ((30, 27), (33, 31), (35, 36))),
         (city_routes, "_mid", 16, ((23, 20), (26, 22), (24, 19))),
-        (outer_routes, "_outer", 18, ((22, 20), (27, 23), (31, 24))),
+        (outer_routes, "_outer", 18, ((40, 34), (43, 35), (45, 36))),
     ):
         for route in frontage:
             placements = list(segment_samples(route, spacing))
@@ -241,7 +241,7 @@ def stamp_city(lots, blockers, box, facade, prop, door, cache, furnishing, tower
         else:
             slab("_walk", "Street sidewalk", 0, -d/2-1.15, z-.20, w+.4, 2.3, .20, "concrete")
         if lot["id"].endswith("_outer"):
-            hx,hy = point(0,-d/2+6.3)
+            hx,hy = point(0,0)
             home(key+"_house",hx,hy,z,yaw)
             continue
         if lot is church_lot:

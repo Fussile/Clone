@@ -44,8 +44,8 @@ def place():
     north = min(origin.y - extent.y for origin, extent in bounds)
     east = max(origin.x + extent.x for origin, extent in bounds)
     south = max(origin.y + extent.y for origin, extent in bounds)
-    width, depth = plan["size_m"]
-    if abs(east - west - width*100) > 400 or abs(south - north - depth*100) > 400:
+    world_width, world_depth = plan["size_m"]
+    if abs(east - west - world_width*100) > 400 or abs(south - north - world_depth*100) > 400:
         raise RuntimeError("Load the entire Landscape in the World Partition editor and check its XY scale.")
     z_zero = landscape_root.get_actor_location().z
     cube = unreal.load_asset("/Engine/BasicShapes/Cube.Cube")
@@ -126,6 +126,14 @@ def place():
         name: import_asset(source_art / f"SM_{name}.glb", f"{world_art}/Region/{name}", unreal.StaticMesh)
         for name in sorted(district_assets - {"AbandonedVan", "SubstationHouse"})
     }
+    detail_meshes = {}
+    for name in ("QuarantineMine","ShopRegister","ShopCounter","ShopCooler"):
+        mesh = import_asset(source_art/"RegionDetail"/f"SM_{name}.glb",
+                            f"{world_art}/RegionDetail/{name}", unreal.StaticMesh)
+        detail_meshes[name] = mesh
+        if name != "QuarantineMine":
+            district_meshes[name] = mesh
+            district_solids.add(name)
     district_meshes["PanelHousingExterior"] = survey_mesh("PanelHousingExterior")
     district_meshes["SubstationHouse"] = survey_mesh("SubstationHouse")
     district_meshes["AbandonedVan"] = import_asset(source_art / "SM_AbandonedVan.glb",
@@ -226,7 +234,7 @@ def place():
             relocate = reconfigure = True
         elif resized_site and key.startswith(resized_site + "_"):
             relocate = reconfigure = True
-        pos = unreal.Vector(west + x*100, north + (depth-y)*100, z_zero + z*100)
+        pos = unreal.Vector(west + x*100, north + (world_depth-y)*100, z_zero + z*100)
         if key in actor_tags:
             actor = actor_tags[key]
             if relocate:
@@ -362,6 +370,38 @@ def place():
             actor.fit_panels(panel, width*100, depth*100, height*100,
                              ground_height*100, entrance_width*100, panel_materials[name])
         spawn(facade_class, key, "City facade panels", x, y, z, configure)
+
+    def campus_art(key,role,x,y,floor,width,depth,height,story,yaw,opening):
+        # The Poly Haven mesh contains exactly one three-metre window bay.
+        # Its instance transforms follow the same storey elevations as the stairs.
+        remove_generated(key+"_sample_main", key+"_sample_ground")
+        bounds=bay_mesh.get_bounding_box()
+        ext=bounds.max-bounds.min
+        wide_x=ext.x>=ext.y
+        transforms=[]
+        for level in range(round(height/story)):
+            for face,span,outset in ((0,width,depth/2),(1,depth,width/2),
+                                      (2,width,depth/2),(3,depth,width/2)):
+                intervals=((-span/2,-opening/2),(opening/2,span/2)) if face==0 and level==0 else ((-span/2,span/2),)
+                normal=unreal.Rotator(yaw=face*90)
+                rotation=unreal.Rotator(yaw=face*90+(0 if wide_x else 90))
+                for left,right in intervals:
+                    count=max(1,round((right-left)/3))
+                    bay=(right-left)/count
+                    scale=unreal.Vector(bay*100/ext.x if wide_x else 1,
+                                        1 if wide_x else bay*100/ext.y,story*100/ext.z)
+                    offset=unreal.MathLibrary.transform_location(unreal.Transform(unreal.Vector(),rotation,scale),
+                                                                  (bounds.min+bounds.max)*.5)
+                    for index in range(count):
+                        local=unreal.Vector((left+(index+.5)*bay)*100,outset*100,(level+.5)*story*100)
+                        center=unreal.MathLibrary.transform_location(unreal.Transform(unreal.Vector(),normal,unreal.Vector(1,1,1)),local)
+                        transforms.append(unreal.Transform(center-offset,rotation,scale))
+        def install(actor):
+            actor.set_actor_rotation(unreal.Rotator(yaw=yaw),False)
+            actor.set_static_instances(bay_mesh,transforms)
+        spawn(facade_class,key+"_academic_bays","Academic window bays",x,y,floor,install,
+              relocate=True,reconfigure=True)
+        return True
 
     hero_folder = "/Game/CitySampleBuildings/Building/Library/Kit_Hero_Bldg/LevelInstance"
     hero_classes = {}
@@ -1164,6 +1204,9 @@ def place():
             style = min(neighborhoods,key=lambda item: math.dist((x,y),item[0]))[1]
         angle = math.radians(yaw)
         def furnish(tag,label,mesh,u,v,size,profile,health):
+            if housing[style]:
+                u *= 1.85
+                v *= 1.85
             def setup(actor):
                 fitted_mesh(actor,mesh,size,yaw)
             prop_kind(key+"_"+tag,label,health,profile,x+u*math.cos(angle)+v*math.sin(angle),
@@ -1184,7 +1227,8 @@ def place():
             size = bounds.max-bounds.min
             if min(size.x,size.y,size.z) <= 0:
                 raise ValueError(f"Empty residential mesh: {mesh.get_name()}")
-            factor = min(17/size.x,13/size.y)
+            width,depth = {"Villa":(36,29),"TimberStone":(31,28),"European":(29,24)}[style]
+            factor = min(width/size.x,depth/size.y)
             dims = (size.x*factor,size.y*factor,size.z*factor)
             def install(actor):
                 fitted_mesh(actor,mesh,dims,yaw)
@@ -1236,7 +1280,7 @@ def place():
             landscape.set_editor_property("tags", [*tags, ground])
 
     sx, sy = plan["downtown_xy_m"]
-    for tag, y in (("CrossroadsClimateNorth", depth), ("CrossroadsClimateCity", sy), ("CrossroadsClimateSouth", 0)):
+    for tag, y in (("CrossroadsClimateNorth", world_depth), ("CrossroadsClimateCity", sy), ("CrossroadsClimateSouth", 0)):
         spawn(unreal.TargetPoint, tag, tag, sx, y, 0, lambda actor: None, always_loaded=True)
 
     for site in plan["sites"]:
@@ -1252,7 +1296,9 @@ def place():
         } and site["id"] not in {
             "stadium", "hangars", "city-hospital", "warehouses", "city-nightlife"
         } else None
-        if site["id"] in {"airport", "hangars", "warehouses", "airport-services"}:
+        if site["kind"] in {"retail_strip", "hardware"} or site["id"] in {
+            "airport", "hangars", "warehouses", "airport-services", "south-base"
+        }:
             resized_site = key
         if site["id"] not in {"stadium", "university", "city-police", "city-hall"}:
             box(key+"_slab", name+" slab", x, y, z-.6, w, d, .8, ground=True,
@@ -1285,6 +1331,13 @@ def place():
                     facility(f"_block_{i}",title,x+26,y-22+i*22,35,15,4)
                 district_mesh(compound+"_medevac","Abandoned military ambulance","MilitaryAmbulance",
                               x-15,y-24,base,(5.4,2.2,2.7))
+                sign(compound+"_gate_id","SOUTH GARRISON  /  MAIN GATE",x+9,y-d/2-.6,base+3.3,size=49)
+                for i in range(3):
+                    for side in (-1,1):
+                        furnishing(f"{compound}_bunk_{side}_{i}","Barracks cot","bed",
+                                   x+26+side*10,y-27+i*4,base,(2.25,1.05,.68),0)
+                communications_art(compound+"_comms","Garrison communications mast","RepeaterMast",
+                                   x+4,y+25,base,(3,3,18))
                 cache(compound+"_stores","Base stores",x+15,y+23,base,profile="MILITARY_ARMORY")
             else:
                 facility("_control","CONTROL ROOM",x-w*.29,y-d*.20,22,14,5)
@@ -1360,8 +1413,10 @@ def place():
             new_key = key+"_landmark"
             resized_site = new_key
             if site["id"] == "university":
-                civic["campus"](new_key, x, y, z+.2, box, door, cache, encounter, sign, hero_art, wreck,
+                civic["campus"](new_key, x, y, z+.2, box, door, cache, encounter, sign, campus_art, wreck,
                                 style_materials)
+                remove_generated(*(tag for tag in actor_tags if tag.startswith(new_key+"_")
+                                   and tag not in site_keys))
             else:
                 role = "police" if site["id"] == "city-police" else "civic"
                 civic["place_landmark"](new_key, role, x, y, z+.2, box, door, cache, encounter,
@@ -1460,14 +1515,29 @@ def place():
                 shops = shops[:1]
             for index,(title,profile) in enumerate(shops):
                 unit = f"{key}_unit_{index}"
-                width = (w-4)/len(shops)
-                cx,cy = x+(index-(len(shops)-1)/2)*width, y+3
-                front = site_tools["building_shell"](box,unit,cx,cy,z+.2,width-.35,12,4,2.5,
+                size = ((28,21,5.6),(38,27,6.8),(27,21,5.2),(22,18,4.8),(30,21,5.6))[index]
+                width,depth,roof = size
+                if len(shops)==1:
+                    cx,cy=x,y+2
+                else:
+                    # Front-row clearances are 50 m between adjacent side walls.
+                    dx,dy=((-83,-41),(0,-41),(82.5,-41),(-39,33),(39,33))[index]
+                    cx,cy=x+dx,y+dy
+                front = site_tools["building_shell"](box,unit,cx,cy,z+.2,width,depth,roof,2.5,
                                                      style_materials["StationBrick"],concrete)
                 site_tools["double_door"](door,unit+"_entry",title+" entrance",cx,front-.04,z+.2,
                                           2.5,2.35,"petrol")
-                facade(unit+"_skin","Storefront",cx,cy,z+.2,width-.35,12,4,0,2.65,2.8,bundled=True)
-                sign(unit+"_sign",title.upper(),cx,front-.4,z+3.55,size=30)
+                remove_generated(unit+"_skin")
+                for side in (-1,1):
+                    for bay in range(max(1,int((width/2-2)/3.25))):
+                        storefront_window(f"{unit}_bay_{side}_{bay}",cx+side*(3.25+bay*3.25),front,z+.2)
+                box(unit+"_canopy","Shop entrance canopy",cx,front-1.35,z+3.3,
+                    width*.68,2.9,.22,material=style_materials["dark_trim"])
+                box(unit+"_fascia","Store fascia",cx,front-.25,z+3.68,width*.78,.4,.88,
+                    material=style_materials["StationBrick"])
+                box(unit+"_footwalk","Store entrance sidewalk",cx,front-1.9,z+.2,width+2,4,.10,
+                    material=concrete,ground=True)
+                sign(unit+"_sign",title.upper(),cx,front-.49,z+4.18,size=30)
                 for side in (-1,1):
                     tag = f"{unit}_stock_{side}"
                     px = cx+side*width*.26
@@ -1479,18 +1549,50 @@ def place():
                     else:
                         furnishing(tag,title+" shelving","shelf",px,cy,z+.2,(3.2,.9,1.9),90)
                 cache(unit+"_delivery",title+" delivery",cx-width*.31,cy+4.4,z+.2,profile=profile)
-                box(unit+"_till","Checkout counter",cx+width*.30,cy-3.9,z+.2,2,.7,.97,
-                    material=style_materials["timber"])
-            box(key+"_walk","Retail sidewalk",x,y-4.6,z+.2,w-2,3,.10,ground=True,material=concrete)
-            box(key+"_parking","Customer forecourt",x,y-(d/2+6)/2,z+.2,w-2,d/2-6,.05,
-                ground=True,material=asphalt)
+                district_mesh(unit+"_checkout","Shop counter","ShopCounter",cx+width*.28,cy-4,z+.2,
+                              (3.2,.88,1.04),yaw=90)
+                district_mesh(unit+"_register","Cash register","ShopRegister",cx+width*.28,cy-4,z+1.24,
+                              (.62,.51,.42),yaw=90,collision=False)
+                remove_generated(unit+"_till")
+                if title=="Supermarket":
+                    for i in range(3):
+                        district_mesh(f"{unit}_cooler_{i}","Grocery cooler","ShopCooler",
+                                      cx-10+i*6,cy+depth*.35,z+.2,(3.5,1.15,2.1))
+            if len(shops) == 1:
+                box(key+"_parking", "Hardware forecourt", x, y-14, z+.2, w-2, 9, .05,
+                    ground=True, material=asphalt)
+            else:
+                box(key+"_parking", "Customer access lane", x, y, z+.2, w-2, 8, .05,
+                    ground=True, material=asphalt)
+                box(key+"_entry_link", "Entrance turning apron", x+13, y-d/2+2, z+.2, 32, 5, .05,
+                    ground=True, material=asphalt)
+                box(key+"_drive", "Retail entrance drive", x+26, y-d/4, z+.2, 6, d/2, .05,
+                    ground=True, material=asphalt)
+                for side in (-1, 1):
+                    cx = x+side*48
+                    box(f"{key}_court_{side}", "Short-stay parking", cx, y-19, z+.2,
+                        22, 32, .05, ground=True, material=asphalt)
+                    for row in range(6):
+                        for bank in (-1, 1):
+                            box(f"{key}_stall_{side}_{row}_{bank}", "Retail parking line",
+                                cx+bank*7.8, y-30+row*3, z+.26, 5, .1, .015,
+                                material=style_materials["traffic"], collision=False)
+                for row, dy in enumerate((-58, 18)):
+                    box(f"{key}_public_walk_{row}", "Shop pedestrian walk", x, y+dy, z+.2,
+                        191 if row==0 else 112, 2.4, .1, ground=True, material=concrete)
+                # Short spurs meet each independently sized shop's entrance sidewalk.
+                for index,(dx,front,walk) in enumerate(((-83,-51.5,-58),(0,-54.5,-58),
+                        (82.5,-51.5,-58),(-39,24,18),(39,22.5,18))):
+                    box(f"{key}_walk_link_{index}", "Entrance path", x+dx, y+(front+walk)/2,
+                        z+.2, 2.5, front-walk, .1, ground=True, material=concrete)
+            remove_generated(key+"_walk")
         elif site["kind"] == "suburbs":
             district = key+"_homes"
             distance = math.hypot(x-sx,y-sy)
             columns = max(2,min(5,round(5-distance/700)))
             for row in (-1, 1):
                 for lot in range(columns):
-                    hx, hy = x+((lot+.5)/columns-.5)*(w-2), y+row*15
+                    hx, hy = x+((lot+.5)/columns-.5)*(w-2), y+row*27
                     home(f"{district}_{row}_{lot}",hx,hy,z+.2,0 if row>0 else 180,housing_styles[site["id"]])
             remove_generated(*(tag for tag in actor_tags if tag.startswith(district+"_") and tag not in site_keys))
             box(district+"_lane", "Residential lane", x, y, z+.2, w, 7, .06, ground=True, material=asphalt)
@@ -1640,6 +1742,15 @@ def place():
     resized_site = None
     for route in plan["m4_route"]:
         place_route(route)
+    garrison=next(r for r in plan["m4_route"] if r["id"]=="garrison-road")
+    for idx,seg in enumerate((garrison["segments"][0],garrison["segments"][-1])):
+        px,py,pz=seg["start"]
+        guide = f"CrossroadsGarrisonGuide_{idx}"
+        box(guide+"_pole", "Garrison direction sign post", px, py+5.9, pz-.3, .16, .16, 3.15,
+            material=style_materials["dark_trim"])
+        box(guide+"_board", "Garrison direction sign", px, py+5.9, pz+2.05, 8.6, .12, .96,
+            material=style_materials["petrol"])
+        sign(guide, "SOUTH GARRISON  /  BASE ACCESS", px, py+5.8, pz+2.5, size=36)
     for site in plan["communications"]:
         resized_site = "CrossroadsComms_" + site["id"]
         if site["kind"] in {"radio","transmitter"}:
@@ -1696,9 +1807,13 @@ def place():
         tag=f"CrossroadsCordon_hazard_{i}"
         def marker(actor):
             mesh=actor.get_component_by_class(unreal.StaticMeshComponent)
-            mesh.set_static_mesh(cylinder)
-            mesh.set_relative_scale3d(unreal.Vector(.65,.65,.15))
-            mesh.set_material(0,style_materials["traffic"])
+            asset=detail_meshes["QuarantineMine"]
+            mesh.set_static_mesh(asset)
+            ext=asset.get_bounding_box().max-asset.get_bounding_box().min
+            mesh.set_relative_scale3d(unreal.Vector(72/ext.x,72/ext.y,16/ext.z))
+            mesh.set_relative_location(unreal.Vector(0,0,4))
+            for slot in range(mesh.get_num_materials()):
+                mesh.set_material(slot,asset.get_material(slot))
         spawn(mine_class,tag,"Quarantine hazard",x,y,z+.1,marker,relocate=True,reconfigure=True)
         perimeter_keys.add(tag)
         if i%8==0 or i>=len(plan["quarantine"]["hazards"])-len(plan["quarantine"]["road_hazards"]):

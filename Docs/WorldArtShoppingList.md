@@ -50,3 +50,5 @@ Put the original archive in `World/<kit-name>/` on the **content** branch with a
 - Retain real units, original pivots and door leaves. Include open doorways, interior wall backs and sensible collision or separable geometry for walkable buildings. We attach the game's interactive, destructible doors and loot actors during integration.
 - For a scan, include an eye-level view of the base, doorway and side wall. Ground skirts, holes behind windows, baked shadows and a mushy underside show up immediately in first person. A good skyline scan can still be used at a distance.
 - Repeated props must share meshes and materials. Profile the downtown block on target hardware with streaming, collisions, active loot and enemies before raising geometry or texture budgets for the rest of the map.
+
+The suburban shops use the counter, register and refrigerated case from Dawid’s Post-Soviet Shop Asset Pack. Each prop was separated, centered and exported with reduced base-color textures. [Model](https://sketchfab.com/3d-models/post-soviet-shop-asset-pack-8a7a854f35f74cf6aae9000d3a9c6ea4) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)

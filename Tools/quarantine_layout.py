@@ -1,7 +1,7 @@
 """Author downtown boundary intervals in map metres; breaks are gameplay passages."""
 import math
 
-WEST, EAST, SOUTH, NORTH = 1770, 2950, 1650, 2700
+WEST, EAST, SOUTH, NORTH = 2100, 2790, 1840, 2310
 SIDES = ((WEST,SOUTH,0,1,NORTH-SOUTH,-1,0),(EAST,SOUTH,0,1,NORTH-SOUTH,1,0),
          (WEST,SOUTH,1,0,EAST-WEST,0,-1),(WEST,NORTH,1,0,EAST-WEST,0,1))
 
@@ -24,11 +24,11 @@ def perimeter(plan,height):
                 z=max(z,a[2]+(b[2]-a[2])*t)
         return z
     for side,(ox,oy,dx,dy,length,nx,ny) in enumerate(SIDES):
-        gate=401 if side==1 else None
-        if side==0:
-            gate=next(a[1]+(WEST-a[0])*(b[1]-a[1])/(b[0]-a[0])-SOUTH
+        gate=None
+        if side<2:
+            gate=next(a[1]+(ox-a[0])*(b[1]-a[1])/(b[0]-a[0])-SOUTH
                       for road in plan["roads"] if road["id"]=="east-west-highway"
-                      for a,b in zip(road["points_m"],road["points_m"][1:]) if a[0]<=WEST<=b[0])
+                      for a,b in zip(road["points_m"],road["points_m"][1:]) if a[0]<=ox<=b[0])
         holes=[(length*.28,4.4,"breach")] if side>=2 else [(length*.7,1.6,"passage")]
         if gate is not None:holes.append((gate,16,"gate"))
         cursor=0

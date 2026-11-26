@@ -10,12 +10,12 @@ HEROES = {
     "tower": ("Bldg_Hero_NYG_Modern_Square_A01", True),
     "science": ("Bldg_Hero_NYG_Modern_Square_A01", True),
 }
-CAMPUS_SIZE = (116, 144)
-CAMPUS_PARKING_END = -68
+CAMPUS_SIZE = (178, 216)
+CAMPUS_PARKING_END = -98
 
 
 def hall(key, x, y, floor, width, depth, levels, yaw, role, title, box, door, cache, encounter,
-         sign, art, palette):
+         sign, art, palette, full_envelope=False):
     story = 4.0 if role in {"library", "civic"} else 3.65
     height = levels*story
     exterior_height = height + {"hospital": 5, "tower": 3}.get(role, 0)*story
@@ -60,7 +60,7 @@ def hall(key, x, y, floor, width, depth, levels, yaw, role, title, box, door, ca
         part("trim_header", "Entrance surround", 0, front-.03, 2.65, entry+.42, .4, .28)
     part("back", "Hall rear wall", 0, depth/2-.28, 0, width-.30, .26, height, hidden=skinned)
     part("roof", "Ceiling slab", 0, 0, height, width-.25, depth-.25, .25, "dark_trim",
-         hidden=skinned, collision=not skinned)
+         hidden=skinned and not full_envelope, collision=not skinned or full_envelope)
     # Sample trim, terraces and the roof silhouette are layered outside this playable core.
     if not skinned:
         for n in range(levels):
@@ -75,7 +75,7 @@ def hall(key, x, y, floor, width, depth, levels, yaw, role, title, box, door, ca
 
     # Bounds include spires, roof furniture and setbacks. Reserve the upper
     # silhouette for the pack art and build stairs only inside the occupied core.
-    if skinned:
+    if skinned and not full_envelope:
         width_scale, depth_scale, playable_levels = {
             "library": (.60, .60, 3), "civic": (.43, .52, 6),
             "hospital": (.43, .52, 12), "tower": (.66, .70, 22),
@@ -159,37 +159,37 @@ def place_landmark(key, role, x, y, floor, box, door, cache, encounter, sign, ar
 
 def campus(key, x, y, floor, box, door, cache, encounter, sign, art, wreck, palette):
     concrete = palette["concrete"]
-    box(key+"_walk", "University central promenade", x, y-7, floor-1, 7, 100, 1,
+    box(key+"_walk", "University central promenade", x, y-9, floor-1, 7, 155, 1,
         material=concrete, ground=True)
-    box(key+"_plaza", "Library entrance plaza", x, y+38, floor-1, 30, 12, 1,
+    box(key+"_plaza", "Library entrance plaza", x, y+60, floor-1, 40, 16, 1,
         material=concrete, ground=True)
 
-    box(key+"_parking", "University parking lot", x, y-56, floor-1, 50, 24, 1,
+    box(key+"_parking", "University parking lot", x, y-86, floor-1, 50, 24, 1,
         material=palette["asphalt"], ground=True)
     for side in (-1, 1):
         for i in range(8):
             px = x+side*(4.8+i*2.5)
             for row in (-1, 1):
-                box(f"{key}_stall_{side}_{row}_{i}", "Parking stall line", px, y-56+row*7.7,
+                box(f"{key}_stall_{side}_{row}_{i}", "Parking stall line", px, y-86+row*7.7,
                     floor+.01, .095, 5.1, .017, material=palette["traffic"], collision=False)
             if i in (1, 5):
-                wreck(f"{key}_car_{side}_{i}", px+side*1.24, y-48.5, floor, 90,
+                wreck(f"{key}_car_{side}_{i}", px+side*1.24, y-78.5, floor, 90,
                       "BurnedSedan" if i==1 else "BurnedCompact")
-    sign(key+"_campus_sign", "CROSSROADS UNIVERSITY", x-10, y-66.9, floor+2.45, size=46)
+    sign(key+"_campus_sign", "CROSSROADS UNIVERSITY", x-10, y-96.9, floor+2.45, size=46)
 
     wings = (
-        (-30,-29, 20, 1, "Admissions"),
-        ( 30,-29, 20, 2, "Humanities"),
-        (-30,  9, 25, 3, "Science Hall"),
-        ( 30,  9, 25, 4, "Engineering Hall"),
+        (-51,-43, 43, 2, "Admissions"),
+        ( 51,-43, 44, 3, "Humanities"),
+        (-51, 16, 52, 3, "Science Hall"),
+        ( 51, 16, 52, 4, "Engineering Hall"),
     )
     for i,(u,v,width,levels,title) in enumerate(wings):
         side = 1 if u>0 else -1
-        depth = 22
+        depth = 34
         distance = abs(u)-depth/2-3.5
         box(f"{key}_branch_walk_{i}", "Academic hall approach", x+side*(3.5+distance/2), y+v,
             floor-1, distance+.18, 3.6, 1, material=concrete, ground=True)
         hall(f"{key}_wing_{i}", x+u, y+v, floor, width, depth, levels, side*90, "academic", title,
-             box, door, cache, encounter, sign, art, palette)
-    hall(key+"_library", x, y+53.5, floor, 44, 28, 7, 0, "library", "University Library",
-         box, door, cache, encounter, sign, art, palette)
+             box, door, cache, encounter, sign, art, palette, full_envelope=True)
+    hall(key+"_library", x, y+84, floor, 62, 42, 5, 0, "library", "University Library",
+         box, door, cache, encounter, sign, art, palette, full_envelope=True)
