@@ -59,8 +59,30 @@ UStaticMesh* FirearmWorldMesh(int32 Model)
 {
     if (Model < 0 || Model >= UE_ARRAY_COUNT(Arsenal)) return nullptr;
     const TCHAR* AssetName = Model == 0 ? TEXT("Sidearm") : Model == 1 ? TEXT("Sniper") : Arsenal[Model].Asset;
-    const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/Assembly/Geometry/World.World"), AssetName);
+    const TCHAR* Directory = Model == 2 || Model == 3 ? TEXT("WeaponSurface") : TEXT("Assembly/Geometry");
+    const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/%s/World.World"), AssetName, Directory);
     return LoadObject<UStaticMesh>(nullptr, *Path, nullptr, LOAD_NoWarn);
+}
+// Model-space length for sizing inventory and held attachments consistently.
+constexpr double FirearmLength[] = {24, 118, 16, 30, 100, 95, 83, 41, 61};
+static_assert(UE_ARRAY_COUNT(FirearmLength) == UE_ARRAY_COUNT(Arsenal));
+
+FTransform PlaceWeaponSurface(UStaticMeshComponent* Model, double Length, FRotator Facing, FVector RearPosition)
+{
+    if (!Model->DoesSocketExist(TEXT("MountMuzzle")))
+    {
+        const auto Bounds = Model->GetStaticMesh()->GetBounds();
+        const bool bAlongY = Bounds.BoxExtent.Y > Bounds.BoxExtent.X;
+        const double Scale = Length / FMath::Max(.001, 2.0 * Bounds.BoxExtent.GetMax());
+        const FQuat Rotation = Facing.Quaternion() * FRotator(0, bAlongY ? -90 : 0, 0).Quaternion();
+        return FTransform(Rotation, RearPosition + Facing.Vector() * (Length * .5)
+            - Rotation.RotateVector(Bounds.Origin * Scale), FVector(Scale));
+    }
+    const FTransform Rear = Model->GetSocketTransform(TEXT("MountRear"), RTS_Component);
+    const FVector Muzzle = Model->GetSocketTransform(TEXT("MountMuzzle"), RTS_Component).GetLocation();
+    const double Scale = Length / FMath::Max(.001, FVector::Dist(Rear.GetLocation(), Muzzle));
+    const FQuat Rotation = Facing.Quaternion() * Rear.GetRotation().Inverse();
+    return FTransform(Rotation, RearPosition - Rotation.RotateVector(Rear.GetLocation() * Scale), FVector(Scale));
 }
 const FName SniperMuzzle(TEXT("ViewMuzzle"));
 const FName ViewmodelGripBone(TEXT("PBody_058"));
@@ -108,6 +130,13 @@ ASurvivalCharacter::ASurvivalCharacter()
     RifleViewmodel->SetOnlyOwnerSee(true);
     RifleViewmodel->SetHiddenInGame(true);
     RifleViewmodel->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+
+    HeldWeaponSurface = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("HeldWeaponSurface"));
+    HeldWeaponSurface->SetupAttachment(FirstPersonCamera);
+    HeldWeaponSurface->SetOnlyOwnerSee(true);
+    HeldWeaponSurface->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    HeldWeaponSurface->SetCastShadow(false);
+    HeldWeaponSurface->SetHiddenInGame(true);
 
     RifleWorldMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RifleWorldMesh"));
     RifleWorldMesh->SetupAttachment(GetMesh(), FName(TEXT("RightHand")));
@@ -417,7 +446,6 @@ void ASurvivalCharacter::ToggleView()
     GetMesh()->SetOwnerNoSee(!bThirdPerson);
     for (UStaticMeshComponent* Part : GearMeshes) Part->SetOwnerNoSee(!bThirdPerson);
     UpdateSidearmView();
-    RefreshAttachments();
 }
 
 const UCameraComponent& ASurvivalCharacter::GetAimCamera() const
@@ -795,8 +823,7 @@ void ASurvivalCharacter::ClientReceiveLoot_Implementation(const TArray<FSurvival
             else if (Item == ESurvivalItem::Rifle && !bHasRifle)
             {
                 bHasRifle = true;
-                LoadRifleViewmodel();
-                UpdateRifleView();
+                UpdateSidearmView();
             }
         }
         bool bPlaced = PlaceLootStack(Pack, Loot, PackTarget, WeaponId);
@@ -1011,7 +1038,6 @@ void ASurvivalCharacter::EquipSidearm()
     {
         ScopeCapture->HideActorComponents(Sidearm.Get(), false);
     }
-    LoadSidearmViewmodel();
     UpdateSidearmView();
 }
 
@@ -1019,8 +1045,11 @@ void ASurvivalCharacter::UpdateSidearmView()
 {
     UpdateFirearmModel();
     UpdateRifleView();
+    HeldWeaponSurface->SetHiddenInGame(!HeldWeaponSurface->GetStaticMesh() || bThirdPerson || bBuildMode
+        || bInventoryOpen || HealthPoints <= 0 || (!IsSidearmSelected() && !IsRifleSelected()));
     const bool bVisible = IsSidearmSelected() && !bBuildMode && !bInventoryOpen && HealthPoints > 0;
     SidearmViewmodel->SetHiddenInGame(!bVisible || bThirdPerson || !bViewmodelReady);
+    RefreshAttachments();
     if (!Sidearm)
     {
         return;
@@ -1039,17 +1068,7 @@ void ASurvivalCharacter::UpdateSidearmView()
     }
     else
     {
-        Sidearm->SetActorHiddenInGame(!bVisible || bViewmodelReady);
-        if (bViewmodelReady)
-        {
-            Sidearm->AttachToComponent(SidearmViewmodel, FAttachmentTransformRules::SnapToTargetNotIncludingScale,
-                ViewmodelGripBone);
-        }
-        else
-        {
-            Sidearm->AttachToComponent(FirstPersonCamera, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-            Sidearm->SetActorRelativeLocation(FVector(48, 19, -44));
-        }
+        Sidearm->SetActorHiddenInGame(true);
     }
 }
 
@@ -1117,26 +1136,52 @@ void ASurvivalCharacter::UpdateFirearmModel()
     const bool bPistol = Active.Item == ESurvivalItem::Sidearm;
     UStaticMeshComponent* WorldPart = bPistol ? (Sidearm ? Sidearm->GetWeaponMesh() : nullptr) : RifleWorldMesh.Get();
     UStaticMesh* Surface = FirearmWorldMesh(Model);
-    if (!Surface)
-        Surface = LoadObject<UStaticMesh>(nullptr, bPistol ?
-            TEXT("/Game/Art/Crossroads/Building/SM_CrossroadsSidearm.SM_CrossroadsSidearm") :
-            TEXT("/Game/Art/Crossroads/SniperSurface/SM_CrossroadsSniper.SM_CrossroadsSniper"));
-    if (WorldPart && Surface)
+    if (WorldPart)
     {
-        const auto Bounds = Surface->GetBounds();
-        const double Scale = (bPistol ? 24.0 : 85.0) / FMath::Max(1., 2 * Bounds.BoxExtent.GetMax());
-        const FRotator Rotation(0, (bPistol ? 0 : 90) - (Bounds.BoxExtent.Y > Bounds.BoxExtent.X ? 90 : 0), 0);
+        WorldPart->EmptyOverrideMaterials();
         WorldPart->SetStaticMesh(Surface);
-        WorldPart->SetRelativeScale3D(FVector(Scale));
-        WorldPart->SetRelativeRotation(Rotation);
-        WorldPart->SetRelativeLocation((bPistol ? FVector(6,0,1) : FVector(0,23,0)) - Rotation.RotateVector(Bounds.Origin * Scale));
+        if (Surface)
+            WorldPart->SetRelativeTransform(PlaceWeaponSurface(WorldPart, FirearmLength[Model],
+                FRotator(0, bPistol ? 0 : 90, 0), bPistol ? FVector(-5,0,1) : FVector(0,-12,0)));
     }
-    const auto LoadBase = [&] { if (bPistol) LoadSidearmViewmodel(); else LoadRifleViewmodel(); };
+    auto* View = bPistol ? SidearmViewmodel.Get() : RifleViewmodel.Get();
+    View->EmptyOverrideMaterials();
+    View->SetSkeletalMesh(nullptr);
+    if (bPistol)
+    {
+        bViewmodelReady = false;
+        ViewmodelIdle = ViewmodelWalk = ViewmodelFire = ViewmodelReload = ViewmodelReloadEmpty = nullptr;
+        CurrentViewmodelAnimation = nullptr;
+    }
+    else
+    {
+        RifleHold = RifleWalk = RifleFire = RifleReload = nullptr;
+        CurrentRifleAnimation = nullptr;
+        RifleAnimationPhase = INDEX_NONE;
+    }
+    HeldWeaponSurface->SetStaticMesh(nullptr);
+    const auto UseStaticSurface = [&]
+    {
+        View->SetSkeletalMesh(nullptr);
+        if (bPistol) bViewmodelReady = false;
+        else RifleHold = nullptr;
+        UE_LOG(LogTemp, Warning, TEXT("Missing prepared first-person rig for %s. Static model: %s"),
+            Arsenal[Model].Label, *GetNameSafe(Surface));
+        HeldWeaponSurface->EmptyOverrideMaterials();
+        HeldWeaponSurface->SetStaticMesh(Surface);
+        if (!Surface) return;
+        const FTransform Pose = PlaceWeaponSurface(HeldWeaponSurface, FirearmLength[Model], FRotator::ZeroRotator,
+            bPistol ? FVector(30, 12, -17) : FVector(8, 12, -16));
+        HeldWeaponSurface->SetRelativeTransform(Pose);
+        HeldSurfaceHip = Pose.GetLocation();
+        const FVector Rail = HeldWeaponSurface->DoesSocketExist(TEXT("MountOptic")) ?
+            HeldWeaponSurface->GetSocketTransform(TEXT("MountOptic"), RTS_Component).GetLocation() : Surface->GetBounds().Origin;
+        HeldSurfaceAim = FVector(36, 0, -2) - Pose.TransformVector(Rail);
+    };
     if (Model < 2)
     {
-        if (bPistol) CurrentViewmodelAnimation = nullptr;
-        else CurrentRifleAnimation = nullptr;
-        LoadBase();
+        if (bPistol) LoadSidearmViewmodel(); else LoadRifleViewmodel();
+        if ((bPistol ? !bViewmodelReady : !RifleHold) || !View->DoesSocketExist(TEXT("MountMuzzle"))) UseStaticSurface();
         return;
     }
     const auto Path = [Model](const TCHAR* Name)
@@ -1146,9 +1191,14 @@ void ASurvivalCharacter::UpdateFirearmModel()
     auto* Rig = LoadObject<USkeletalMesh>(nullptr, *Path(TEXT("Rig0")), nullptr, LOAD_NoWarn);
     const auto Clip = [&](const TCHAR* Name) { return LoadObject<UAnimSequence>(nullptr, *Path(Name), nullptr, LOAD_NoWarn); };
     UAnimSequence* Presentation = Clip(TEXT("Presentation0"));
-    if (!Rig || !Presentation) { LoadBase(); return; }
-    auto* View = bPistol ? SidearmViewmodel.Get() : RifleViewmodel.Get();
-    View->EmptyOverrideMaterials();
+    auto* Other = LoadObject<USkeletalMesh>(nullptr, *Path(TEXT("Rig1")), nullptr, LOAD_NoWarn);
+    UAnimSequence* OtherHold = Other ? Clip(TEXT("Presentation1")) : nullptr;
+    if (!Rig || !Presentation || ((Model == 3 || Model == 6) && (!Other || !OtherHold)) ||
+        (!Rig->FindSocket(TEXT("MountMuzzle")) && (!Other || !Other->FindSocket(TEXT("MountMuzzle")))))
+    {
+        UseStaticSurface();
+        return;
+    }
     View->SetSkeletalMesh(Rig);
     RefreshViewmodelGear(View);
     const auto Bounds = Rig->GetBounds();
@@ -1180,7 +1230,7 @@ void ASurvivalCharacter::UpdateFirearmModel()
         RifleReload = Clip(TEXT("Reload"));
         CurrentRifleAnimation = nullptr;
     }
-    if (auto* Other = LoadObject<USkeletalMesh>(nullptr, *Path(TEXT("Rig1")), nullptr, LOAD_NoWarn))
+    if (Other)
     {
         SecondaryRig = NewObject<USkeletalMeshComponent>(this);
         SecondaryRig->SetupAttachment(View);
@@ -1190,7 +1240,7 @@ void ASurvivalCharacter::UpdateFirearmModel()
         SecondaryRig->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         SecondaryRig->SetCastShadow(false);
         SecondaryRig->RegisterComponent();
-        SecondaryRig->PlayAnimation(Clip(TEXT("Presentation1")), false);
+        SecondaryRig->PlayAnimation(OtherHold, false);
         if (Model == 3) SecondaryRig->SetPlayRate(0.f);
         SecondaryRig->SetHiddenInGame(bThirdPerson || bInventoryOpen || bBuildMode || HealthPoints <= 0);
     }
@@ -1364,7 +1414,7 @@ UTextureRenderTarget2D* ASurvivalCharacter::GetScopeTexture() const
 
 bool ASurvivalCharacter::IsAimingRifle() const
 {
-    return bAimHeld && RifleHold && bHasRifle && GetWeaponAssembly(ESurvivalItem::Rifle).IsComplete() && IsRifleSelected() && !bThirdPerson
+    return bAimHeld && (RifleHold || HeldWeaponSurface->GetStaticMesh()) && bHasRifle && GetWeaponAssembly(ESurvivalItem::Rifle).IsComplete() && IsRifleSelected() && !bThirdPerson
         && !bBuildMode && !bInventoryOpen && !IsRifleReloading() && HealthPoints > 0;
 }
 
@@ -1429,9 +1479,11 @@ void ASurvivalCharacter::UpdateWeaponAim(float DeltaSeconds)
         SidearmViewmodel->SetRelativeRotation(Recoil * FQuat::Slerp(SidearmHipRotation, SidearmAimRotation, PistolAlpha));
         SidearmViewmodel->SetRelativeLocation(RearPivot + Recoil.RotateVector(Pose - RearPivot) - FVector(2.0 * Kick, 0, 0));
     }
-    else if (!bViewmodelReady && Sidearm && !bThirdPerson && (AimBlend > 0.0f || PreviousAim > 0.0f))
+    if (HeldWeaponSurface->GetStaticMesh())
     {
-        Sidearm->SetActorRelativeLocation(FMath::Lerp(FVector(48, 19, -44), FVector(48, 0, -7.5), PistolAlpha));
+        const float Blend = IsSidearmSelected() ? PistolAlpha :
+            (RifleADS = FMath::FInterpConstantTo(RifleADS, IsAimingRifle() ? 1.f : 0.f, DeltaSeconds, 6.f));
+        HeldWeaponSurface->SetRelativeLocation(FMath::Lerp(HeldSurfaceHip, HeldSurfaceAim, Blend));
     }
 
     if (RifleHold)
@@ -1599,7 +1651,6 @@ bool ASurvivalCharacter::FireRound(const FVector& Origin, double Range, bool bRi
 
 void ASurvivalCharacter::LoadRifleViewmodel()
 {
-    RifleWorldMesh->SetStaticMesh(FirearmWorldMesh(1));
     USkeletalMesh* Arms = LoadObject<USkeletalMesh>(nullptr,
         TEXT("/Game/Art/Crossroads/Arsenal/Sniper/PlayerArms/SK_SniperViewmodel.SK_SniperViewmodel"));
     if (!Arms)
@@ -2098,7 +2149,6 @@ bool ASurvivalCharacter::MoveMenuItem(bool bFromBelt, int32 From, bool bToBelt, 
     }
     CancelWeaponReloadOnSwitch(PreviousWeaponId);
     UpdateSidearmView();
-    RefreshAttachments();
     return true;
 }
 
@@ -2401,7 +2451,6 @@ void ASurvivalCharacter::ChooseHotbarSlot(int32 Slot)
     ActiveHotbarSlot = Slot;
     CancelWeaponReloadOnSwitch(PreviousWeaponId);
     UpdateSidearmView();
-    RefreshAttachments();
 }
 
 bool ASurvivalCharacter::CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const
@@ -2804,15 +2853,13 @@ void ASurvivalCharacter::ShowWeaponPortrait(bool bWeapon, bool bCharacter)
     FVector Focus = GetMesh()->Bounds.Origin;
     double Distance = 225;
     const int32 Id = GetWeaponId(InspectedWeapon);
-    UStaticMesh* PreviewSurface = WeaponItems.IsValidIndex(Id) ? FirearmWorldMesh(WeaponItems[Id].Firearm) : nullptr;
-    if (!PreviewSurface && bWeapon)
-        PreviewSurface = LoadObject<UStaticMesh>(nullptr, InspectedWeapon == ESurvivalItem::Sidearm ?
-            TEXT("/Game/Art/Crossroads/Building/SM_CrossroadsSidearm.SM_CrossroadsSidearm") :
-            TEXT("/Game/Art/Crossroads/SniperSurface/SM_CrossroadsSniper.SM_CrossroadsSniper"));
-    if (bWeapon && PreviewSurface)
+    UStaticMesh* PreviewSurface = bWeapon && WeaponItems.IsValidIndex(Id) ? FirearmWorldMesh(WeaponItems[Id].Firearm) : nullptr;
+    InspectionWeapon->EmptyOverrideMaterials();
+    InspectionWeapon->SetStaticMesh(PreviewSurface);
+    if (PreviewSurface)
     {
-        InspectionWeapon->SetStaticMesh(PreviewSurface);
-        InspectionWeapon->SetRelativeRotation(FRotator(0,90,0));
+        InspectionWeapon->SetRelativeTransform(PlaceWeaponSurface(InspectionWeapon, FirearmLength[WeaponItems[Id].Firearm],
+            FRotator(0,90,0), FVector::ZeroVector));
         PortraitCapture->ShowOnlyComponent(InspectionWeapon);
         Focus = InspectionWeapon->Bounds.Origin;
         Distance = FMath::Max(25., InspectionWeapon->Bounds.SphereRadius * 3.5);
@@ -2904,7 +2951,8 @@ int32 ASurvivalCharacter::GetWeaponId(ESurvivalItem Weapon) const
 
 void ASurvivalCharacter::InspectWeapon(ESurvivalItem Weapon)
 {
-    InspectedWeaponId = Weapon != ESurvivalItem::None ? GetWeaponId(Weapon) : INDEX_NONE;
+    InspectedWeaponId = INDEX_NONE;
+    if (Weapon != ESurvivalItem::None) InspectedWeaponId = GetWeaponId(Weapon);
     InspectedWeapon = Weapon;
 }
 
@@ -3026,13 +3074,12 @@ void ASurvivalCharacter::RefreshAttachments()
     for (UStaticMeshComponent* Part : AttachmentMeshes)
         if (Part) Part->DestroyComponent();
     AttachmentMeshes.Reset();
-    const bool bPreview = bInventoryOpen && InspectedWeapon != ESurvivalItem::None;
+    const bool bPreview = bInventoryOpen && InspectedWeapon != ESurvivalItem::None && InspectionWeapon->IsVisible();
     const ESurvivalItem Weapon = bPreview ? InspectedWeapon : GetHotbarItem(ActiveHotbarSlot);
     const bool bRifle = Weapon == ESurvivalItem::Rifle;
     if ((!bRifle && Weapon != ESurvivalItem::Sidearm) || (bInventoryOpen && !bPreview) || bBuildMode || HealthPoints <= 0) return;
     UStaticMeshComponent* WorldMesh = bRifle ? RifleWorldMesh.Get() : Sidearm ? Sidearm->GetWeaponMesh() : nullptr;
     UStaticMeshComponent* Model = bPreview ? InspectionWeapon.Get() : WorldMesh;
-    if (!Model || !Model->GetStaticMesh()) return;
     const int32 InstanceId = GetWeaponId(Weapon);
     if (!WeaponItems.IsValidIndex(InstanceId)) return;
     const auto& Assembly = WeaponItems[InstanceId].Assembly;
@@ -3075,61 +3122,27 @@ void ASurvivalCharacter::RefreshAttachments()
         ApplySections(bRifle ? RifleViewmodel.Get() : SidearmViewmodel.Get());
         ApplySections(SecondaryRig.Get());
     }
-    const FBoxSphereBounds Bounds = Model->GetStaticMesh()->GetBounds();
-    const FVector Axis = Bounds.BoxExtent.X >= Bounds.BoxExtent.Y ? FVector::ForwardVector : FVector::RightVector;
-    const double Half = FMath::Max(Bounds.BoxExtent.X, Bounds.BoxExtent.Y);
-    const double Unit = 2 * Half / (bRifle ? 100.0 : 24.0);
-    auto Mount = [&](const FVector& Size, double Along, double Height, const TCHAR* Asset = nullptr)
+    const bool bViewmodel = !bPreview && !bThirdPerson;
+    UMeshComponent* Parent = Model;
+    if (bViewmodel)
     {
-        const bool bViewmodel = !bPreview && !bThirdPerson && (bRifle ? RifleHold != nullptr : bViewmodelReady);
-        USceneComponent* Parent = Model;
-        FName Bone = NAME_None;
-        FVector Location = Bounds.Origin + Axis * (Along*Half) + FVector::UpVector * (Height*Bounds.BoxExtent.Z);
-        FVector Dimensions = Size * Unit;
-        FQuat MountRotation = Axis.Rotation().Quaternion();
-        if (bViewmodel)
+        if (HeldWeaponSurface->GetStaticMesh()) Parent = HeldWeaponSurface.Get();
+        else
         {
             Parent = bRifle ? RifleViewmodel.Get() : SidearmViewmodel.Get();
-            Bone = bRifle ? SniperMuzzle : ViewmodelGripBone;
-            Location = FVector((Along - (bRifle ? 1.0 : 0.0)) * (bRifle ? 44.3 : 12.0),0, Height*4.0)
-                / FMath::Max(.001, Parent->GetComponentScale().GetAbsMax());
-            Dimensions = Size / FMath::Max(.001, Parent->GetComponentScale().GetAbsMax());
-            MountRotation = FQuat::Identity;
-            if (bRifle && RifleViewmodel->DoesSocketExist(TEXT("ViewBreech")) && RifleViewmodel->DoesSocketExist(SniperMuzzle))
-            {
-                Bone = TEXT("ViewBreech");
-                const FTransform Breech = RifleViewmodel->GetSocketTransform(Bone);
-                const FVector Rear = Breech.GetLocation();
-                const FVector Front = RifleViewmodel->GetSocketLocation(SniperMuzzle);
-                const FVector Forward = (Front - Rear).GetSafeNormal();
-                const FQuat Frame = FRotationMatrix::MakeFromXZ(Forward, FirstPersonCamera->GetUpVector()).ToQuat();
-                const FVector Rail = RifleViewmodel->GetSocketLocation(TEXT("ViewScopeEye"));
-                const FVector Point = Height >= .99 && Along == 0 ? Rail + Forward * (Size.X * .5) :
-                    FMath::Lerp(Rear, Front, (Along + 1.) * .5) + Frame.GetUpVector() * (Height * 4.);
-                Location = Breech.InverseTransformPosition(Point);
-                Dimensions = Size / FMath::Max(.001, Breech.GetScale3D().GetAbsMax());
-                MountRotation = Breech.GetRotation().Inverse() * Frame;
-            }
-            else
-            {
-                USkeletalMeshComponent* Rig = bRifle ? RifleViewmodel.Get() : SidearmViewmodel.Get();
-                const bool bBasePistol = Rig->DoesSocketExist(TEXT("RearSight"));
-                Bone = bBasePistol ? FName(TEXT("RearSight")) : FName(TEXT("GunRear"));
-                if (!Rig->DoesSocketExist(Bone)) Rig = SecondaryRig.Get();
-                if (!Rig || !Rig->DoesSocketExist(Bone)) return;
-                Parent = Rig;
-                const FTransform Rear = Rig->GetSocketTransform(Bone);
-                const FVector Front = Rig->GetSocketLocation(bBasePistol ? TEXT("FrontSight") : TEXT("GunFront"));
-                const FVector Top = Rig->GetSocketLocation(bBasePistol ? TEXT("SightUp") : TEXT("GunTop"));
-                const FVector Forward = (Front - Rear.GetLocation()).GetSafeNormal();
-                const FQuat Frame = FRotationMatrix::MakeFromXZ(Forward, Top - Rear.GetLocation()).ToQuat();
-                const FVector Point = FMath::Lerp(Rear.GetLocation(), Front, (Along + 1.) * .5)
-                    + Frame.GetUpVector() * (Height * (bBasePistol ? 1.5 : 4.));
-                Location = Rear.InverseTransformPosition(Point);
-                MountRotation = Rear.GetRotation().Inverse() * Frame;
-                Dimensions = Size / FMath::Max(.001, Rear.GetScale3D().GetAbsMax());
-            }
+            if (!Parent->DoesSocketExist(TEXT("MountMuzzle"))) Parent = SecondaryRig.Get();
         }
+    }
+    if (!Parent || !Parent->DoesSocketExist(TEXT("MountMuzzle")) || !Parent->DoesSocketExist(TEXT("MountRear"))) return;
+    if (bViewmodel && Parent == HeldWeaponSurface.Get()) ApplySections(Parent);
+    const double Cm = FVector::Dist(Parent->GetSocketLocation(TEXT("MountRear")),
+        Parent->GetSocketLocation(TEXT("MountMuzzle"))) / FirearmLength[FirearmIndex(Weapon, WeaponItems[InstanceId].Firearm)];
+    constexpr const TCHAR* MountNames[] = {TEXT("MountOptic"), TEXT("MountMuzzle"), TEXT("MountLaser"),
+        TEXT("MountMagazine"), TEXT("MountLight"), TEXT("MountUnderbarrel"), TEXT("MountSling"), TEXT("MountAction"), TEXT("MountStock")};
+    auto Mount = [&](const FWeaponModDefinition& Mod, const TCHAR* Asset)
+    {
+        const FName Bone(MountNames[static_cast<int32>(Mod.Slot)]);
+        const FTransform Anchor = Parent->GetSocketTransform(Bone);
         auto* Part = NewObject<UStaticMeshComponent>(this);
         Part->SetupAttachment(Parent, Bone);
         Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -3142,21 +3155,26 @@ void ASurvivalCharacter::RefreshAttachments()
             if (UMaterialInterface* Finish = LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Art/Crossroads/Building/M_DefenseSteel.M_DefenseSteel")))
                 Part->SetMaterial(0,Finish);
         }
-        Part->SetRelativeLocation(Location);
-        Part->SetRelativeRotation(MountRotation);
-        if (ArtMesh)
+        const auto ArtBounds = Part->GetStaticMesh()->GetBounds();
+        const FVector Extent = ArtBounds.BoxExtent;
+        const FQuat Orient = !ArtMesh ? FQuat::Identity : Extent.Z >= Extent.X && Extent.Z >= Extent.Y ?
+            FRotator(90,0,0).Quaternion() : Extent.Y > Extent.X ? FRotator(0,90,0).Quaternion() : FQuat::Identity;
+        const FVector Scale = ArtMesh ? FVector(Cm * Mod.Dimensions.GetMax() / FMath::Max(.001, 2 * Extent.GetMax())) :
+            Mod.Dimensions * Cm / 100.;
+        const FBox Box = ArtBounds.GetBox().TransformBy(FTransform(Orient, FVector::ZeroVector, Scale));
+        FVector Contact = Box.GetCenter();
+        switch (Mod.Slot)
         {
-            const auto ArtBounds = ArtMesh->GetBounds();
-            const FVector Extent = ArtBounds.BoxExtent;
-            const FRotator Orient = Extent.Z >= Extent.X && Extent.Z >= Extent.Y ? FRotator(90,0,0) :
-                Extent.Y > Extent.X ? FRotator(0,90,0) : FRotator::ZeroRotator;
-            const FQuat Rotation = Part->GetRelativeRotation().Quaternion() * Orient.Quaternion();
-            const double Scale = Dimensions.GetMax() / FMath::Max(.001, 2 * Extent.GetMax());
-            Part->SetRelativeScale3D(FVector(Scale));
-            Part->SetRelativeRotation(Rotation);
-            Part->SetRelativeLocation(Location - Rotation.RotateVector(ArtBounds.Origin * Scale));
+        case EWeaponMount::Muzzle: Contact.X = Box.Min.X; break;
+        case EWeaponMount::Optic: Contact.Z = Box.Min.Z; break;
+        case EWeaponMount::Magazine: case EWeaponMount::Underbarrel: Contact.Z = Box.Max.Z; break;
+        case EWeaponMount::Light: case EWeaponMount::Sling: Contact.Y = Box.Max.Y; break;
+        case EWeaponMount::Laser: case EWeaponMount::Action: Contact.Y = Box.Min.Y; break;
+        default: break;
         }
-        else Part->SetRelativeScale3D(Dimensions / 100);
+        const FQuat Frame = Anchor.GetRotation();
+        const FTransform Target(Frame * Orient, Anchor.GetLocation() - Frame.RotateVector(Contact), Scale);
+        Part->SetRelativeTransform(Target.GetRelativeTransform(Anchor));
         Part->SetVisibleInSceneCaptureOnly(bPreview);
         Part->SetOnlyOwnerSee(bViewmodel);
         Part->RegisterComponent();
@@ -3179,7 +3197,7 @@ void ASurvivalCharacter::RefreshAttachments()
             else if (Index == ReflexSight) Art = TEXT("ReflexSight");
             else if (Index == ThermalSight) Art = TEXT("ThermalSight");
             else if (Mod.Slot == EWeaponMount::Laser || Index == IRIlluminator) Art = TEXT("PEQ15");
-            Mount(Mod.Dimensions, Mod.AlongWeapon, Mod.Height, Art);
+            Mount(Mod, Art);
             const bool bLaser = Mod.Slot == EWeaponMount::Laser;
             if (bPreview || !IsLocallyControlled() || (!bLaser && Mod.Slot != EWeaponMount::Light)) continue;
             const bool bInfrared = Index == IRLaser || Index == IRIlluminator;
@@ -3190,8 +3208,7 @@ void ASurvivalCharacter::RefreshAttachments()
                      FCString::Strcmp(SurvivalGear[Gear].Id, TEXT("tactical_modern_helmet_w_nvgs")) == 0);
             })) continue;
             auto* Light = NewObject<USpotLightComponent>(this);
-            Light->SetupAttachment(FirstPersonCamera);
-            Light->SetRelativeLocation(FVector(50, 3, -4));
+            Light->SetupAttachment(Parent, FName(MountNames[static_cast<int32>(Mod.Slot)]));
             Light->SetCastShadows(false);
             Light->SetAttenuationRadius(bLaser ? 3500.f : 1800.f);
             Light->SetInnerConeAngle(bLaser ? .2f : 10.f);

@@ -32,6 +32,7 @@ private:
     TSharedRef<SWidget> MakeRecipeBrowser();
     TSharedRef<SWidget> MakeSkillsPanel();
     TSharedRef<SWidget> MakeStatsPanel();
+    TArray<FSlateBrush> FirearmIcons;
     TArray<FSlateBrush> GearIcons;
     TStrongObjectPtr<UTexture2D> GearAtlas;
     ETraining SelectedStat = ETraining::Athletics;

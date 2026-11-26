@@ -18,8 +18,8 @@ class ASurvivalHUD : public AHUD
 public:
     void SetInventoryVisible(ASurvivalCharacter& Character, bool bVisible);
     void SetLootVisible(ASurvivalCharacter& Character, bool bVisible);
-    UTexture2D* GetItemIcon(ESurvivalItem Item) const;
-    FBox2f GetItemIconUV(ESurvivalItem Item) const;
+    UTexture2D* GetItemIcon(ESurvivalItem Item, int32 Model = INDEX_NONE) const;
+    FBox2f GetItemIconUV(ESurvivalItem Item, int32 Model = INDEX_NONE) const;
 
 protected:
     void BeginPlay() override;
@@ -39,6 +39,9 @@ private:
 
     UPROPERTY(Transient)
     TObjectPtr<UTexture2D> ItemAtlas;
+
+    UPROPERTY(Transient)
+    TObjectPtr<UTexture2D> FirearmAtlas;
 
     TSharedPtr<SWidget> InventoryWidget;
     TSharedPtr<SWidget> LootWidget;

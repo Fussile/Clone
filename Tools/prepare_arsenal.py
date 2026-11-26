@@ -4,6 +4,7 @@ import zipfile
 from pathlib import Path
 import os
 import gzip
+import traceback
 
 import unreal
 
@@ -20,7 +21,7 @@ RIGS = {
 
 
 WORLD = {
-    "Makarov": "Makarov_PM.usdz", "Python357": "357_python_revolver_riggedgame_ready.glb",
+    "Makarov": "makarov_pm_fps_animations.glb", "Python357": "357_python_revolver_riggedgame_ready.glb",
     "AK12": "ak-12.usdz", "HK416": "HK_416_A7_free_download.usdz", "MP7": "HK_MP7_A1_model.usdz",
     "Scorpion": "CZ_Scorpion_Evo3_A1.usdz", "ScrapRifle": "scrap_sniper.glb",
 }
@@ -90,10 +91,17 @@ def import_rig(source, directory, clips):
     task.automated = True
     task.save = True
     unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
-    # USD imports can place meshes and clips in child package folders.
-    objects = [assets.load_asset(p) for p in sorted(assets.list_assets(imported_folder, recursive=True))]
-    rigs = [obj for obj in objects if isinstance(obj, unreal.SkeletalMesh)]
-    animations = [obj for obj in objects if isinstance(obj, unreal.AnimSequence)]
+    # Interchange and USD populate different task result fields. USD may add a
+    # stage-named subfolder. Keep discovery scoped to this weapon's import.
+    paths = set(assets.list_assets(imported_folder, recursive=True))
+    paths.update(task.imported_object_paths)
+    objects = {obj.get_path_name(): obj for obj in task.get_objects() if obj}
+    for path in sorted(paths):
+        obj = assets.load_asset(path)
+        if obj:
+            objects[obj.get_path_name()] = obj
+    rigs = sorted((obj for obj in objects.values() if isinstance(obj, unreal.SkeletalMesh)), key=lambda obj: obj.get_path_name())
+    animations = sorted((obj for obj in objects.values() if isinstance(obj, unreal.AnimSequence)), key=lambda obj: obj.get_path_name())
     if not rigs:
         raise RuntimeError(f"No skeletal mesh imported from {source.name}")
     if not animations:
@@ -102,7 +110,6 @@ def import_rig(source, directory, clips):
         target = f"{directory}/{name}"
         if not assets.does_asset_exist(target) and not assets.duplicate_loaded_asset(obj, target):
             raise RuntimeError(f"Could not create {target}")
-    rigs = [obj for obj in rigs if obj.get_name() not in {"Rig0", "Rig1"}]
     for index, rig in enumerate(rigs):
         matches = [clip for clip in animations if clip.get_editor_property("skeleton") == rig.get_editor_property("skeleton")]
         if not matches:
@@ -116,17 +123,11 @@ def import_rig(source, directory, clips):
             for role in ("Fire", "Reload"):
                 alias(matches[0], role if index == 0 else f"{role}{index}")
         alias(roles.get("Idle", matches[0]), f"Presentation{index}")
-    assets.save_directory(directory)
+    if not assets.save_directory(directory):
+        raise RuntimeError(f"Could not save {model_name} animation assets")
 
 
-def prepare(tools, source, art, import_asset, import_skeletal_pack):
-    arms = runpy.run_path(str(tools / "player_viewmodel_arms.py"))
-    skin = source / "PlayerArms"
-    folder = source / "Arsenal"
-    dest = art + "/Arsenal"
-    generated = tools.parent / "Saved" / "GeneratedArt" / "Arsenal"
-    generated.mkdir(parents=True, exist_ok=True)
-    glb = runpy.run_path(str(tools / "prepare_sidearm_glb.py"))
+def prepare_accessories(source, folder, dest, generated, glb, import_asset):
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     if not assets.does_asset_exist(dest + "/M_RemovedPart"):
         hidden = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
@@ -147,7 +148,6 @@ def prepare(tools, source, art, import_asset, import_skeletal_pack):
         ("ReflexSight", "free_weapon_accessories_pack.glb", "Sight 1"),
         ("IRSight", "reap-ir.glb", "Reap_low"),
     ):
-        assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
         if assets.does_asset_exist(f"{dest}/{name}/{name}"):
             continue
         model, binary = glb["read_glb"](folder / filename)
@@ -191,30 +191,66 @@ def prepare(tools, source, art, import_asset, import_skeletal_pack):
         options.import_textures = True
         options.import_materials = True
         import_asset(path, dest + "/" + name, unreal.StaticMesh, options)
+
+
+def prepare(tools, source, art, import_asset, import_skeletal_pack):
+    arms = runpy.run_path(str(tools / "player_viewmodel_arms.py"))
+    skin = source / "PlayerArms"
+    folder = source / "Arsenal"
+    dest = art + "/Arsenal"
+    generated = tools.parent / "Saved" / "GeneratedArt" / "Arsenal"
+    generated.mkdir(parents=True, exist_ok=True)
+    glb = runpy.run_path(str(tools / "prepare_sidearm_glb.py"))
+    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    failures = []
+
+    def attempt(label, operation, *args):
+        try:
+            operation(*args)
+        except Exception as error:
+            failures.append(f"{label}: {error}")
+            unreal.log_error(f"{label}: {traceback.format_exc()}")
+
+    def mount_meshes(name, paths):
+        for path in paths:
+            if not assets.does_asset_exist(path):
+                continue
+            mesh = assets.load_asset(path)
+            if assets.get_metadata_tag(mesh, "CrossroadsMountBake") == "1":
+                return
+            if unreal.CrossroadsWorldBake.prepare_weapon_mounts(mesh, name in ("Sidearm", "Makarov", "Python357")):
+                assets.set_metadata_tag(mesh, "CrossroadsMountBake", "1")
+                if not assets.save_loaded_asset(mesh):
+                    raise RuntimeError(f"Could not save mount sockets on {path}")
+                return
+        raise RuntimeError(f"No weapon geometry with a receiver in {paths}")
+
     mesh_tools = runpy.run_path(str(tools / "arsenal_world_mesh.py"))
     section_tools = runpy.run_path(str(tools / "weapon_sections.py"))
     gear = runpy.run_path(str(tools / "prepare_viewmodel_gear.py"))
     weapons = source / "Weapons"
-    for name, rig_name, takes, donor, prop, extra in (
+    bases = (
         ("Sidearm", "SK_SidearmViewmodel", ("ViewmodelIdle", "ViewmodelWalk", "ViewmodelFire", "ViewmodelReload", "ViewmodelReloadEmpty"),
          "fps_pistol_animations.glb", "SM_CrossroadsSidearm.glb", (weapons / "SM_CrossroadsSidearm.glb", weapons / "SM_Magazine.glb")),
         ("Sniper", "SK_SniperViewmodel", ("SniperHold", "SniperFire", "SniperReload"),
          "SK_SniperViewmodel.glb", "SM_CrossroadsSniper.glb", ()),
-    ):
+    )
+
+    def prepare_base(name, rig_name, takes, donor, prop, extra):
         directory = f"{dest}/{name}/PlayerArms"
         geometry = f"{dest}/{name}/Assembly/Geometry"
         if assets.does_asset_exist(geometry + "/World") and all(assets.does_asset_exist(f"{directory}/{asset}") for asset in (rig_name, *takes)):
-            continue
+            return
         output = generated / name
         output.mkdir(exist_ok=True)
         dressed = output / "Dressed" / (rig_name + ".glb")
         gear["prepare_viewmodel_gear"](weapons / donor, dressed, *extra)
         section_tools["base_models"](name, weapons / prop, dressed, output)
+        import_asset(output / "World.glb", geometry, unreal.StaticMesh)
         arms["dress_gltf"](skin, name, output / dressed.name, glb)
         import_skeletal_pack(directory, (rig_name, *takes), output / dressed.name)
-        import_asset(output / "World.glb", geometry, unreal.StaticMesh)
 
-    for name, (filename, clips) in RIGS.items():
+    def prepare_rig(name, filename, clips):
         directory = dest + "/" + name + "/PlayerArms"
         rig = folder / filename
         if name in ("Makarov", "ScrapRifle"):
@@ -259,15 +295,46 @@ def prepare(tools, source, art, import_asset, import_skeletal_pack):
         else:
             arms["dress_gltf"](skin, name, rig, glb)
         import_rig(rig, directory, clips)
-        geometry = f"{dest}/{name}/Assembly/Geometry"
+
+    def geometry_dir(name):
+        suffix = "WeaponSurface" if name in ("Makarov", "Python357") else "Assembly/Geometry"
+        return f"{dest}/{name}/{suffix}"
+
+    def prepare_world(name):
+        geometry = geometry_dir(name)
         if assets.does_asset_exist(geometry + "/World"):
-            continue
+            return
         prop = folder / WORLD[name]
         if prop.suffix == ".glb":
             model, binary = glb["read_glb"](prop)
-            section_tools["split_props"](model, binary, name)
+            if name in ("Makarov", "Python357"):
+                # The prop scenes include a display stand or loose rounds. Use the
+                # actual weapon in bind space, retaining its material and UVs.
+                mesh_name = "makarov_base_makarov_material_0" if name == "Makarov" else "revolver_revolver_0"
+                weapon = next(mesh for mesh in model["meshes"] if mesh["name"].lower() == mesh_name)
+                model["meshes"] = [weapon]
+                model["nodes"] = [{"mesh": 0}]
+                model["scenes"] = [{"nodes": [0]}]
+                model["scene"] = 0
+                model.pop("animations", None)
+                model.pop("skins", None)
+            section_tools["split_props"](model, binary, name, view=name == "Makarov")
             prop = generated / (name + "Sections.glb")
             glb["write_glb"](prop, model, binary)
         else:
             prop = part_layer(tools, generated, name, "World", prop)
         import_world(name, prop, geometry, generated / name, glb, mesh_tools["flatten"], import_asset)
+
+    for base in bases:
+        attempt(base[0], prepare_base, *base)
+    for name, (filename, clips) in RIGS.items():
+        attempt(name + " world geometry", prepare_world, name)
+        attempt(name + " animation", prepare_rig, name, filename, clips)
+    for name in [base[0] for base in bases] + list(RIGS):
+        directory = f"{dest}/{name}"
+        attempt(name + " static mounts", mount_meshes, name, [geometry_dir(name) + "/World"])
+        rigs = [f"SK_{name}Viewmodel"] if name in ("Sidearm", "Sniper") else ["Rig0", "Rig1"]
+        attempt(name + " animated mounts", mount_meshes, name, [f"{directory}/PlayerArms/{rig}" for rig in rigs])
+    attempt("attachments", prepare_accessories, source, folder, dest, generated, glb, import_asset)
+    if failures:
+        raise RuntimeError("Incomplete arsenal preparation: " + "; ".join(failures))
