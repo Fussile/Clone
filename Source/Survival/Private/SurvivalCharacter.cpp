@@ -1066,11 +1066,11 @@ float ASurvivalCharacter::ActionDuration(bool bReload, UAnimSequence* Clip, floa
     return Clip ? Clip->GetPlayLength() : Fallback;
 }
 
-void ASurvivalCharacter::PlaySecondaryClip(const TCHAR* Role, float Start, float Rate)
+void ASurvivalCharacter::PlaySecondaryClip(const TCHAR* ClipRole, float Start, float Rate)
 {
     if (!SecondaryRig || EquippedFirearm < 2) return;
     const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/%s1.%s1"),
-        Arsenal[EquippedFirearm].Asset, Role, Role);
+        Arsenal[EquippedFirearm].Asset, ClipRole, ClipRole);
     if (auto* Sequence = LoadObject<UAnimSequence>(nullptr, *Path, nullptr, LOAD_NoWarn))
     {
         SecondaryRig->PlayAnimation(Sequence, false);
@@ -2633,8 +2633,8 @@ void ASurvivalCharacter::RefreshGear()
 
 void ASurvivalCharacter::RefreshViewmodelGear(USkeletalMeshComponent* Viewmodel)
 {
-    const USkeletalMesh* Mesh = Viewmodel->GetSkeletalMeshAsset();
-    if (!IsLocallyControlled() || !Mesh) return;
+    const USkeletalMesh* ViewmodelMesh = Viewmodel->GetSkeletalMeshAsset();
+    if (!IsLocallyControlled() || !ViewmodelMesh) return;
 
     const FSurvivalGearDefinition* OuterLayer = nullptr;
     const FSurvivalGearDefinition* BodyLayer = nullptr;
@@ -2652,7 +2652,7 @@ void ASurvivalCharacter::RefreshViewmodelGear(USkeletalMeshComponent* Viewmodel)
     }
 
     UMaterialInterface* Cloth = nullptr;
-    const auto& Materials = Mesh->GetMaterials();
+    const auto& Materials = ViewmodelMesh->GetMaterials();
     for (int32 Index = 0; Index < Materials.Num(); ++Index)
     {
         const auto& Slot = Materials[Index];
@@ -2773,7 +2773,7 @@ bool ASurvivalCharacter::CanDropSelection() const
 void ASurvivalCharacter::DropSelection()
 {
     if (!CanDropSelection()) return;
-    const auto Cell = Pack[SelectedPackSlot];
+    const FSurvivalPackCell Cell = Pack[SelectedPackSlot];
     FSurvivalLoot Loot;
     const int32 Amount = FMath::Min(Cell.Count, GetItemCount(Cell.Item));
     *Loot.StackCount(Cell.Item) = Amount;

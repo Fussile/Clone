@@ -119,7 +119,7 @@ private:
     void UpdateFirearmModel();
     int32 EquippedFirearm = INDEX_NONE;
     float RifleADS = 0;
-    void PlaySecondaryClip(const TCHAR* Role, float Start, float Rate);
+    void PlaySecondaryClip(const TCHAR* ClipRole, float Start, float Rate);
     float ActionDuration(bool bReload, UAnimSequence* Clip, float Fallback) const;
     int32 WeaponCapacity(ESurvivalItem Family) const;
     UPROPERTY()
