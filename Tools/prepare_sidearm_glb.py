@@ -38,7 +38,7 @@ def add_sight(model, binary, parent, name, bind_point):
                    + grip_inverse[axis + 12] for axis in range(3)]
 
     nodes = model["nodes"]
-    nodes[parent]["children"].append(len(nodes))
+    nodes[parent].setdefault("children", []).append(len(nodes))
     skin["joints"].append(len(nodes))
     nodes.append({"name": name, "translation": local_point})
     for axis in range(3):

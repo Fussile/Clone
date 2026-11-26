@@ -120,6 +120,14 @@ private:
     bool bHighOpticZoom = false;
     void RefreshAttachments();
     void UpdateFirearmModel();
+    FVector RifleCameraPose = FVector::ZeroVector;
+    struct FRifleClearancePoint
+    {
+        int32 PartBone;
+        FVector PositionInPart;
+    };
+    TArray<FRifleClearancePoint> RifleClearancePoints;
+    void ApplySniperClearance();
     int32 RifleAnimationPhase = INDEX_NONE;
     int32 EquippedFirearm = INDEX_NONE;
     UPROPERTY()
@@ -127,11 +135,8 @@ private:
     FVector HeldSurfaceHip = FVector::ZeroVector;
     FVector HeldSurfaceAim = FVector::ZeroVector;
     float RifleADS = 0;
-    void PlaySecondaryClip(const TCHAR* ClipRole, float Start, float Rate);
     float ActionDuration(bool bReload, UAnimSequence* Clip, float Fallback) const;
     int32 WeaponCapacity(ESurvivalItem Family) const;
-    UPROPERTY()
-    TObjectPtr<USkeletalMeshComponent> SecondaryRig;
     float WeaponRecoil(ESurvivalItem Weapon) const;
 public:
     int32 GearCount(int32 Index) const;
