@@ -94,6 +94,11 @@ FText DescribeItem(const ASurvivalCharacter* Character, ESurvivalItem Item, int3
     }
     const int32 Carried = Character->GetItemCount(Item);
     FString Text = WeaponId != INDEX_NONE ? Character->GetInstanceLabel(Item, WeaponId) : SurvivalItemName(Item);
+    if (IsAttachmentItem(Item))
+    {
+        Text += TEXT("\nIn Modify, drag to its mount or Shift-click to fit.");
+        return FText::FromString(Text);
+    }
     const auto Weapon = AssemblyWeapon(Item);
     if (const int32 Slot = FSurvivalWeaponAssembly::PartIndex(Item, Weapon); Slot != INDEX_NONE)
     {
@@ -394,6 +399,7 @@ private:
     {
         if (!Player.IsValid() || Item() == ESurvivalItem::None || SurvivalItemHasQuality(Item())) { return; }
         const ESurvivalItem Value = Item();
+        if (!bBelt && IsAttachmentItem(Value)) { Player->FitAttachment(Index); return; }
         if (!ASurvivalCharacter::CanQuickSlot(Value)) return;
         int32 Target = Player->GetActiveHotbarSlot();
         for (int32 Slot = 0; Slot < ASurvivalCharacter::HotbarSize; ++Slot)
@@ -541,6 +547,48 @@ private:
     TWeakObjectPtr<ASurvivalCharacter> Player;
     int32 Slot = 0;
     bool bDragOver = false;
+};
+
+class SAttachmentSlot : public SCompoundWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SAttachmentSlot) {}
+        SLATE_ARGUMENT(ASurvivalCharacter*, Player)
+        SLATE_ARGUMENT(int32, Mount)
+    SLATE_END_ARGS()
+
+    void Construct(const FArguments& Args)
+    {
+        Player = Args._Player;
+        Mount = Args._Mount;
+        SetVisibility(TAttribute<EVisibility>::CreateLambda([this]{
+            for (int32 Mod = 0; Player.IsValid() && Mod < WeaponModCount; ++Mod)
+                if (static_cast<int32>(WeaponMods[Mod].Slot) == Mount && Player->SupportsAttachment(Mod))
+                    return EVisibility::Visible;
+            return EVisibility::Collapsed;
+        }));
+        ChildSlot[SNew(SButton).ButtonColorAndOpacity(Tile)
+            .ToolTipText(FText::FromString(TEXT("Drop an attachment here, or Shift-click it in your backpack. Click an installed item to remove it.")))
+            .Text_Lambda([this]{
+                static const TCHAR* Names[] = {TEXT("Optic"), TEXT("Muzzle"), TEXT("Laser"), TEXT("Magazine"),
+                    TEXT("Light"), TEXT("Underbarrel"), TEXT("Sling"), TEXT("Action"), TEXT("Stock")};
+                const int32 Installed = Player.IsValid() ? Player->InstalledOnMount(Mount) : INDEX_NONE;
+                return FText::FromString(FString::Printf(TEXT("%s  ·  %s  ·  Q%d"), Names[Mount],
+                    Installed == INDEX_NONE ? TEXT("Empty") : WeaponMods[Installed].Name, MountQuality[Mount]));
+            })
+            .OnClicked_Lambda([this]{ if (Player.IsValid()) Player->RemoveAttachment(Mount); return FReply::Handled(); })];
+    }
+
+    FReply OnDrop(const FGeometry&, const FDragDropEvent& Event) override
+    {
+        const auto Op = Event.GetOperationAs<FPackDrag>();
+        return Op && !Op->bBelt && !Op->bLoot && Player.IsValid() && Player->FitAttachment(Op->Slot, Mount)
+            ? FReply::Handled() : FReply::Unhandled();
+    }
+
+private:
+    TWeakObjectPtr<ASurvivalCharacter> Player;
+    int32 Mount = INDEX_NONE;
 };
 
 // One spare part from the pack, listed in the Modify panel. Drag it onto the matching slot.
@@ -1021,15 +1069,10 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
         [SNew(SSpareRow).Player(Player.Get()).PackSlot(Slot).Icons(Icons)];
     }
     TSharedRef<SVerticalBox> Mounts = SNew(SVerticalBox);
-    for (int32 Mod = 0; Mod < UE_ARRAY_COUNT(WeaponMods); ++Mod)
+    for (int32 Mount = 0; Mount < UE_ARRAY_COUNT(MountQuality); ++Mount)
     {
-        Mounts->AddSlot().AutoHeight().Padding(0,2)
-        [SNew(SButton).ButtonStyle(&MenuButtonStyle()).ButtonColorAndOpacity(Tile)
-            .Text_Lambda([this,Mod]{ return FText::FromString(FString::Printf(TEXT("%s %s  ·  Q%d"),
-                Player.IsValid() && Player->HasWeaponMod(Player->InspectedWeapon, Mod) ? TEXT("Remove") : TEXT("Fit"),
-                WeaponMods[Mod].Name, MountQuality[static_cast<uint8>(WeaponMods[Mod].Slot)])); })
-            .IsEnabled_Lambda([this,Mod]{ return Player.IsValid() && Player->CanToggleWeaponMod(Player->InspectedWeapon,Mod); })
-            .OnClicked_Lambda([this,Mod]{ if (Player.IsValid()) Player->ToggleWeaponMod(Player->InspectedWeapon,Mod); return FReply::Handled(); })];
+        Mounts->AddSlot().AutoHeight().Padding(0, 2)
+        [SNew(SAttachmentSlot).Player(Player.Get()).Mount(Mount)];
     }
     const TSharedRef<SWidget> ModifyPanel = SNew(SBorder)
         .Visibility_Lambda([ModifyOpen]() { return ModifyOpen() ? EVisibility::Visible : EVisibility::Collapsed; })
@@ -1870,6 +1913,11 @@ FReply SSurvivalInventoryMenu::OnKeyDown(const FGeometry& Geometry, const FKeyEv
             return FReply::Handled();
         }
         const int32 Gear = Character->GetPackCell(Character->GetSelectedPackSlot()).GearIndex;
+        if (bModifying && Event.GetKey() == EKeys::E && IsAttachmentItem(Character->GetPackItem(Character->GetSelectedPackSlot())))
+        {
+            if (!Event.IsRepeat()) Character->FitAttachment(Character->GetSelectedPackSlot());
+            return FReply::Handled();
+        }
         if (Gear != INDEX_NONE && Event.GetKey() == EKeys::E)
         {
             if (!Event.IsRepeat()) Character->ServerSetGearEquipped(Gear, true);

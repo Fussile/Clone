@@ -101,6 +101,7 @@ int32* FSurvivalLoot::StackCount(ESurvivalItem Item)
 
 int32 FSurvivalLoot::Count(ESurvivalItem Item) const
 {
+    if (IsAttachmentItem(Item)) return LooseAttachment == static_cast<uint8>(Item) ? 1 : 0;
     if (Item == ESurvivalItem::None) return GearIndex != INDEX_NONE ? 1 : 0;
     if (Item == ESurvivalItem::Rifle) return bRifle ? 1 : 0;
     if (Item == ESurvivalItem::Sidearm) return bSidearm ? 1 : 0;
@@ -111,6 +112,7 @@ int32 FSurvivalLoot::Count(ESurvivalItem Item) const
 
 bool FSurvivalLoot::IsEmpty() const
 {
+    if (IsAttachmentItem(static_cast<ESurvivalItem>(LooseAttachment))) return false;
     if (GearIndex != INDEX_NONE || !Materials.IsEmpty() || bSidearm || bRifle || Items.Food || Items.Water || Items.Cloth
         || Items.Bandages || Items.Rounds || Items.TimberDoors || Items.RifleRounds || Items.BuilderGuides
         || Items.ScavengerNotes || Items.DressingSchematics || Items.FieldDressings)

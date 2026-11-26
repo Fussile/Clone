@@ -93,8 +93,10 @@ public:
     bool bCharacterPortrait = false;
     bool CanInspectWeapon(ESurvivalItem Item) const;
     bool HasWeaponMod(ESurvivalItem Weapon, int32 Mod) const;
-    bool CanToggleWeaponMod(ESurvivalItem Weapon, int32 Mod) const;
-    void ToggleWeaponMod(ESurvivalItem Weapon, int32 Mod);
+    bool SupportsAttachment(int32 Mod) const;
+    int32 InstalledOnMount(int32 Mount) const;
+    bool FitAttachment(int32 PackSlot, int32 Mount = INDEX_NONE);
+    bool RemoveAttachment(int32 Mount);
     ESurvivalItem InspectedWeapon = ESurvivalItem::None;
 private:
     struct FWeaponInstance
@@ -117,6 +119,7 @@ private:
     bool bHighOpticZoom = false;
     void RefreshAttachments();
     void UpdateFirearmModel();
+    int32 RifleAnimationPhase = INDEX_NONE;
     int32 EquippedFirearm = INDEX_NONE;
     float RifleADS = 0;
     void PlaySecondaryClip(const TCHAR* ClipRole, float Start, float Rate);
@@ -284,6 +287,11 @@ private:
     void RefreshViewmodelGear(USkeletalMeshComponent* Viewmodel);
     float AirborneAnimationTime = 0.0f;
     bool bPlayingRun = false;
+    int32 TriggerWeapon = INDEX_NONE;
+    int32 BurstRemaining = 0;
+    void ReleaseTrigger() { TriggerWeapon = INDEX_NONE; BurstRemaining = 0; }
+    void ReleaseAutomatic();
+    void PressTrigger();
     void PrimaryAction();
     void EquipSidearm();
     bool FireRound(const FVector& Muzzle, double Range, bool bRifleRound);
@@ -326,6 +334,8 @@ private:
 
     UPROPERTY(Transient)
     TObjectPtr<UAnimSequence> RifleHold;
+    UPROPERTY()
+    TObjectPtr<UAnimSequence> RifleWalk;
 
     UPROPERTY(Transient)
     TObjectPtr<UAnimSequence> RifleFire;
@@ -355,6 +365,7 @@ private:
     double ReloadCompleteAt = -1.0;
     double NextShotAt = 0.0;
     double SidearmAimedShotAt = -1.0;
+    bool bPlayingSidearmLoop = false;
     bool bViewmodelReady = false;
     bool bAimHeld = false;
     float AimBlend = 0.0f;

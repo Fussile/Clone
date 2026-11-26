@@ -47,6 +47,9 @@ struct FSurvivalLoot
     UPROPERTY()
     int32 GearIndex = INDEX_NONE;
 
+    UPROPERTY()
+    uint8 LooseAttachment = static_cast<uint8>(ESurvivalItem::None);
+
     bool IsEmpty() const;
     int32 Count(ESurvivalItem Item) const;
     int32* StackCount(ESurvivalItem Item);
@@ -71,6 +74,9 @@ struct FSurvivalLootSlot
 
     UPROPERTY()
     int32 Firearm = INDEX_NONE;
+
+    UPROPERTY()
+    uint32 InstalledMods = 0;
 
     ESurvivalItem Item() const { return static_cast<ESurvivalItem>(ItemId); }
     bool IsEmpty() const { return Count <= 0; }

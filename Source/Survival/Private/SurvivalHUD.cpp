@@ -37,7 +37,7 @@ void ASurvivalHUD::BeginPlay()
         TEXT("Stone"), TEXT("Cloth"), TEXT("Rounds"), TEXT("TimberDoor"),
         TEXT("Rifle"), TEXT("RifleRounds"), TEXT("BuilderGuide"), TEXT("ScavengerNotes"),
         TEXT("DressingSchematic"), TEXT("FieldDressing"),
-        TEXT("RifleStock"), TEXT("RifleReceiver"), TEXT("RifleBarrel"), TEXT("RifleOptic")
+        TEXT("RifleStock"), TEXT("RifleReceiver"), TEXT("RifleBarrel"), TEXT("RifleMagazine")
     };
     static_assert(UE_ARRAY_COUNT(Names) == static_cast<int32>(ESurvivalItem::SidearmGrip));
     for (const TCHAR* Name : Names)
@@ -49,7 +49,7 @@ void ASurvivalHUD::BeginPlay()
 
 UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item) const
 {
-    if (ItemAtlas && Item < ESurvivalItem::SidearmGrip && Item != ESurvivalItem::TimberDoor
+    if (ItemAtlas && Item < ESurvivalItem::RifleMagazine && Item != ESurvivalItem::TimberDoor
         && Item != ESurvivalItem::RifleStock && Item != ESurvivalItem::RifleReceiver && Item != ESurvivalItem::RifleBarrel)
     {
         return ItemAtlas.Get();
