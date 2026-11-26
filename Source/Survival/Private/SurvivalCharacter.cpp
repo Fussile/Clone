@@ -506,7 +506,7 @@ bool ASurvivalCharacter::CanReachLoot(const ASurvivalSupplyCrate* Crate, FVector
 
 void ASurvivalCharacter::ServerScavenge_Implementation(ASurvivalSupplyCrate* Crate, FVector_NetQuantize10 ImpactPoint)
 {
-    if (!CanReachLoot(Crate, ImpactPoint)) return;
+    if (!CanReachLoot(Crate, ImpactPoint) || Crate->IsDepleted()) return;
 
     SearchImpactPoint = ImpactPoint;
     if (Crate->HasBeenSearched())
@@ -582,6 +582,11 @@ float ASurvivalCharacter::GetSearchSecondsLeft() const
 
 void ASurvivalCharacter::ShowContainer(ASurvivalSupplyCrate& Crate, bool bOpenMenu)
 {
+    if (Crate.IsDepleted())
+    {
+        ServerCloseContainer_Implementation();
+        return;
+    }
     ServerContainer = &Crate;
     bViewingContainer = true;
     ServerSeenLootRevision = Crate.GetLootRevision();
@@ -922,7 +927,8 @@ void ASurvivalCharacter::Interact()
     }
     else if (ASurvivalSupplyCrate* Crate = FindSupplyCrate(&InteractionPoint))
     {
-        ServerScavenge(Crate, FVector_NetQuantize10(InteractionPoint));
+        if (!Crate->IsDepleted())
+            ServerScavenge(Crate, FVector_NetQuantize10(InteractionPoint));
     }
     else
     {
