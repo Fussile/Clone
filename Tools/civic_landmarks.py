@@ -37,13 +37,14 @@ def hall(key, x, y, floor, width, depth, levels, yaw, role, title, box, door, ca
         door(f"{key}_{tag}", label, *xy(u,v), floor+dz, w, h, yaw=yaw, reverse=reverse, finish="petrol")
 
     part("foundation", "Building footing", 0, 0, -1.0, width, depth, 1, "concrete", ground=True)
+    hide_walls = skinned and not full_envelope
     for side in (-1, 1):
         part(f"side_{side}", "Hall exterior wall", side*(width/2-.28), 0, 0, .26, depth-.28, height,
-             hidden=skinned)
+             hidden=hide_walls)
         part(f"front_{side}", "Entrance wall", side*(width+entry)/4, front+.18,
-             0, (width-entry)/2-.18, .27, height, hidden=skinned)
+             0, (width-entry)/2-.18, .27, height, hidden=hide_walls)
         leaf(f"entry_{side}", title+" entrance", side*entry/4, front+.01, 0, entry/2, 2.65, reverse=side>0)
-    part("header", "Stone entrance lintel", 0, front+.18, 2.65, entry, .34, height-2.65, hidden=skinned)
+    part("header", "Stone entrance lintel", 0, front+.18, 2.65, entry, .34, height-2.65, hidden=hide_walls)
     if skinned:
         for side in (-1,1):
             part(f"trim_{side}", "Recessed entrance jamb", side*(entry/2+.105), front-.03,
@@ -58,9 +59,9 @@ def hall(key, x, y, floor, width, depth, levels, yaw, role, title, box, door, ca
         part("portal_transom", "Entrance transom", 0, front+.38, 2.93,
              entry+.4, .18, story+.2-2.93, "glazing")
         part("trim_header", "Entrance surround", 0, front-.03, 2.65, entry+.42, .4, .28)
-    part("back", "Hall rear wall", 0, depth/2-.28, 0, width-.30, .26, height, hidden=skinned)
+    part("back", "Hall rear wall", 0, depth/2-.28, 0, width-.30, .26, height, hidden=hide_walls)
     part("roof", "Ceiling slab", 0, 0, height, width-.25, depth-.25, .25, "dark_trim",
-         hidden=skinned and not full_envelope, collision=not skinned or full_envelope)
+         hidden=hide_walls, collision=not hide_walls)
     # Sample trim, terraces and the roof silhouette are layered outside this playable core.
     if not skinned:
         for n in range(levels):
