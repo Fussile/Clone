@@ -426,14 +426,15 @@ def import_interface():
         import_local_medicine_sheet()
 
 
-def build_region():
+def build_region(force_structures=False, force_biomes=False):
     import_surfaces()
     import_building()
     prepare_region = runpy.run_path(str(TOOLS / "prepare_region.py"))["prepare_region"]
-    return prepare_region(TOOLS, unreal.load_asset(f"{SURFACES}/M_Ground036"))
+    return prepare_region(TOOLS, unreal.load_asset(f"{SURFACES}/M_Ground036"), import_asset, make_material,
+                          force_structures, force_biomes)
 
 
-def prepare():
+def prepare(force_structures=False, force_biomes=False):
     failures = []
     def import_arsenal():
         runpy.run_path(str(TOOLS / "prepare_arsenal.py"))["prepare"](TOOLS, SOURCE, ART, import_asset, import_skeletal_pack)
@@ -450,7 +451,7 @@ def prepare():
             failures.append(f"{label}: {error}")
             unreal.log_error(traceback.format_exc())
     unreal.log("Crossroads: baking the region and saving its external actors.")
-    map_path = build_region()
+    map_path = build_region(force_structures, force_biomes)
     if failures:
         raise RuntimeError("Incomplete Crossroads imports: " + ", ".join(failures))
     if marker := os.environ.get("SURVIVAL_PREPARED_MARKER"):

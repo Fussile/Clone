@@ -1,0 +1,31 @@
+Crossroads landscape art
+
+European birches (SM_BirchA and SM_BirchB)
+Copyright Wildfire Games and contributors, from 0 A.D.
+Project and original art: https://play0ad.com/
+Source meshes: https://github.com/0ad/0ad/tree/master/binaries/data/mods/public/art/meshes/gaia
+Source texture: https://github.com/0ad/0ad/blob/master/binaries/data/mods/public/art/textures/skins/gaia/birch_tree_02.png
+The adaptations of euro_birch_02 and euro_birch_03 and their textures are distributed
+under Creative Commons Attribution-ShareAlike 3.0 Unported:
+https://creativecommons.org/licenses/by-sa/3.0/
+Adaptations include root alignment, scale normalization, masked leaf materials and glTF export.
+Original art license: https://github.com/0ad/0ad/blob/master/binaries/data/mods/public/art/LICENSE.txt
+
+Ground and understory photography, meshes and textures from Poly Haven, CC0.
+https://polyhaven.com/license
+https://polyhaven.com/a/aerial_sand
+https://polyhaven.com/a/dry_ground_rocks
+https://polyhaven.com/a/aerial_grass_rock
+https://polyhaven.com/a/forest_ground_04
+https://polyhaven.com/a/snow_02
+https://polyhaven.com/a/aerial_rocks_02
+https://polyhaven.com/a/boulder_01
+https://polyhaven.com/a/coast_rocks_01
+https://polyhaven.com/a/fern_02
+https://polyhaven.com/a/shrub_03
+https://polyhaven.com/a/weed_plant_02
+Meshes were selected, centered, resized and optimized. Plant textures include the original opacity masks.
+
+City lawn: Grass 004 by Lennart Demes / ambientCG, CC0.
+https://ambientcg.com/a/Grass004
+https://docs.ambientcg.com/license/

@@ -126,13 +126,23 @@ def prepare_if_needed():
     required += tuple(prop_materials["required_packages"](project / "SourceArt" / "Crossroads" / "World"))
     if medicine_sheet.is_file():
         required += ("/Game/Art/Crossroads/Local/MedicineSheet",)
+    biome_package = "/Game/Art/Crossroads/World/Biomes"
+    biome_sources = project / "SourceArt" / "Crossroads" / "Biomes"
+    biome_packages = [biome_package+"/M_CrossroadsGround",biome_package+"/T_CrossroadsBiomes"]
+    biome_packages.extend(f"{biome_package}/{p.stem}" for p in biome_sources.glob("*.jpg"))
+    biome_packages.extend(f"{biome_package}/{p.stem[3:]}/{p.stem}" for p in biome_sources.glob("SM_*.glb"))
+    required += tuple(biome_packages)
+    missing_before = {path for path in required if not assets.does_asset_exist(path)}
     if (stamp.is_file() and stamp.read_text(encoding="utf-8") == revision
-            and all(assets.does_asset_exist(path) for path in required) and region_is_ready()):
+            and not missing_before and region_is_ready()):
         return
 
     unreal.log("Crossroads: preparing the default region map and assets.")
     try:
-        runpy.run_path(str(project / "Tools" / "prepare_crossroads.py"), run_name="__main__")
+        prepare = runpy.run_path(str(project / "Tools" / "prepare_crossroads.py"))["prepare"]
+        prepare(force_structures=any(path.startswith("/Game/Art/Crossroads/World/") and path not in biome_packages
+                                     for path in missing_before),
+                force_biomes=any(path in missing_before for path in biome_packages))
         if not region_is_ready():
             raise RuntimeError("The region did not finish preparing.")
         missing = [path for path in required if not assets.does_asset_exist(path)]
