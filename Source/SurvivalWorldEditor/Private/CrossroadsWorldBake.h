@@ -3,6 +3,8 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "CrossroadsWorldBake.generated.h"
 
+class USkeletalMesh;
+
 class AActor;
 class UMaterialInterface;
 class UStaticMesh;
@@ -21,6 +23,8 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Crossroads Weapon Bake")
     static bool PrepareWeaponMounts(UObject* WeaponMesh, bool bPistol);
+    UFUNCTION(BlueprintCallable, Category = "Crossroads Weapon Bake")
+    static bool PrepareFieldMounts(UStaticMesh* WorldModel, USkeletalMesh* AnimatedModel);
 
     UFUNCTION(BlueprintCallable, Category = "Crossroads World Bake")
     static TArray<UMaterialInterface*> GetLandmarkMaterials(AActor* Source);

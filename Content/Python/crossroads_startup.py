@@ -101,6 +101,8 @@ def prepare_if_needed():
         for icon in (project / "SourceArt" / "Crossroads" / "Interface").glob("T_UI_*.png")
     )
     required += ("/Game/Art/Crossroads/Interface/T_UI_GearAtlas", "/Game/Art/Crossroads/Arsenal/M_RemovedPart")
+    for model in ("PrimitiveBow", "WoodenBow", "CompoundBow", "Crossbow", "Knife"):
+        required += tuple(f"/Game/Art/Crossroads/Arsenal/{model}/Field/{asset}" for asset in ("World", "Rig0", "Presentation0"))
     for model in ("Sidearm", "Sniper", "AK12", "HK416", "MP7", "Scorpion", "Python357", "Makarov", "ScrapRifle"):
         directory = f"/Game/Art/Crossroads/Arsenal/{model}"
         rig, idle = {"Sidearm": ("SK_SidearmViewmodel", "ViewmodelIdle"),

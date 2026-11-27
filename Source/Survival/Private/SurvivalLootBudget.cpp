@@ -47,11 +47,32 @@ constexpr FItemValue Values[] = {
     {EItem::ReflexSight, 35, 0},
     {EItem::BurstTrigger, 65, 0},
     {EItem::AutoTrigger, 85, 0},
+    {EItem::None, 0, 0},
+    {EItem::BowBinding, 12, 0},
+    {EItem::BowSight, 45, 0},
+    {EItem::KnifeWrap, 8, 0},
+    {EItem::KnifeBalance, 18, 0},
+    {EItem::PrimitiveBow, 15, 8},
+    {EItem::WoodenBow, 38, 6},
+    {EItem::CompoundBow, 95, 4},
+    {EItem::Crossbow, 110, 4},
+    {EItem::Knife, 22, 6},
+    {EItem::Arrows, 2, 0},
+    {EItem::Bolts, 3, 0},
+    {EItem::WoodenStave, 15, 12},
+    {EItem::WoodenString, 8, 12},
+    {EItem::CompoundRiser, 30, 12},
+    {EItem::CompoundLimbs, 24, 12},
+    {EItem::CompoundCams, 20, 12},
+    {EItem::CrossbowStock, 25, 12},
+    {EItem::CrossbowProd, 28, 12},
+    {EItem::CrossbowString, 12, 12},
+    {EItem::CrossbowLatch, 22, 12},
 };
-static_assert(UE_ARRAY_COUNT(Values) == static_cast<int32>(EItem::None));
+static_assert(UE_ARRAY_COUNT(Values) == static_cast<int32>(EItem::Count));
 static_assert([]{
     for (int32 Index = 0; Index < UE_ARRAY_COUNT(Values); ++Index)
-        if (static_cast<int32>(Values[Index].Item) != Index || Values[Index].BaseValue <= 0) return false;
+        if (static_cast<int32>(Values[Index].Item) != Index || (Values[Index].Item != EItem::None && Values[Index].BaseValue <= 0)) return false;
     return true;
 }(), "Every loot item needs a positive value in enum order.");
 
@@ -65,6 +86,9 @@ struct FPoolEntry
 constexpr FPoolEntry General[] = {
     {EItem::Food, 24, 3}, {EItem::Water, 23, 3}, {EItem::Cloth, 16, 10},
     {EItem::Timber, 18, 8}, {EItem::Stone, 14, 7}, {EItem::Bandage, 8, 2},
+    {EItem::Knife, 7}, {EItem::WoodenBow, 5}, {EItem::CompoundBow, 2}, {EItem::Crossbow, 2},
+    {EItem::Arrows, 9, 8}, {EItem::Bolts, 5, 5}, {EItem::BowSight, 2}, {EItem::BowBinding, 4},
+    {EItem::KnifeWrap, 4}, {EItem::KnifeBalance, 2},
     {EItem::None, 8}, {EItem::ScavengerNotes, 3}
 };
 constexpr FPoolEntry Food[] = {
@@ -72,6 +96,8 @@ constexpr FPoolEntry Food[] = {
 };
 constexpr FPoolEntry Building[] = {
     {EItem::Timber, 36, 40}, {EItem::Stone, 32, 32}, {EItem::Cloth, 12, 15},
+    {EItem::WoodenStave, 2}, {EItem::WoodenString, 2}, {EItem::CompoundRiser, 2}, {EItem::CompoundLimbs, 2}, {EItem::CompoundCams, 2},
+    {EItem::CrossbowStock, 2}, {EItem::CrossbowProd, 2}, {EItem::CrossbowString, 2}, {EItem::CrossbowLatch, 2},
     {EItem::TimberDoor, 9, 3}, {EItem::BuilderGuide, 4}
 };
 constexpr FPoolEntry Medical[] = {
@@ -268,7 +294,7 @@ TArray<FSurvivalLootSlot> SurvivalLootBudget::Roll(ESurvivalLootProfile Profile,
 
     if (Profile == ESurvivalLootProfile::MilitaryArmory || Profile == ESurvivalLootProfile::PoliceArmory)
     {
-        for (int32 Mod = 0; Mod < WeaponModCount; ++Mod)
+        for (int32 Mod = 0; Mod < BowBinding; ++Mod)
         {
             if (Profile == ESurvivalLootProfile::PoliceArmory && !FirearmAccepts(0, Mod)) continue;
             AddChoice(Choices, MakeStack(AttachmentItem(Mod), 1, 0), 2, Budget);
@@ -331,7 +357,7 @@ TArray<FSurvivalLootSlot> SurvivalLootBudget::Roll(ESurvivalLootProfile Profile,
     }
     for (auto& Slot : Result)
     {
-        if (Slot.Item() != EItem::Sidearm && Slot.Item() != EItem::Rifle) continue;
+        if (!IsWeaponItem(Slot.Item())) continue;
         TArray<int32, TInlineAllocator<10>> Candidates;
         for (int32 Index = 0; Index < UE_ARRAY_COUNT(Arsenal); ++Index)
             if (Arsenal[Index].Family == Slot.Item()) Candidates.Add(Index);
@@ -345,8 +371,8 @@ TArray<FSurvivalLootSlot> SurvivalLootBudget::Roll(ESurvivalLootProfile Profile,
         for (auto& Accessory : Result)
         {
             if (!IsAttachmentItem(Accessory.Item()) || Accessory.IsEmpty()) continue;
-            const int32 Mod = Accessory.ItemId - static_cast<int32>(EItem::GripWrap);
-            if (!FirearmAccepts(Weapon.Firearm, Mod) || Weapon.Quality < MountQuality[static_cast<int32>(WeaponMods[Mod].Slot)]) continue;
+            const int32 Mod = AttachmentIndex(Accessory.Item());
+            if (!FirearmAccepts(Weapon.Firearm, Mod) || Weapon.Quality < RequiredMountQuality(Weapon.Item(), static_cast<int32>(WeaponMods[Mod].Slot))) continue;
             bool Occupied = false;
             for (int32 Installed = 0; Installed < WeaponModCount; ++Installed)
                 if ((Weapon.InstalledMods & (1u << Installed)) && WeaponMods[Installed].Slot == WeaponMods[Mod].Slot) Occupied = true;

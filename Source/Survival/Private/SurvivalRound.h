@@ -13,12 +13,14 @@ class ASurvivalRound : public AActor
 
 public:
     ASurvivalRound();
+    void SetArrow(float Damage, float Speed);
     void SetRifleRound(float BaseDamage);
 
 protected:
     virtual void BeginPlay() override;
 
 private:
+    float ArrowDamage = 0.f;
     bool bRifleRound = false;
     float RifleBaseDamage = 0.0f;
 

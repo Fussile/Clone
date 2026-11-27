@@ -64,7 +64,7 @@ private:
     TArray<TStrongObjectPtr<UTexture2D>> ThemeTextures;
 
     TWeakObjectPtr<ASurvivalCharacter> Player;
-    FSlateBrush Icons[static_cast<int32>(ESurvivalItem::None)];
+    FSlateBrush Icons[static_cast<int32>(ESurvivalItem::Count)];
 };
 
 TSharedRef<SWidget> MakeSurvivalLootGrid(ASurvivalCharacter& Character, ASurvivalHUD& HUD);

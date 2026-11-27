@@ -88,6 +88,8 @@ int32* FSurvivalLoot::StackCount(ESurvivalItem Item)
     case ESurvivalItem::FieldDressing: return &Items.FieldDressings;
     case ESurvivalItem::Rounds: return &Items.Rounds;
     case ESurvivalItem::RifleRounds: return &Items.RifleRounds;
+    case ESurvivalItem::Arrows: return &Items.Arrows;
+    case ESurvivalItem::Bolts: return &Items.Bolts;
     case ESurvivalItem::TimberDoor: return &Items.TimberDoors;
     case ESurvivalItem::BuilderGuide: return &Items.BuilderGuides;
     case ESurvivalItem::ScavengerNotes: return &Items.ScavengerNotes;
@@ -116,7 +118,7 @@ bool FSurvivalLoot::IsEmpty() const
     if (IsAttachmentItem(static_cast<ESurvivalItem>(LooseAttachment))) return false;
     if (GearIndex != INDEX_NONE || !Materials.IsEmpty() || bSidearm || bRifle || Items.Food || Items.Water || Items.Cloth
         || Items.Bandages || Items.Rounds || Items.TimberDoors || Items.RifleRounds || Items.BuilderGuides
-        || Items.ScavengerNotes || Items.DressingSchematics || Items.FieldDressings)
+        || Items.Arrows || Items.Bolts || Items.ScavengerNotes || Items.DressingSchematics || Items.FieldDressings)
     {
         return false;
     }
@@ -187,7 +189,7 @@ int32 ASurvivalSupplyCrate::GetSlotCapacity() const
     if (IsStarterWeaponCase()) return MaxLootSlots;
     if (bDropped) return 4;
     if (LootProfile == ESurvivalLootProfile::Mailbox) return 4;
-    if (LootProfile == ESurvivalLootProfile::Vehicle) return MaxLootSlots;
+    if (LootProfile == ESurvivalLootProfile::Vehicle) return 36;
     return ChestSlots;
 }
 
@@ -207,7 +209,7 @@ void ASurvivalSupplyCrate::PopulateSlots(const FSurvivalLoot& Loot)
     int32 NextSlot = 0;
     if (IsStarterWeaponCase())
     {
-        static_assert(UE_ARRAY_COUNT(Arsenal) + WeaponModCount + 2 <= MaxLootSlots);
+        static_assert(UE_ARRAY_COUNT(Arsenal) + WeaponModCount + 4 + 9 <= MaxLootSlots);
         for (int32 Model = 0; Model < UE_ARRAY_COUNT(Arsenal); ++Model)
         {
             auto& Entry = State.Slots[NextSlot++];
@@ -223,15 +225,22 @@ void ASurvivalSupplyCrate::PopulateSlots(const FSurvivalLoot& Loot)
             Entry.ItemId = static_cast<uint8>(AttachmentItem(Mod));
             Entry.Count = 1;
         }
-        for (const auto Ammo : {ESurvivalItem::Rounds, ESurvivalItem::RifleRounds})
+        for (const auto Ammo : {ESurvivalItem::Rounds, ESurvivalItem::RifleRounds, ESurvivalItem::Arrows, ESurvivalItem::Bolts})
         {
             auto& Entry = State.Slots[NextSlot++];
             Entry.ItemId = static_cast<uint8>(Ammo);
             Entry.Count = SurvivalItemMaxStack(Ammo);
         }
+        for (int32 Part = static_cast<int32>(ESurvivalItem::WoodenStave); Part <= static_cast<int32>(ESurvivalItem::CrossbowLatch); ++Part)
+        {
+            auto& Entry = State.Slots[NextSlot++];
+            Entry.ItemId = static_cast<uint8>(Part);
+            Entry.Count = 1;
+            Entry.Quality = 500;
+        }
         return;
     }
-    for (uint8 Id = 0; Id <= static_cast<uint8>(ESurvivalItem::None) && NextSlot < State.Slots.Num(); ++Id)
+    for (uint8 Id = 0; Id < static_cast<uint8>(ESurvivalItem::Count) && NextSlot < State.Slots.Num(); ++Id)
     {
         const auto Item = static_cast<ESurvivalItem>(Id);
         const int32 Limit = SurvivalItemMaxStack(Item);

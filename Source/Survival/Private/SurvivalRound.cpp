@@ -2,6 +2,8 @@
 
 #include "CollisionQueryParams.h"
 #include "Components/SphereComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/HitResult.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "SurvivalBuildChunk.h"
@@ -43,6 +45,23 @@ void ASurvivalRound::SetRifleRound(float BaseDamage)
     SetLifeSpan(0.8f);
 }
 
+void ASurvivalRound::SetArrow(float Damage, float Speed)
+{
+    ArrowDamage = Damage;
+    Movement->Velocity = GetActorForwardVector() * Speed;
+    Movement->bRotationFollowsVelocity = true;
+    Movement->ProjectileGravityScale = 1.f;
+    SetLifeSpan(4.f);
+    auto* Shaft = NewObject<UStaticMeshComponent>(this);
+    Shaft->SetupAttachment(Collision);
+    Shaft->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")));
+    Shaft->SetRelativeRotation(FRotator(90,0,0));
+    Shaft->SetRelativeScale3D(FVector(.009,.009,.48));
+    Shaft->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    Shaft->SetCanEverAffectNavigation(false);
+    Shaft->RegisterComponent();
+}
+
 void ASurvivalRound::BeginPlay()
 {
     Super::BeginPlay();
@@ -78,8 +97,8 @@ void ASurvivalRound::HandleImpact(const FHitResult& Hit)
     }
     else if (ASurvivalZombie* Zombie = Cast<ASurvivalZombie>(Hit.GetActor()))
     {
-        float Damage = bRifleRound ? RifleBaseDamage : 32.0f;
-        if (Shooter)
+        float Damage = ArrowDamage > 0.f ? ArrowDamage : bRifleRound ? RifleBaseDamage : 32.0f;
+        if (Shooter && ArrowDamage <= 0.f)
         {
             const FSurvivalProgression& Progress = Shooter->GetProgression();
             Damage *= Progress.Effect(bRifleRound ? ETraining::Rifles : ETraining::Pistols);
@@ -92,13 +111,14 @@ void ASurvivalRound::HandleImpact(const FHitResult& Hit)
 
     else if (ASurvivalSupplyCrate* Object = Cast<ASurvivalSupplyCrate>(Hit.GetActor()))
     {
-        bDamaged = UGameplayStatics::ApplyDamage(Object, bRifleRound ? RifleBaseDamage : 32.0f,
+        bDamaged = UGameplayStatics::ApplyDamage(Object, ArrowDamage > 0.f ? ArrowDamage : bRifleRound ? RifleBaseDamage : 32.0f,
             GetInstigatorController(), this, nullptr) > 0.0f;
     }
 
     if (bDamaged && Shooter)
     {
-        Shooter->NotifyRoundHit(bHitZombie, bRifleRound);
+        if (ArrowDamage > 0.f) Shooter->NotifyFieldHit(bHitZombie, false);
+        else Shooter->NotifyRoundHit(bHitZombie, bRifleRound);
     }
     Destroy();
 }

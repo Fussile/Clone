@@ -19,10 +19,17 @@ inline constexpr FSurvivalFirearm Arsenal[] = {
     {ESurvivalItem::Rifle, TEXT("HK416"), TEXT("HK416 A7"), 30},
     {ESurvivalItem::Rifle, TEXT("MP7"), TEXT("MP7A1"), 20},
     {ESurvivalItem::Rifle, TEXT("Scorpion"), TEXT("Scorpion EVO 3"), 30},
+    {ESurvivalItem::PrimitiveBow, TEXT("PrimitiveBow"), TEXT("Primitive bow"), 0},
+    {ESurvivalItem::WoodenBow, TEXT("WoodenBow"), TEXT("Wooden bow"), 0},
+    {ESurvivalItem::CompoundBow, TEXT("CompoundBow"), TEXT("Compound bow"), 0},
+    {ESurvivalItem::Crossbow, TEXT("Crossbow"), TEXT("Crossbow"), 0},
+    {ESurvivalItem::Knife, TEXT("Knife"), TEXT("Field knife"), 0},
 };
 
 inline int32 FirearmIndex(ESurvivalItem Family, int32 Index)
 {
-    return Index >= 0 && Index < UE_ARRAY_COUNT(Arsenal) && Arsenal[Index].Family == Family
-        ? Index : (Family == ESurvivalItem::Rifle ? 1 : 0);
+    if (Index >= 0 && Index < UE_ARRAY_COUNT(Arsenal) && Arsenal[Index].Family == Family) return Index;
+    for (int32 Candidate = 0; Candidate < UE_ARRAY_COUNT(Arsenal); ++Candidate)
+        if (Arsenal[Candidate].Family == Family) return Candidate;
+    return INDEX_NONE;
 }

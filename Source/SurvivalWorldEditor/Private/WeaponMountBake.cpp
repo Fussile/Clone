@@ -198,3 +198,51 @@ bool UCrossroadsWorldBake::PrepareWeaponMounts(UObject* WeaponMesh, bool bPistol
     WeaponMesh->MarkPackageDirty();
     return true;
 }
+
+bool UCrossroadsWorldBake::PrepareFieldMounts(UStaticMesh* WorldModel, USkeletalMesh* AnimatedModel)
+{
+    if (!WorldModel || !AnimatedModel) return false;
+    const auto& Ref = AnimatedModel->GetRefSkeleton();
+    const FName Markers[] = {TEXT("FieldRear"), TEXT("FieldFront"), TEXT("FieldTop"), TEXT("FieldOptic")};
+    FVector Points[4];
+    for (int32 Index = 0; Index < 4; ++Index)
+    {
+        int32 Joint = Ref.FindBoneIndex(Markers[Index]);
+        if (Joint == INDEX_NONE) return false;
+        FTransform Pose = Ref.GetRefBonePose()[Joint];
+        while ((Joint = Ref.GetParentIndex(Joint)) != INDEX_NONE) Pose *= Ref.GetRefBonePose()[Joint];
+        Points[Index] = Pose.GetLocation();
+    }
+    const FRotator Facing = FRotationMatrix::MakeFromXZ(Points[1] - Points[0], Points[2] - Points[0]).Rotator();
+    const FName Mounts[] = {TEXT("MountRear"), TEXT("MountMuzzle"), TEXT("MountOptic")};
+    const int32 Indices[] = {0, 1, 3};
+    for (int32 Index = 0; Index < 3; ++Index)
+    {
+        auto* StaticSocket = WorldModel->FindSocket(Mounts[Index]);
+        if (!StaticSocket)
+        {
+            StaticSocket = NewObject<UStaticMeshSocket>(WorldModel);
+            StaticSocket->SocketName = Mounts[Index];
+            WorldModel->AddSocket(StaticSocket);
+        }
+        StaticSocket->RelativeLocation = Points[Indices[Index]];
+        StaticSocket->RelativeRotation = Facing;
+        auto& Sockets = AnimatedModel->GetMeshOnlySocketList();
+        const auto* Existing = Sockets.FindByPredicate([&](const auto& Entry){ return Entry && Entry->SocketName == Mounts[Index]; });
+        auto* Socket = Existing ? Existing->Get() : NewObject<USkeletalMeshSocket>(AnimatedModel);
+        if (!Existing) Sockets.Add(Socket);
+        Socket->SocketName = Mounts[Index];
+        Socket->BoneName = Markers[Indices[Index]];
+        // Marker axes inherit the glTF import basis. Express the common frame in bone space.
+        const int32 Joint = Ref.FindBoneIndex(Socket->BoneName);
+        FTransform Rest = Ref.GetRefBonePose()[Joint];
+        for (int32 Parent = Ref.GetParentIndex(Joint); Parent != INDEX_NONE; Parent = Ref.GetParentIndex(Parent))
+            Rest *= Ref.GetRefBonePose()[Parent];
+        Socket->RelativeRotation = (Rest.GetRotation().Inverse() * Facing.Quaternion()).Rotator();
+    }
+    WorldModel->PostEditChange();
+    WorldModel->MarkPackageDirty();
+    AnimatedModel->PostEditChange();
+    AnimatedModel->MarkPackageDirty();
+    return true;
+}

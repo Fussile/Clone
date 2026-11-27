@@ -31,6 +31,7 @@ const FLinearColor Blocked(1.0f, 0.51f, 0.36f);
 void ASurvivalHUD::BeginPlay()
 {
     Super::BeginPlay();
+    FieldAtlas = LoadObject<UTexture2D>(nullptr,TEXT("/Game/Art/Crossroads/Interface/T_UI_FieldWeapons.T_UI_FieldWeapons"));
     FirearmAtlas = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Art/Crossroads/Interface/T_UI_Firearms.T_UI_Firearms"));
     ItemAtlas = LoadObject<UTexture2D>(nullptr,
         TEXT("/Game/Art/Crossroads/Interface/T_UI_ItemAtlas.T_UI_ItemAtlas"), nullptr, LOAD_NoWarn);
@@ -51,6 +52,7 @@ void ASurvivalHUD::BeginPlay()
 
 UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item, int32 Model) const
 {
+    if (IsFieldWeapon(Item)) return FieldAtlas.Get();
     if (FirearmAtlas && Model >= 0 && Model < UE_ARRAY_COUNT(Arsenal)) return FirearmAtlas.Get();
     if (ItemAtlas && Item < ESurvivalItem::RifleMagazine && Item != ESurvivalItem::TimberDoor
         && Item != ESurvivalItem::RifleStock && Item != ESurvivalItem::RifleReceiver && Item != ESurvivalItem::RifleBarrel)
@@ -63,6 +65,11 @@ UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item, int32 Model) const
 
 FBox2f ASurvivalHUD::GetItemIconUV(ESurvivalItem Item, int32 Model) const
 {
+    if (IsFieldWeapon(Item))
+    {
+        const int32 Cell = static_cast<int32>(Item) - static_cast<int32>(ESurvivalItem::PrimitiveBow);
+        return FBox2f(FVector2f(Cell * .2f, 0), FVector2f((Cell + 1) * .2f, 1));
+    }
     if (FirearmAtlas && Model >= 0 && Model < UE_ARRAY_COUNT(Arsenal))
     {
         const FVector2f Start((Model % 4) * .25f, (Model / 4) * .25f);
@@ -320,6 +327,16 @@ void ASurvivalHUD::DrawHUD()
         const bool bRifle = Character->HasRifle() && Character->IsRifleSelected();
         const bool bPistol = Character->HasSidearm() &&
             Character->GetHotbarItem(Character->GetActiveHotbarSlot()) == ESurvivalItem::Sidearm;
+        const auto Held = Character->GetHotbarItem(Character->GetActiveHotbarSlot());
+        if (IsFieldWeapon(Held))
+        {
+            const auto Ammo = Held == ESurvivalItem::Crossbow ? ESurvivalItem::Bolts : ESurvivalItem::Arrows;
+            const FString Status = !Character->GetWeaponAssembly(Held).IsComplete() ? FString(TEXT("Parts missing")) :
+                Held == ESurvivalItem::Knife ? FString(TEXT("LMB  ·  Strike")) :
+                FString::Printf(TEXT("%d %s  ·  %s"), Character->GetItemCount(Ammo), SurvivalItemName(Ammo),
+                    Held == ESurvivalItem::Crossbow ? TEXT("LMB to fire") : TEXT("Hold LMB to draw"));
+            DrawText(Status, FLinearColor::White, Right - 215.f, Canvas->SizeY - 50.f);
+        }
         if (bRifle || bPistol)
         {
             const bool bReloading = bRifle ? Character->IsRifleReloading() : Character->IsReloading();
