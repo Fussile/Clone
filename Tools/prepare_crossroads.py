@@ -254,6 +254,24 @@ def import_skeletal_pack(directory, names, source, prepared=None, generator=None
     if all(assets.does_asset_exist(f"{directory}/{name}") for name in names):
         return
 
+    # Interchange can publish a single glTF clip as <source>_Anim in a nested folder.
+    def recover_single_clip():
+        mesh_path = f"{directory}/{names[0]}"
+        if len(names) != 2 or not assets.does_asset_exist(mesh_path):
+            return False
+        skeleton = assets.load_asset(mesh_path).get_editor_property("skeleton")
+        clips = []
+        for asset_path in assets.list_assets(directory, recursive=True):
+            item = assets.load_asset(asset_path)
+            if isinstance(item, unreal.AnimSequence) and item.get_editor_property("skeleton") == skeleton:
+                clips.append(item)
+        return len(clips) == 1 and assets.rename_loaded_asset(clips[0], f"{directory}/{names[1]}")
+
+    if recover_single_clip():
+        if not assets.save_directory(directory, only_if_is_dirty=True):
+            raise RuntimeError(f"Could not save {directory}.")
+        return
+
     if generator is not None:
         runpy.run_path(str(TOOLS / f"{generator}.py"))[generator](source, prepared, *generator_inputs)
         source = prepared
@@ -274,6 +292,8 @@ def import_skeletal_pack(directory, names, source, prepared=None, generator=None
         else:
             matching = [item for item in imported
                         if isinstance(item, unreal.AnimSequence) and re.search(rf"{re.escape(name)}(?:$|_)", item.get_name(), re.IGNORECASE)]
+        if not matching and name != names[0] and recover_single_clip():
+            continue
         if len(matching) != 1 or not assets.rename_loaded_asset(matching[0], path):
             raise RuntimeError(f"Could not resolve {name} from {source.name}.")
 
