@@ -80,10 +80,10 @@ void ASurvivalZombie::BeginPlay()
     ContactDamage = (bHound ? 10 : bToxic ? 20 : 15) + StageBonus;
     if (bHound || bToxic)
     {
-        const FString Role = bHound ? TEXT("Hound") : TEXT("Toxic");
-        const FString Folder = TEXT("/Game/Art/Crossroads/Enemies/") + Role + TEXT("/");
-        const FString MeshName = TEXT("SK_") + Role;
-        const FString ClipName = Role + TEXT("Loop");
+        const FString VariantName = bHound ? TEXT("Hound") : TEXT("Toxic");
+        const FString Folder = TEXT("/Game/Art/Crossroads/Enemies/") + VariantName + TEXT("/");
+        const FString MeshName = TEXT("SK_") + VariantName;
+        const FString ClipName = VariantName + TEXT("Loop");
         USkeletalMesh* Variant = LoadObject<USkeletalMesh>(nullptr, *(Folder + MeshName + TEXT(".") + MeshName));
         UAnimSequence* Clip = LoadObject<UAnimSequence>(nullptr, *(Folder + ClipName + TEXT(".") + ClipName));
         if (Variant && Clip)
