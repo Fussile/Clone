@@ -29,3 +29,10 @@ Meshes were selected, centered, resized and optimized. Plant textures include th
 City lawn: Grass 004 by Lennart Demes / ambientCG, CC0.
 https://ambientcg.com/a/Grass004
 https://docs.ambientcg.com/license/
+
+Fallen timber and weathered boards adapted from Poly Haven (CC0).
+https://polyhaven.com/a/dead_tree_trunk_02
+https://polyhaven.com/a/weathered_planks
+The fallen trunk was resized and simplified. The boards, forest floor and dry ground
+use DirectX normal maps from their respective scans.
+Fir regeneration uses an optimized young fir from https://polyhaven.com/a/fir_sapling (CC0).

@@ -174,6 +174,9 @@ public:
     bool CanFinish(const FSurvivalBuildPlacement& Placement) const;
     const FSurvivalFinishedPiece* FindFinishedPiece() const;
     void TakeSurvivalDamage(int32 Amount);
+    bool IsHeadUnderwater() const { return bHeadUnderwater; }
+    int32 GetOxygenPercent() const { return OxygenPercent; }
+    int32 GetWetnessPercent() const { return WetnessPercent; }
     int32 GetHealthPoints() const { return HealthPoints; }
     int32 GetAmmo() const;
     int32 GetReserveAmmo() const { return Items.Rounds; }
@@ -216,6 +219,22 @@ private:
     bool HasReachTo(const FVector& Point, double Reach) const;
     bool HasSupport(const FSurvivalBuildPlacement& Placement) const;
     bool IsFootprintClear(const FSurvivalBuildPlacement& Placement, bool bPlanning) const;
+
+    void UpdateWaterState(float DeltaSeconds);
+    void SwimVertical(float Value);
+    bool bWaterSwimming = false;
+    bool bHeadUnderwater = false;
+    float OxygenReserve = 100.0f;
+    float WetnessLevel = 0.0f;
+    float DrowningTime = 0.0f;
+
+    UPROPERTY(Replicated)
+    uint8 OxygenPercent = 100;
+    UPROPERTY(Replicated)
+    uint8 WetnessPercent = 0;
+
+    UFUNCTION(Client, Reliable)
+    void ClientReceiveDrowningDamage(int32 Amount);
 
     void MoveForward(float Value);
     void MoveRight(float Value);

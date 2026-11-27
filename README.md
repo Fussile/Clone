@@ -8,6 +8,8 @@ Download `Survival-Windows-x64.zip` from [Releases](https://github.com/Fussile/C
 
 Crossroads starts outside the Southern Crossroads gas station. Follow the [region map](Docs/CrossroadsRegion.svg) to the warehouse, the city loop, and General Hospital. Use **WASD** and the mouse to move and look, **Space** to jump, **Left Shift** to sprint, **C** to toggle crouch, **Z** to toggle prone, **V** to switch to third person, and **E** to search the building materials crate in the shop.
 
+In deep water, look and move to swim, hold **Space** to rise, or hold **C** to dive. Watch the **O2** meter when your head goes under. Surfacing restores oxygen. Wet clothing dries gradually on land and increases the calorie cost of cold weather. Search fallen logs and desert cacti for timber, or exposed geodes for stone.
+
 Press **B** to open the build menu. Choose timber or stone blocks, stairs, or a door frame. **Left-click** places a blueprint on the 1.05 m grid. Press **E** to finish a blueprint or **X** to remove it. Stairs rise one full cube. A grounded timber wall can carry five cubes out from its upper block. A door frame reserves two stacked cells and mounts on the edge nearest the aim point. Rotate the frame twice with **R** to reverse its swing direction while keeping the same edge. Craft a timber door in the pack and press **E** on the finished frame to install it. Press **E** again to open or close the door.
 
 Search the darker case inside the shop for the sidearm, then move it from the backpack into a toolbelt slot. With the build menu closed, **left-click** fires, **right mouse** aims down sights, and **R** reloads. Rounds damage finished structures. **E** repairs a damaged piece, and **K** dismantles it in build mode.

@@ -297,6 +297,9 @@ void ASurvivalHUD::DrawHUD()
         }
     }
 
+    if (Character->IsHeadUnderwater())
+        DrawRect(FLinearColor(.025f, .20f, .22f, .24f), 0, 0, Canvas->SizeX, Canvas->SizeY);
+
     const FSurvivalVitals& Vitals = Character->GetVitals();
     const int32 Wave = Character->GetDefenseWave();
     const bool bHordeStarted = Character->HasFirstHordeStarted();
@@ -311,6 +314,13 @@ void ASurvivalHUD::DrawHUD()
     Meter(113.0f, TEXT("Stamina"), Vitals.Stamina, FLinearColor(.56f, .74f, .42f));
     Meter(206.0f, TEXT("Food"), Vitals.Hunger, Alloy);
     Meter(299.0f, TEXT("Water"), Vitals.Thirst, Cyan);
+
+    if (Character->IsHeadUnderwater() || Character->GetOxygenPercent() < 100)
+        Meter(392.0f, TEXT("O2"), Character->GetOxygenPercent(),
+              Character->GetOxygenPercent() <= 25 ? Blocked : Cyan);
+    if (Character->GetWetnessPercent() > 0)
+        Meter(Character->IsHeadUnderwater() || Character->GetOxygenPercent() < 100 ? 485.0f : 392.0f,
+              TEXT("Wet"), Character->GetWetnessPercent(), Cyan);
 
     const float Right = Canvas->SizeX - 20.0f;
     if (const ASurvivalGameMode* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>())

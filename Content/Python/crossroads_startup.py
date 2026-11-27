@@ -114,7 +114,7 @@ def prepare_if_needed():
     required += tuple(f"/Game/Art/Crossroads/World/Props/{name}/SM_{name}"
                       for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler"))
     required += tuple(f"/Game/Art/Crossroads/World/M_RegionFinish_{name}"
-                      for name in ("Concrete", "StationBrick", "ShopTile"))
+                      for name in ("Concrete", "StationBrick", "ShopTile", "WeatheredBoards"))
     required += tuple(f"/Game/Art/Crossroads/World/Region/{name}/SM_{name}" for name in (
         "CornerShop", "SubstationSwitchgear", "TransmissionPylon", "TransmissionCable",
         "BurnedSedan", "BurnedCompact", "RustedTruck", "SixTwelveShop", "SixTwelveCanopy",
@@ -130,7 +130,7 @@ def prepare_if_needed():
         required += ("/Game/Art/Crossroads/Local/MedicineSheet",)
     biome_package = "/Game/Art/Crossroads/World/Biomes"
     biome_sources = project / "SourceArt" / "Crossroads" / "Biomes"
-    biome_packages = [biome_package+"/M_CrossroadsGround",biome_package+"/T_CrossroadsBiomes"]
+    biome_packages = [biome_package+"/M_CrossroadsGround",biome_package+"/T_CrossroadsBiomes",biome_package+"/M_CrossroadsOpenWater"]
     biome_packages.extend(f"{biome_package}/{p.stem}" for p in biome_sources.glob("*.jpg"))
     biome_packages.extend(f"{biome_package}/{p.stem[3:]}/{p.stem}" for p in biome_sources.glob("SM_*.glb"))
     required += tuple(biome_packages)

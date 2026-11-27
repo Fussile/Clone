@@ -234,6 +234,8 @@ void ASurvivalCharacter::Tick(float DeltaSeconds)
             if (BurstRemaining > 0 && --BurstRemaining == 0) ReleaseTrigger();
         }
     }
+    if (HealthPoints > 0 && (HasAuthority() || IsLocallyControlled()))
+        UpdateWaterState(DeltaSeconds);
     UpdateVitals(DeltaSeconds);
     UpdateRifle();
     UpdateSurvivorAnimation(DeltaSeconds);
@@ -293,6 +295,7 @@ void ASurvivalCharacter::UpdateSurvivorAnimation(float DeltaSeconds)
 void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
+    PlayerInputComponent->BindAxis(TEXT("SwimVertical"), this, &ASurvivalCharacter::SwimVertical);
     PlayerInputComponent->BindAxis(TEXT("MoveForward"), this, &ASurvivalCharacter::MoveForward);
     PlayerInputComponent->BindAxis(TEXT("MoveRight"), this, &ASurvivalCharacter::MoveRight);
     PlayerInputComponent->BindAxis(TEXT("Turn"), this, &APawn::AddControllerYawInput);
@@ -330,9 +333,79 @@ void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
     PlayerInputComponent->BindAction(TEXT("RestartDefense"), IE_Pressed, this, &ASurvivalCharacter::RestartDefense);
 }
 
+void ASurvivalCharacter::UpdateWaterState(float DeltaSeconds)
+{
+    const FVector Center = GetActorLocation();
+    const double HalfHeight = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+    const double Feet = Center.Z - HalfHeight;
+    FHitResult Surface;
+    static const FName WaterProfile(TEXT("CrossroadsWater"));
+    const bool bInWater = GetWorld()->LineTraceSingleByChannel(Surface,
+        Center + FVector(0, 0, 10000), Center - FVector(0, 0, HalfHeight),
+        ECC_GameTraceChannel3, FCollisionQueryParams(SCENE_QUERY_STAT(WaterSurface), true, this))
+        && Surface.GetComponent() && Surface.GetComponent()->GetCollisionProfileName() == WaterProfile;
+    const double Depth = bInWater ? Surface.ImpactPoint.Z - Feet : 0.0;
+    bHeadUnderwater = Depth > HalfHeight * 2;
+    // A lower exit threshold lets the swimmer hold their head above the surface.
+    const bool bShouldSwim = Depth > HalfHeight * (bWaterSwimming ? .85 : 1.35);
+    UCharacterMovementComponent* Movement = GetCharacterMovement();
+    if (bShouldSwim && Movement->MovementMode != MOVE_Flying)
+    {
+        Movement->MaxFlySpeed = 225.0f;
+        Movement->BrakingDecelerationFlying = 520.0f;
+        Movement->SetMovementMode(MOVE_Flying);
+    }
+    else if (!bShouldSwim && bWaterSwimming && Movement->MovementMode == MOVE_Flying)
+    {
+        Movement->SetMovementMode(MOVE_Falling);
+    }
+    if (bShouldSwim)
+    {
+        // Ease an idle swimmer toward a breathable waterline. Dive input can overcome buoyancy.
+        const float Buoyancy = FMath::Clamp(float(Depth / HalfHeight - 1.64), 0.0f, 1.0f);
+        Movement->AddForce(FVector::UpVector * (Movement->Mass * 95.0f * Buoyancy));
+    }
+    bWaterSwimming = bShouldSwim;
+    if (!HasAuthority()) return;
+
+    WetnessLevel = FMath::Clamp(WetnessLevel + DeltaSeconds *
+        (bInWater ? (bShouldSwim ? 60.0f : 12.0f) : -1.0f), 0.0f, 100.0f);
+    const float AirSecondsLeft = OxygenReserve / 2.5f;
+    OxygenReserve = FMath::Clamp(OxygenReserve +
+        DeltaSeconds * (bHeadUnderwater ? -2.5f : 12.5f), 0.0f, 100.0f);
+    WetnessPercent = FMath::CeilToInt(WetnessLevel);
+    OxygenPercent = FMath::CeilToInt(OxygenReserve);
+    if (bHeadUnderwater && OxygenReserve <= 0)
+    {
+        DrowningTime += FMath::Max(0.0f, DeltaSeconds - AirSecondsLeft);
+        const int32 Seconds = FMath::FloorToInt(DrowningTime);
+        if (Seconds > 0)
+        {
+            DrowningTime -= Seconds;
+            const int32 Damage = Seconds * 5;
+            TakeSurvivalDamage(Damage);
+            if (!IsLocallyControlled()) ClientReceiveDrowningDamage(Damage);
+        }
+    }
+    else
+    {
+        DrowningTime = 0;
+    }
+}
+
+void ASurvivalCharacter::ClientReceiveDrowningDamage_Implementation(int32 Amount)
+{
+    if (!HasAuthority()) TakeSurvivalDamage(Amount);
+}
+
+void ASurvivalCharacter::SwimVertical(float Value)
+{
+    if (bWaterSwimming && !bInventoryOpen) AddMovementInput(FVector::UpVector, Value);
+}
+
 void ASurvivalCharacter::MoveForward(float Value)
 {
-    AddMovementInput(GetActorForwardVector(), Value);
+    AddMovementInput(bWaterSwimming ? GetControlRotation().Vector() : GetActorForwardVector(), Value);
 }
 
 void ASurvivalCharacter::MoveRight(float Value)
@@ -342,7 +415,7 @@ void ASurvivalCharacter::MoveRight(float Value)
 
 void ASurvivalCharacter::StartJump()
 {
-    if (!bIsCrouched && !bInventoryOpen)
+    if (!bWaterSwimming && !bIsCrouched && !bInventoryOpen)
     {
         Jump();
     }
@@ -2062,13 +2135,14 @@ void ASurvivalCharacter::UpdateVitals(float DeltaSeconds)
     {
         return;
     }
-    const bool bSprintAllowed = bSprintHeld && Stance == EStance::Standing && Vitals.CanSprint()
+    const bool bSprintAllowed = !bWaterSwimming && bSprintHeld && Stance == EStance::Standing && Vitals.CanSprint()
         && !IsAimingSidearm() && !IsAimingRifle() && !bInventoryOpen;
     const bool bSprinting = bSprintAllowed && GetVelocity().SizeSquared2D() > FMath::Square(20.0);
     const ASurvivalGameMode* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
     const float Ambient = Mode ? static_cast<float>(Mode->GetAmbientTemperature(GetActorLocation())) : 14.0f;
     const float Effort = static_cast<float>(FMath::Clamp(GetVelocity().Size2D() / WalkSpeed, 0.0, 1.5));
-    const int32 Damage = Vitals.Advance(DeltaSeconds, bSprinting, Effort, Ambient,
+    const float EffectiveTemperature = Ambient - 6.0f * WetnessPercent / 100.0f;
+    const int32 Damage = Vitals.Advance(DeltaSeconds, bSprinting, Effort, EffectiveTemperature,
         Progression.Effect(ETraining::Athletics), Progression.Effect(ETraining::Recovery),
         Progression.Effect(ETraining::Nutrition), Progression.Effect(ETraining::Hydration));
     if (bSprinting)
@@ -2860,6 +2934,8 @@ void ASurvivalCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
     DOREPLIFETIME_CONDITION(ASurvivalCharacter, OwnedGear, COND_OwnerOnly);
     DOREPLIFETIME_CONDITION(ASurvivalCharacter, LootGameStage, COND_OwnerOnly);
     DOREPLIFETIME(ASurvivalCharacter, WornGear);
+    DOREPLIFETIME_CONDITION(ASurvivalCharacter, OxygenPercent, COND_OwnerOnly);
+    DOREPLIFETIME_CONDITION(ASurvivalCharacter, WetnessPercent, COND_OwnerOnly);
 }
 
 int32 ASurvivalCharacter::GearCount(int32 Index) const

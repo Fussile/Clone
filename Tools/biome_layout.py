@@ -142,7 +142,7 @@ def scatter(plan,height,cover,clear):
     w,d=plan["size_m"]
     # Each candidate has a private seed so a blocked plot never shifts another district's planting.
     batches=defaultdict(list)
-    for band,step in enumerate((17,15)):
+    for band,step in enumerate((10,11)):
         for i in range(math.ceil(w/step)):
             for j in range(math.ceil(d/step)):
                 rng=random.Random((plan["seed"]<<32)+(band<<28)+(i<<14)+j)
@@ -154,7 +154,7 @@ def scatter(plan,height,cover,clear):
                 grade=math.hypot(height(x+3,y)-height(x-3,y),height(x,y+3)-height(x,y-3))/6
                 draw=rng.random()
                 if band==0:
-                    if grade<.55 and draw<.68*forest+.01*(1-urban)*(1-dry):
+                    if grade<.55 and draw<.82*forest+.01*(1-urban)*(1-dry):
                         name=rng.choice(("BirchA","BirchB"))
                         size=rng.uniform(.62,1.26)
                     elif draw>1-(.025+.22*smooth(.2,.9,grade)+.016*dry)*(1-urban):
@@ -163,9 +163,35 @@ def scatter(plan,height,cover,clear):
                     else:
                         continue
                 else:
-                    if grade>.75 or snow>.85 or draw>(.20+.47*forest+.10*dry)*(1-.9*urban):
+                    if grade>.75 or snow>.85 or draw>(.20+.56*forest+.10*dry)*(1-.9*urban):
                         continue
                     name="Shrub" if dry>.42 or rng.random()<.18 else "Fern" if forest>.45 else "Weeds"
-                    size=rng.uniform(.7,1.5)
+                    if forest>.38 and name in ("Fern","Shrub") and rng.random()<.18:
+                        name="FirSapling"
+                    size=rng.uniform(.7,1.5) if name!="FirSapling" else rng.uniform(1.0,2.1)
                 batches[int(x//256),int(y//256),name].append((x,y,z,rng.uniform(-180,180),size))
     return batches
+
+
+def forage(plan, height, cover, clear):
+    """Keep one wood source and one mineral source per suitable patch of terrain."""
+    w, d = plan["size_m"]
+    spacing = 150
+    for i in range(math.ceil(w/spacing)):
+        for j in range(math.ceil(d/spacing)):
+            for mineral in (False, True):
+                seed = (plan["seed"] << 32) + (i << 16) + (j << 1) + int(mineral)
+                rng = random.Random(seed)
+                for attempt in range(24):
+                    x = i*spacing + rng.uniform(5, min(spacing, w-i*spacing)-4)
+                    y = j*spacing + rng.uniform(5, min(spacing, d-j*spacing)-4)
+                    if not clear.allows(x,y):
+                        continue
+                    dz = math.hypot(height(x+2,y)-height(x-2,y), height(x,y+2)-height(x,y-2))
+                    if dz > 1.15:
+                        continue
+                    z = height(x,y)
+                    dry = cover.weights(x,y,z)[0]
+                    name = "Geode" if mineral else ("Saguaro" if dry>.65 and rng.random()<.78 else "Deadwood")
+                    yield i, j, name, x, y, z, rng.uniform(-180,180), rng.uniform(.83,1.2)
+                    break

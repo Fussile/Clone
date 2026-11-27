@@ -4,13 +4,13 @@ import math
 
 import unreal
 
-from biome_layout import Clearances, Cover, Surface, scatter
+from biome_layout import Clearances, Cover, Surface, forage, scatter
 
 
 PACKAGE = "/Game/Art/Crossroads/World/Biomes"
-NAMES = ("BirchA","BirchB","Fern","Shrub","Weeds","Boulder","Stones")
+NAMES = ("BirchA","BirchB","Fern","Shrub","Weeds","Boulder","Stones","FirSapling")
 COLORS = ("Meadow","Sand","DryPlain","CityLawn","Forest","Snow","Rock")
-NORMALS = ("Meadow","Sand","Snow","Rock")
+NORMALS = ("Meadow","Sand","Snow","Rock","DryPlain","Forest")
 
 
 def ground_material(plan, mask_path, source, import_asset, west, north):
@@ -60,6 +60,8 @@ def ground_material(plan, mask_path, source, import_asset, west, north):
         node=editing.create_material_expression(mat,unreal.MaterialExpressionTextureSample,-520,y)
         node.set_editor_property("texture",texture)
         node.set_editor_property("sampler_type",kind)
+        if kind != unreal.MaterialSamplerType.SAMPLERTYPE_MASKS:
+            node.set_editor_property("sampler_source",unreal.SamplerSourceMode.SSM_WRAP_WORLD_GROUP_SETTINGS)
         connect(uv,"",node,"UVs")
         return node
 
@@ -72,10 +74,15 @@ def ground_material(plan, mask_path, source, import_asset, west, north):
     normals=dict(bindings)
     # UVs are in metres. World projection keeps the texture scale independent of the 5 km Landscape.
     repeats={"Meadow":4,"DryPlain":4,"Sand":5,"Snow":4,"Rock":5,"Forest":2.5,"CityLawn":1.4}
+    broad_uv=custom("return float2(dot(P.xy,float2(.8,.6)),dot(P.xy,float2(-.6,.8)))/2250.;",
+                    vec.CMOT_FLOAT2,{"P":(basepos,"")},-1100,-600)
     for idx,name in enumerate(COLORS):
         uv=custom(f"return P.xy/{repeats[name]*100:.1f};",vec.CMOT_FLOAT2,{"P":(basepos,"")},-1000,idx*210)
         texture=import_asset(source/f"T_{name}.jpg",PACKAGE,unreal.Texture2D,refresh_if_source_changed=True)
-        bindings[name]=(sample(texture,uv,sampler.SAMPLERTYPE_COLOR,idx*210),"RGB")
+        detail=sample(texture,uv,sampler.SAMPLERTYPE_COLOR,idx*210)
+        broad=sample(texture,broad_uv,sampler.SAMPLERTYPE_COLOR,idx*210+90)
+        bindings[name]=(custom("return Detail*.8+Broad*.2;",vec.CMOT_FLOAT3,
+                               {"Detail":(detail,"RGB"),"Broad":(broad,"RGB")},-320,idx*210),"")
         if name in NORMALS:
             texture=import_asset(source/f"T_{name}_Normal.jpg",PACKAGE,unreal.Texture2D,refresh_if_source_changed=True)
             texture.set_editor_property("compression_settings",unreal.TextureCompressionSettings.TC_NORMALMAP)
@@ -94,7 +101,10 @@ def ground_material(plan, mask_path, source, import_asset, west, north):
     """
     normal_code="""
         float steep = saturate((Exposure*255-32)/223);
-        float3 n = lerp(Meadow,Sand, Zones.r*(1-City));
+        float3 n = lerp(Meadow,DryPlain,smoothstep(0,.65,Zones.r));
+        n = lerp(n,Sand,smoothstep(.59,.98,Zones.r));
+        n = lerp(n,Forest,Zones.g);
+        n = lerp(n,Meadow,City);
         n = lerp(n,Rock,steep);
         return normalize(lerp(n,Snow,Zones.b*(1-.82*steep)));
     """
@@ -119,7 +129,7 @@ def water_geometry(plan, height):
         rx,ry = lake["radii_m"]
         level = height(x,y)+3
         lakes.append((x,y,rx,ry,level))
-        yield lake["id"], "Cylinder", x,y,level-.025, 2*rx,2*ry,.05,0,0
+        yield lake["id"], "Disk", x,y,level, 2*rx,2*ry,1,0,0
 
     def surface(x,y):
         # Match the level basin at a river mouth before following the channel inland.
@@ -149,15 +159,28 @@ def water_geometry(plan, height):
                        math.degrees(math.atan2(end-z,run)),yaw)
                 z=end
             if i+1<len(points)-1:
-                yield f"{river['id']}_bend_{i}", "Cylinder", *b,z-.03,width,width,.05,0,0
+                yield f"{river['id']}_bend_{i}", "Disk", *b,z-.015,width,width,1,0,0
 
 
-def place_water(plan,height,actors,existing,west,north,base_z,make_material):
-    mat = make_material(PACKAGE,"M_SurfaceWater",(),tint=unreal.LinearColor(.025,.095,.11,1),
-                        scalars=[(.15,unreal.MaterialProperty.MP_ROUGHNESS)])
+def place_water(plan,height,actors,existing,west,north,base_z,make_material,disk):
+    mat = make_material(PACKAGE,"M_CrossroadsOpenWater",(),tint=unreal.LinearColor(.032,.12,.127,1),
+                        scalars=[(.13,unreal.MaterialProperty.MP_ROUGHNESS)])
     editing = unreal.MaterialEditingLibrary
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     if not assets.get_metadata_tag(mat,"WaterRipples"):
+        mat.set_editor_property("blend_mode",unreal.BlendMode.BLEND_TRANSLUCENT)
+        mat.set_editor_property("two_sided",True)
+        mat.set_editor_property("translucency_lighting_mode",unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
+        fade=editing.create_material_expression(mat,unreal.MaterialExpressionDepthFade,-600,-250)
+        fade.set_editor_property("opacity_default",.78)
+        fade.set_editor_property("fade_distance_default",185.0)
+        fresnel=editing.create_material_expression(mat,unreal.MaterialExpressionFresnel,-600,-100)
+        opacity=editing.create_material_expression(mat,unreal.MaterialExpressionLinearInterpolate,-240,-250)
+        opacity.set_editor_property("const_b",.94)
+        if not (editing.connect_material_expressions(fade,"",opacity,"A") and
+                editing.connect_material_expressions(fresnel,"",opacity,"Alpha") and
+                editing.connect_material_property(opacity,"",unreal.MaterialProperty.MP_OPACITY)):
+            raise RuntimeError("Could not build shoreline and reflection falloff")
         pos=editing.create_material_expression(mat,unreal.MaterialExpressionWorldPosition,-800,200)
         time=editing.create_material_expression(mat,unreal.MaterialExpressionTime,-800,340)
         ripple=editing.create_material_expression(mat,unreal.MaterialExpressionCustom,-400,200)
@@ -168,7 +191,14 @@ def place_water(plan,height,actors,existing,west,north,base_z,make_material):
             inputs.append(pin)
         ripple.set_editor_property("inputs",inputs)
         ripple.set_editor_property("output_type",unreal.CustomMaterialOutputType.CMOT_FLOAT3)
-        ripple.set_editor_property("code","return normalize(float3(.085*sin(dot(P.xy,float2(.021,.013))+T),.06*cos(dot(P.xy,float2(-.011,.025))-.7*T),1));")
+        ripple.set_editor_property("code","""
+            float2 p=P.xy*.01;
+            float swell=sin(dot(p,float2(.83,.46))+.82*T);
+            float2 ripples=float2(sin(dot(p,float2(3.6,1.4))+1.8*T+.9*swell),
+                                  cos(dot(p,float2(-1.9,4.7))-1.4*T+.65*swell));
+            float2 wind=float2(cos(p.x*8.7+p.y*4.2+2.7*T),sin(p.y*7.4-p.x*3.2+2.1*T));
+            return normalize(float3(.11*ripples+.034*wind+.05*swell,1));
+        """)
         if not (editing.connect_material_expressions(pos,"",ripple,"P") and
                 editing.connect_material_expressions(time,"",ripple,"T") and
                 editing.connect_material_property(ripple,"",unreal.MaterialProperty.MP_NORMAL)):
@@ -177,7 +207,7 @@ def place_water(plan,height,actors,existing,west,north,base_z,make_material):
         assets.set_metadata_tag(mat,"WaterRipples","1")
         if not assets.save_loaded_asset(mat):
             raise RuntimeError("Could not save water material")
-    meshes={n:unreal.load_asset(f"/Engine/BasicShapes/{n}.{n}") for n in ("Plane","Cylinder")}
+    meshes={"Plane":unreal.load_asset("/Engine/BasicShapes/Plane.Plane"),"Disk":disk}
     groups=defaultdict(list)
     for key,shape,x,y,z,w,d,h,pitch,yaw in water_geometry(plan,height):
         i,j=int(x//256),int(y//256)
@@ -197,9 +227,35 @@ def place_water(plan,height,actors,existing,west,north,base_z,make_material):
             actor.set_actor_location(at,False,False)
         actor.set_static_instances(meshes[shape],instances)
         component=actor.get_component_by_class(unreal.InstancedStaticMeshComponent)
+        component.set_editor_property("disallow_nanite",True)
         component.set_material(0,mat)
-        component.set_collision_profile_name("NoCollision")
+        component.set_collision_profile_name("CrossroadsWater")
         component.set_editor_property("cast_shadow",False)
+    for actor in old.values():
+        actors.destroy_actor(actor)
+
+
+def place_resources(plan,height,cover,clear,meshes,existing,actors,west,north,base_z):
+    cls=unreal.load_class(None,"/Script/Survival.SurvivalSupplyCrate")
+    old={str(tag):actor for actor in existing for tag in actor.tags if str(tag).startswith("CrossroadsForage_")}
+    labels={"Deadwood":"Fallen timber","Saguaro":"Dry cactus ribs","Geode":"Exposed quartz geode"}
+    for i,j,name,x,y,z,yaw,scale in forage(plan,height,cover,clear):
+        key=f"CrossroadsForage_{i}_{j}_{'stone' if name=='Geode' else 'wood'}"
+        at=unreal.Vector(west+x*100,north+(plan["size_m"][1]-y)*100,base_z+100*z)
+        actor=old.pop(key,None)
+        if actor is None:
+            actor=actors.spawn_actor_from_class(cls,at)
+            actor.set_editor_property("tags",[unreal.Name(key)])
+        actor.modify()
+        actor.set_actor_label(labels[name])
+        actor.set_actor_location_and_rotation(at,unreal.Rotator(yaw=yaw),False,False)
+        actor.set_actor_scale3d(unreal.Vector(scale,scale,scale))
+        actor.set_editor_property("loot_name",labels[name])
+        actor.set_editor_property("timber_amount",{"Saguaro":4,"Deadwood":8,"Geode":0}[name])
+        actor.set_editor_property("stone_amount",6 if name=="Geode" else 0)
+        comp=actor.get_component_by_class(unreal.StaticMeshComponent)
+        comp.set_static_mesh(meshes[name])
+        comp.set_collision_profile_name("BlockAll")
     for actor in old.values():
         actors.destroy_actor(actor)
 
@@ -233,21 +289,24 @@ def place(plan, raw, output, source, import_asset, make_material):
             terrain.set_editor_property("landscape_material",material)
     root=next(a for a in existing if isinstance(a,unreal.Landscape))
     origin=root.get_actor_location()
-    place_water(plan,height,actors,existing,west,north,origin.z,make_material)
     meshes={name:import_asset(source/f"SM_{name}.glb",f"{PACKAGE}/{name}",unreal.StaticMesh,
-                              refresh_if_source_changed=True) for name in NAMES}
-    for name in ("Boulder","Stones"):
+                              refresh_if_source_changed=True) for name in (*NAMES,"WaterDisk","Deadwood","Saguaro","Geode")}
+    for name in ("Boulder","Stones","WaterDisk","Deadwood","Saguaro","Geode"):
         if not unreal.CrossroadsWorldBake.set_static_mesh_collision(meshes[name]) or not assets.save_loaded_asset(meshes[name]):
             raise RuntimeError(f"Could not save {name} collision")
     meshes["Trunks"]=unreal.load_asset("/Engine/BasicShapes/Cylinder.Cylinder")
-    batches=scatter(plan,height,cover,Clearances(plan))
+    resources=[a for a in existing if any(str(tag).startswith("CrossroadsForage_") for tag in a.tags)]
+    place_water(plan,height,actors,existing,west,north,origin.z,make_material,meshes["WaterDisk"])
+    clear=Clearances(plan)
+    place_resources(plan,height,cover,clear,meshes,resources,actors,west,north,origin.z)
+    batches=scatter(plan,height,cover,clear)
     trunks=defaultdict(list)
     for (i,j,name),points in batches.items():
         if name.startswith("Birch"):
             trunks[i,j,"Trunks"].extend(points)
     batches.update(trunks)
     actor_class=unreal.load_class(None,"/Script/Survival.SurvivalFacade")
-    limits={"BirchA":1100,"BirchB":1100,"Boulder":650,"Stones":300,"Shrub":210,"Fern":115,"Weeds":95}
+    limits={"BirchA":1100,"BirchB":1100,"FirSapling":165,"Boulder":650,"Stones":300,"Shrub":210,"Fern":115,"Weeds":95}
     for (i,j,name),points in sorted(batches.items()):
         key=f"{prefix}{i}_{j}_{name}"
         # World Partition assigns an actor to a cell by its bounds. Local instance positions

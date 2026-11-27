@@ -69,10 +69,11 @@ def make_material(directory, name, textures, tint=None, world_repeat_cm=None, *,
     path = f"{directory}/{name}"
     editing = unreal.MaterialEditingLibrary
     world_material = directory == ART + "/World" or directory.startswith(ART + "/World/")
+    projection_version = "2" if any(prop == unreal.MaterialProperty.MP_NORMAL for _,_,_,prop in textures) else "1"
     if assets.does_asset_exist(path):
         material = assets.load_asset(path)
         # A failed projection can leave a saved asset with a partial graph.
-        if world_repeat_cm is None or assets.get_metadata_tag(material, "CrossroadsProjection") == "1":
+        if world_repeat_cm is None or assets.get_metadata_tag(material, "CrossroadsProjection") == projection_version:
             if world_material and not material.get_editor_property("used_with_nanite"):
                 material.set_editor_property("used_with_nanite", True)
                 editing.recompile_material(material)
@@ -93,22 +94,17 @@ def make_material(directory, name, textures, tint=None, world_repeat_cm=None, *,
         # use the same physical texel density, including rotated structures.
         pos = editing.create_material_expression(material, unreal.MaterialExpressionWorldPosition, -900, 0)
         uv = editing.create_material_expression(material, unreal.MaterialExpressionCustom, -620, 0)
-        normal = editing.create_material_expression(material, unreal.MaterialExpressionPixelNormalWS, -900, 160)
-        inputs = []
-        for pin_name in ("P", "N"):
-            pin = unreal.CustomInput()
-            pin.set_editor_property("input_name", unreal.Name(pin_name))
-            inputs.append(pin)
-        uv.set_editor_property("inputs", inputs)
+        pin = unreal.CustomInput()
+        pin.set_editor_property("input_name", unreal.Name("P"))
+        uv.set_editor_property("inputs", [pin])
         uv.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT2)
         uv.set_editor_property("code", (
-            "float3 n = abs(N); "
+            "float3 n = abs(cross(ddx(P.xyz),ddy(P.xyz))); "
             "float2 uv = n.z >= max(n.x,n.y) ? P.xy : "
             "(n.x > n.y ? float2(P.y,-P.z) : float2(P.x,-P.z)); "
             f"return uv / {world_repeat_cm:.1f};"
         ))
-        if (not editing.connect_material_expressions(pos, "", uv, "P")
-                or not editing.connect_material_expressions(normal, "", uv, "N")):
+        if not editing.connect_material_expressions(pos, "", uv, "P"):
             raise RuntimeError(f"Could not project textures for {path}.")
     if not textures and tint is not None:
         color = editing.create_material_expression(material, unreal.MaterialExpressionConstant3Vector, -300, 0)
@@ -147,7 +143,7 @@ def make_material(directory, name, textures, tint=None, world_repeat_cm=None, *,
             raise RuntimeError(f"Could not set {target} for {path}.")
     editing.recompile_material(material)
     if world_repeat_cm is not None:
-        assets.set_metadata_tag(material, "CrossroadsProjection", "1")
+        assets.set_metadata_tag(material, "CrossroadsProjection", projection_version)
     if not assets.save_loaded_asset(material):
         raise RuntimeError(f"Could not save {path}.")
     return material

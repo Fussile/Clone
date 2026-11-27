@@ -194,21 +194,31 @@ def place():
     color_map = unreal.load_asset(f"{surface_path}/Concrete034_Color")
     roughness = unreal.load_asset(f"{surface_path}/Concrete034_Roughness")
     sampler, prop = unreal.MaterialSamplerType, unreal.MaterialProperty
-    def finish(name, texture, repeat, color=None):
+    concrete_normal = unreal.load_asset(f"{surface_path}/Concrete034_NormalDX")
+    def finish(name, texture, repeat, color=None, normal=None, rough=None):
         return prepare_art["make_material"](world_art, "M_RegionFinish_"+name, (
             (texture, sampler.SAMPLERTYPE_COLOR, "RGB", prop.MP_BASE_COLOR),
-            (roughness, sampler.SAMPLERTYPE_LINEAR_COLOR, "R", prop.MP_ROUGHNESS),
+            (rough or roughness, sampler.SAMPLERTYPE_LINEAR_COLOR, "R", prop.MP_ROUGHNESS),
+            *([(normal, sampler.SAMPLERTYPE_NORMAL, "RGB", prop.MP_NORMAL)] if normal else []),
         ), tint=color, world_repeat_cm=repeat)
 
     for name in ("StationBrick", "ShopTile"):
         tex = import_asset(source_art / "Finishes" / f"T_{name}.jpg", surface_path, unreal.Texture2D)
         style_materials[name] = finish(name, tex, 200 if name == "StationBrick" else 160)
     for style in ("late_soviet", "stucco_metal", "classical_civic", "modern", "petrol"):
-        style_materials[style] = finish(style, color_map, 165, unreal.LinearColor(*colors[style], 1.0))
+        style_materials[style] = finish(style, color_map, 165, unreal.LinearColor(*colors[style], 1.0), concrete_normal)
     style_materials["brick_hardwood"] = style_materials["StationBrick"]
-    concrete = finish("Concrete", color_map, 200)
-    style_materials["timber"] = unreal.load_asset("/Game/Art/Crossroads/Building/M_CrossroadsTimber")
-    hangar_finish = finish("HangarConcrete", color_map, 200)
+    concrete = finish("Concrete", color_map, 200, normal=concrete_normal)
+    boards = [import_asset(source_art/"Finishes"/f"T_WeatheredBoards{suffix}.jpg",
+                           surface_path,unreal.Texture2D,refresh_if_source_changed=True)
+              for suffix in ("","_Normal","_Rough")]
+    boards[1].set_editor_property("compression_settings",unreal.TextureCompressionSettings.TC_NORMALMAP)
+    for texture in boards[1:]:
+        texture.set_editor_property("srgb",False)
+        if not assets.save_loaded_asset(texture):
+            raise RuntimeError("Could not save the weathered timber finish")
+    style_materials["timber"] = finish("WeatheredBoards",boards[0],185,normal=boards[1],rough=boards[2])
+    hangar_finish = finish("HangarConcrete", color_map, 200, normal=concrete_normal)
     if not hangar_finish.get_editor_property("two_sided"):
         hangar_finish.set_editor_property("two_sided", True)
         unreal.MaterialEditingLibrary.recompile_material(hangar_finish)

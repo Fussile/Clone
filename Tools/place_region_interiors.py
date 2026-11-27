@@ -78,7 +78,20 @@ def homes(site, ranch=False):
     if ranch:
         w = site.width*.58
     h = 3.0
-    site.building("_house", w, d, h, 1.35, finish="timber")
+    front = site.building("_house", w, d, h, 1.35, finish="timber") - site.y
+    porch_w = min(5.4, w*.52)
+    site.part("porch_cover", "Porch roof", 0, front-.93, 2.58, porch_w, 2.12, .18, "dark_trim")
+    for side in (-1, 1):
+        site.part(f"porch_post_{side}", "Porch post", side*(porch_w/2-.14), front-1.78,
+                  0, .14, .14, 2.58, "timber")
+        site.part(f"eave_{side}", "Eave fascia", side*(w/2+.09), 0, h-.07,
+                  .17, d+.72, .23, "timber")
+    chimney_x = -w*.39
+    roofline = h+(w/2-abs(chimney_x))*math.tan(math.radians(17))
+    site.part("chimney", "Brick chimney", chimney_x, -d*.24, h, .72, 1.0,
+              roofline-h+.93, "StationBrick")
+    site.part("chimney_cap", "Chimney cap", chimney_x, -d*.24, roofline+.93,
+              .86, 1.14, .13, "concrete")
     # Paired pitched surfaces preserve a recognizable roofline on cabins and farmhouses.
     for side in (-1, 1):
         site.part(f"roof_pitch_{side}", "Pitched roof", side*w/4, 0, h+w*.25*math.tan(math.radians(17)),
@@ -116,6 +129,11 @@ def retail(site, use_windows):
     w, d = site.width*.92, site.depth*.90
     front = site.building("_market", w, d, 3.65, 2.6, finish="petrol")
     site.label(front)
+    for side in (-1, 1):
+        site.part(f"display_awning_{side}", "Shop awning", side*w*.29, front-site.y-.73, 2.96,
+                  w*.36, 1.5, .15, "petrol",collision=False)
+        site.part(f"shop_plinth_{side}", "Brick stall riser", side*w*.29, front-site.y-.12, 0,
+                  w*.36, .28, .48, "StationBrick")
     if use_windows:
         for side in (-1, 1):
             site.window(f"{site.key}_display_{side}", site.x+side*w*.24, front, site.z)
@@ -141,6 +159,9 @@ def civic(site, medical=False, classroom=False):
     front = site.building("_main", w, d, 4.25, 3.0, finish="petrol")
     site.label(front)
     for side in (-1, 1):
+        site.window(f"{site.key}_wing_window_{side}", site.x+side*w*.335, front, site.z)
+        site.part(f"wing_sill_{side}", "Stone window sill", side*w*.335, front-site.y-.19,
+                  .48, min(3.6,w*.27), .36, .15, "concrete")
         dx = side*w*.246
         site.part(f"pier_{side}", "Entrance pier", side*w*.18, front-site.y-1.45,
                   0, .55, .55, 3.45, "classical_civic")
