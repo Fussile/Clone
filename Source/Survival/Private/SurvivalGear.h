@@ -49,4 +49,6 @@ inline constexpr FSurvivalGearDefinition SurvivalGear[] = {
     {TEXT("team_wendy_exfil_helmet_camo"), TEXT("EXFIL camouflage helmet"), TEXT("Helmet"), 83},
     {TEXT("vetements_cargo_jeans_wide_leg_track_pants"), TEXT("Wide-leg cargo trousers"), TEXT("Legs"), 29},
     {TEXT("ww2_soviet_uniform"), TEXT("WWII uniform"), TEXT("Body"), 48, nullptr, {0.22f, 0.17f, 0.082f}},
+    {TEXT("woven_fiber_shirt"), TEXT("Woven fiber shirt"), TEXT("Torso"), 10, TEXT("free_shirt_sleeved"), {.28f,.24f,.12f}},
+    {TEXT("woven_fiber_trousers"), TEXT("Woven fiber trousers"), TEXT("Legs"), 10, TEXT("male_jeans")},
 };

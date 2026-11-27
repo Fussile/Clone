@@ -1,4 +1,5 @@
 #include "SurvivalCharacter.h"
+#include "SurvivalStation.h"
 #include "Algo/Find.h"
 #include "SurvivalGear.h"
 #include "SurvivalWeaponMods.h"
@@ -108,6 +109,20 @@ ASurvivalCharacter::ASurvivalCharacter()
     FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
     FirstPersonCamera->SetRelativeLocation(FVector(0.0, 0.0, BaseEyeHeight));
     FirstPersonCamera->bUsePawnControlRotation = true;
+
+    PrimitiveToolRoot = CreateDefaultSubobject<USceneComponent>(TEXT("PrimitiveToolPose"));
+    PrimitiveToolRoot->SetupAttachment(FirstPersonCamera);
+    PrimitiveHandle = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("FieldToolHandle"));
+    PrimitiveHead = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("FieldToolHead"));
+    for (auto* ToolPart : {PrimitiveHandle.Get(), PrimitiveHead.Get()})
+    {
+        ToolPart->SetupAttachment(PrimitiveToolRoot);
+        ToolPart->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        ToolPart->SetOnlyOwnerSee(true);
+        ToolPart->SetHiddenInGame(true);
+        ToolPart->SetVisibility(false);
+        ToolPart->SetCanEverAffectNavigation(false);
+    }
 
     SidearmViewmodel = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SidearmViewmodel"));
     SidearmViewmodel->SetupAttachment(FirstPersonCamera);
@@ -242,6 +257,11 @@ void ASurvivalCharacter::Tick(float DeltaSeconds)
     }
     if (HealthPoints > 0 && (HasAuthority() || IsLocallyControlled()))
         UpdateWaterState(DeltaSeconds);
+    if (PrimitiveHandle->IsVisible())
+    {
+        const double Phase = FMath::Clamp((GetWorld()->GetTimeSeconds() - ToolSwingStart) / .35, 0., 1.);
+        PrimitiveToolRoot->SetRelativeRotation(FRotator(-28. + 32.*FMath::Sin(PI * Phase), 0., -12.));
+    }
     UpdateVitals(DeltaSeconds);
     UpdateRifle();
     UpdateSurvivorAnimation(DeltaSeconds);
@@ -1027,6 +1047,7 @@ void ASurvivalCharacter::Interact()
         return;
     }
     if (bInventoryOpen) return;
+    if (FieldInteract()) return;
     FHitResult LadderHit;
     if (FindWorldAimHit(InteractReach, LadderHit) && IsValid(LadderHit.GetActor()) &&
         LadderHit.GetActor()->ActorHasTag(TEXT("CrossroadsRoofLadder")))
@@ -1043,6 +1064,20 @@ void ASurvivalCharacter::Interact()
     const FSurvivalPlanTarget Target = FindPlan();
     if (const FSurvivalBuildPlacement* Plan = Target.GetPlan())
     {
+        if (!HasAuthority())
+        {
+            FHitResult Hit;
+            const int32 Cost = Plan->GetPiece().Cost.Timber;
+            if (!bFieldRequestPending && CanFinish(*Plan) && Cost > 0 && Inventory.Timber >= Cost && FindPlanAimHit(InteractReach, Hit))
+            {
+                bFieldRequestPending = true;
+                PendingFieldItem = ESurvivalItem::Timber;
+                PendingMaterialCount = Cost;
+                Inventory.Timber -= Cost;
+                ServerActOnPlan(Target.Chunk, Target.PlanIndex, *Plan, FVector_NetQuantize10(Hit.ImpactPoint), true);
+            }
+            return;
+        }
         if (ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
             GameMode && CanFinish(*Plan))
         {
@@ -1065,7 +1100,25 @@ void ASurvivalCharacter::Interact()
         {
             if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
             {
-                if (const FSurvivalFinishedPiece* Piece = Chunk->FindFinished(Hit);
+                const auto* Shared = Chunk->FindFinished(Hit);
+                if (!HasAuthority() && Shared && Shared->Tier != INDEX_NONE)
+                {
+                    const bool bDoor = !bBuildMode && Shared->Placement.GetPiece().bDoorFrame;
+                    const uint8 Action = bDoor ? (Shared->Door.IsValid() ? 0 : 1) : 2;
+                    if (bFieldRequestPending || (Action == 2 && Shared->Health >= Shared->MaxHealth)) return;
+                    const auto Cost = Action == 1 ? ESurvivalItem::TimberDoor : ESurvivalItem::Timber;
+                    if (Action != 0 && GetItemCount(Cost) < 1) return;
+                    bFieldRequestPending = true;
+                    if (Action != 0)
+                    {
+                        PendingFieldItem = Cost;
+                        ChangeItemCount(Cost,-1);
+                        SyncPack();
+                    }
+                    ServerUseBuiltPiece(Chunk, Shared->StructureId, Action, FVector_NetQuantize10(Hit.ImpactPoint));
+                    return;
+                }
+                if (const FSurvivalFinishedPiece* Piece = Shared;
                     !bBuildMode && Piece && Piece->Placement.GetPiece().bDoorFrame)
                 {
                     if (Piece->Door.IsValid())
@@ -1131,6 +1184,7 @@ void ASurvivalCharacter::EquipSidearm()
 
 void ASurvivalCharacter::UpdateSidearmView()
 {
+    RefreshPrimitiveTool();
     UpdateFirearmModel();
     UpdateRifleView();
     HeldWeaponSurface->SetHiddenInGame(!HeldWeaponSurface->GetStaticMesh() || bThirdPerson || bBuildMode
@@ -1167,7 +1221,7 @@ const TCHAR* ASurvivalCharacter::GetWeaponLabel(ESurvivalItem Weapon) const
 
 const TCHAR* ASurvivalCharacter::GetInstanceLabel(ESurvivalItem Weapon, int32 Id) const
 {
-    if (!WeaponItems.IsValidIndex(Id) || WeaponItems[Id].Item != Weapon) return SurvivalItemName(Weapon);
+    if (!IsWeaponItem(Weapon) || !WeaponItems.IsValidIndex(Id) || WeaponItems[Id].Item != Weapon) return SurvivalItemName(Weapon);
     return Arsenal[FirearmIndex(Weapon, WeaponItems[Id].Firearm)].Label;
 }
 
@@ -1467,6 +1521,11 @@ bool ASurvivalCharacter::IsAimingSidearm() const
 
 void ASurvivalCharacter::PressAim()
 {
+    if (!bInventoryOpen && HealthPoints > 0 && GetHotbarItem(ActiveHotbarSlot) == ESurvivalItem::Hammer)
+    {
+        HammerUpgrade();
+        return;
+    }
     bAimHeld = true;
 }
 
@@ -1665,6 +1724,11 @@ void ASurvivalCharacter::PrimaryAction()
         return;
     }
     const auto Weapon = GetHotbarItem(ActiveHotbarSlot);
+    if (Weapon == ESurvivalItem::StoneSpear || Weapon == ESurvivalItem::StoneAxe)
+    {
+        UsePrimitiveTool(Weapon);
+        return;
+    }
     if (IsFieldWeapon(Weapon))
     {
         UseFieldWeapon(Weapon);
@@ -2118,6 +2182,13 @@ void ASurvivalCharacter::UpdateVitals(float DeltaSeconds)
     {
         return;
     }
+    if (WaterIllness > 0)
+    {
+        const float SickTime = FMath::Min(DeltaSeconds, WaterIllness);
+        WaterIllness -= SickTime;
+        Vitals.Thirst = FMath::Max(0.f, Vitals.Thirst - SickTime * .52f);
+        Vitals.Hunger = FMath::Max(0.f, Vitals.Hunger - SickTime * .18f);
+    }
     const bool bSprintAllowed = !bWaterSwimming && bSprintHeld && Stance == EStance::Standing && Vitals.CanSprint()
         && !IsAimingSidearm() && !IsAimingRifle() && !bInventoryOpen;
     const bool bSprinting = bSprintAllowed && GetVelocity().SizeSquared2D() > FMath::Square(20.0);
@@ -2163,6 +2234,7 @@ void ASurvivalCharacter::SetInventoryOpen(bool bOpen)
         return;
     }
     bInventoryOpen = bOpen;
+    if (!bOpen) OpenStation.Reset();
     InspectWeapon(ESurvivalItem::None);
     ShowWeaponPortrait(false);
     bAimHeld = false;
@@ -2231,6 +2303,9 @@ ESurvivalItem ASurvivalCharacter::TrainingBook(ETraining Entry)
     {
     case ETraining::Construction: return ESurvivalItem::BuilderGuide;
     case ETraining::LootAppraisal: return ESurvivalItem::ScavengerNotes;
+    case ETraining::Workbench: return ESurvivalItem::ToolManual;
+    case ETraining::ChemistryStation: return ESurvivalItem::ScienceManual;
+    case ETraining::Steelworking: return ESurvivalItem::SteelManual;
     case ETraining::FieldDressings: return ESurvivalItem::DressingSchematic;
     default: return ESurvivalItem::None;
     }
@@ -2242,8 +2317,15 @@ bool ASurvivalCharacter::CanUseItem(ESurvivalItem Item, bool bFromBelt) const
     {
         return false;
     }
+    if (ASurvivalStation::IsKit(Item)) return bFromBelt && !bInventoryOpen && !bFieldRequestPending && !HasOpenContainer();
     switch (Item)
     {
+    case ESurvivalItem::ToolManual: return Progression.CanReadGuide(ETraining::Workbench);
+    case ESurvivalItem::ScienceManual: return Progression.CanReadGuide(ETraining::ChemistryStation);
+    case ESurvivalItem::SteelManual: return Progression.CanReadGuide(ETraining::Steelworking);
+    case ESurvivalItem::FiberShirt: case ESurvivalItem::FiberPants: return !bFieldRequestPending;
+    case ESurvivalItem::StrainedWater: case ESurvivalItem::RawWater: return Vitals.Thirst < FSurvivalVitals::Max;
+    case ESurvivalItem::GrilledMeal: case ESurvivalItem::OvenMeal:
     case ESurvivalItem::Food: return Vitals.Hunger < FSurvivalVitals::Max;
     case ESurvivalItem::EmptyBottle:
     {
@@ -2267,9 +2349,30 @@ void ASurvivalCharacter::UseItem(ESurvivalItem Item, int32 BeltSlot)
     if (bFromBelt && (BeltSlot < 0 || BeltSlot >= HotbarSize || Toolbelt[BeltSlot].Item != Item || Toolbelt[BeltSlot].Count <= 0))
         return;
     if (!CanUseItem(Item, bFromBelt)) return;
+    if (ASurvivalStation::IsKit(Item))
+    {
+        PlaceKit(Item);
+        return;
+    }
     if (bFromBelt && --Toolbelt[BeltSlot].Count == 0) Toolbelt[BeltSlot] = {};
     switch (Item)
     {
+    case ESurvivalItem::FiberShirt: case ESurvivalItem::FiberPants:
+        PendingFieldItem = Item;
+        bFieldRequestPending = true;
+        ChangeItemCount(Item, -1);
+        SyncPack();
+        ServerWearFiber(static_cast<uint8>(Item));
+        break;
+    case ESurvivalItem::ToolManual: case ESurvivalItem::ScienceManual: case ESurvivalItem::SteelManual:
+        ChangeItemCount(Item, -1);
+        Progression.ReadGuide(Item == ESurvivalItem::ToolManual ? ETraining::Workbench :
+            Item == ESurvivalItem::ScienceManual ? ETraining::ChemistryStation : ETraining::Steelworking);
+        break;
+    case ESurvivalItem::GrilledMeal: case ESurvivalItem::OvenMeal:
+        ChangeItemCount(Item, -1);
+        Vitals.Hunger = FMath::Min(FSurvivalVitals::Max, Vitals.Hunger + 54.f);
+        break;
     case ESurvivalItem::Food:
         --Items.Food;
         Progression.AwardPractice(ETraining::Nutrition, FMath::FloorToInt(FMath::Min(34.0f, FSurvivalVitals::Max - Vitals.Hunger)));
@@ -2281,9 +2384,11 @@ void ASurvivalCharacter::UseItem(ESurvivalItem Item, int32 BeltSlot)
         ChangeItemCount(ESurvivalItem::RawWater, 1);
         SyncPack();
         break;
+    case ESurvivalItem::StrainedWater:
+    case ESurvivalItem::RawWater:
     case ESurvivalItem::Water:
     {
-        --Items.Water;
+        ChangeItemCount(Item, -1);
         // Drinking still works with a full pack. Return the bottle when there is room after the drink.
         SyncPack();
         if (bFromBelt && Toolbelt[BeltSlot].IsEmpty())
@@ -2297,7 +2402,7 @@ void ASurvivalCharacter::UseItem(ESurvivalItem Item, int32 BeltSlot)
             SyncPack();
         }
         Progression.AwardPractice(ETraining::Hydration, FMath::FloorToInt(FMath::Min(42.0f, FSurvivalVitals::Max - Vitals.Thirst)));
-        Vitals.Thirst = FMath::Min(FSurvivalVitals::Max, Vitals.Thirst + 42.0f);
+        DrinkFieldWater(Item);
         break;
     }
     case ESurvivalItem::Bandage:
@@ -2626,6 +2731,18 @@ void ASurvivalCharacter::SyncPack()
             RemoveFromPack(Item, InPack - PackTotal);
         }
     }
+    // Keep whole units pending when the pack is full, and retain fractional fifths across scraps.
+    for (auto It = ScrapRemainders.CreateIterator(); It; ++It)
+    {
+        if (It.Value() < 5) continue;
+        int32 Units = FMath::Min(It.Value() / 5, SurvivalItemMaxStack(It.Key()));
+        while (Units > 0 && !HasRoomForExchange({}, It.Key(), Units)) Units /= 2;
+        if (Units == 0) continue;
+        ChangeItemCount(It.Key(), Units);
+        AddToPack(It.Key(), Units, 0);
+        It.Value() -= 5 * Units;
+        if (It.Value() == 0) It.RemoveCurrent();
+    }
     while (Pack.Num() > PackSize)
     {
         bool bEmptyRow = true;
@@ -2668,7 +2785,7 @@ void ASurvivalCharacter::ChooseHotbarSlot(int32 Slot)
 }
 
 bool ASurvivalCharacter::HasRoomForExchange(TConstArrayView<FSurvivalIngredient> Ingredients,
-    ESurvivalItem Output, int32 Quantity) const
+    ESurvivalItem Output, int32 Quantity, bool bBatchCosts) const
 {
     int32 Slots = MaxPackCells - Pack.Num() - PendingLootItems.Num();
     const int32 StackSize = SurvivalItemMaxStack(Output);
@@ -2683,7 +2800,7 @@ bool ASurvivalCharacter::HasRoomForExchange(TConstArrayView<FSurvivalIngredient>
     // SyncPack spends pack stacks from the end before using items on the toolbelt.
     for (const auto& Ingredient : Ingredients)
     {
-        int32 Spent = Ingredient.Count * Quantity;
+        int32 Spent = bBatchCosts ? Ingredient.Count : Ingredient.Count * Quantity;
         for (int32 Index = Pack.Num() - 1; Index >= 0 && Spent > 0; --Index)
         {
             const auto& Cell = Pack[Index];
@@ -2703,6 +2820,8 @@ bool ASurvivalCharacter::CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const
         return false;
     }
     const FSurvivalRecipe& Recipe = Recipes[RecipeIndex];
+    if (Recipe.Station != ESurvivalItem::None && (!StationInReach() || OpenStation->Kind() != Recipe.Station ||
+        (Recipe.Module != ESurvivalItem::None && !OpenStation->Installed(Recipe.Module)))) return false;
     if (Recipe.RequiredTool != ESurvivalItem::None && GetItemCount(Recipe.RequiredTool) < 1) return false;
     if (Recipe.RequiredTraining != ETraining::Count && Progression.Rank(Recipe.RequiredTraining) == 0)
     {
@@ -2710,12 +2829,14 @@ bool ASurvivalCharacter::CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const
     }
     for (const FSurvivalIngredient& Ingredient : Recipe.Ingredients)
     {
-        if (GetItemCount(Ingredient.Item) < Ingredient.Count * Quantity)
+        if (GetItemCount(Ingredient.Item) < IngredientCost(Recipe, Ingredient, Quantity))
         {
             return false;
         }
     }
-    return HasRoomForExchange(Recipe.Ingredients, Recipe.Output, Quantity);
+    TArray<FSurvivalIngredient> Batch;
+    for (const auto& Entry : Recipe.Ingredients) Batch.Add({Entry.Item, IngredientCost(Recipe, Entry, Quantity)});
+    return HasRoomForExchange(Batch, Recipe.Output, Quantity, true);
 }
 
 void ASurvivalCharacter::CraftRecipe(int32 RecipeIndex, int32 Quantity)
@@ -2727,7 +2848,7 @@ void ASurvivalCharacter::CraftRecipe(int32 RecipeIndex, int32 Quantity)
     const FSurvivalRecipe& Recipe = GetSurvivalRecipes()[RecipeIndex];
     for (const FSurvivalIngredient& Ingredient : Recipe.Ingredients)
     {
-        ChangeItemCount(Ingredient.Item, -Ingredient.Count * Quantity);
+        ChangeItemCount(Ingredient.Item, -IngredientCost(Recipe, Ingredient, Quantity));
     }
     SyncPack();
     if (IsWeaponItem(Recipe.Output))
@@ -2835,7 +2956,7 @@ void ASurvivalCharacter::PreviousPiece()
 bool ASurvivalCharacter::HasSupport(const FSurvivalBuildPlacement& Placement) const
 {
     const ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
-    return GameMode && GameMode->CanSupport(Placement);
+    return GameMode ? GameMode->CanSupport(Placement) : !HasAuthority();
 }
 
 bool ASurvivalCharacter::IsFootprintClear(const FSurvivalBuildPlacement& Placement, bool bPlanning) const
@@ -2879,6 +3000,12 @@ TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
         return {};
     }
 
+    return PlacementAt(Hit, bPlanHit, GetSelectedPiece(), QuarterTurns, GetAimCamera().GetComponentLocation());
+}
+
+TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::PlacementAt(const FHitResult& Hit, bool bPlanHit,
+    int32 Piece, int32 Turns, const FVector& Eye) const
+{
     const FSurvivalBuildPlacement* Source = nullptr;
     if (ASurvivalBuildChunk* Chunk = Cast<ASurvivalBuildChunk>(Hit.GetActor()))
     {
@@ -2895,12 +3022,12 @@ TOptional<FSurvivalBuildPlacement> ASurvivalCharacter::FindPlacement() const
     FSurvivalBuildPlacement Placement;
     Placement.Base = FVector(FMath::GridSnap(Hit.ImpactPoint.X, FSurvivalBuildPlacement::GridSize),
         FMath::GridSnap(Hit.ImpactPoint.Y, FSurvivalBuildPlacement::GridSize), Hit.ImpactPoint.Z);
-    Placement.Rotation = FRotator(0, QuarterTurns * 90.0, 0).Quaternion();
-    Placement.PieceIndex = GetSelectedPiece();
+    Placement.Rotation = FRotator(0, Turns * 90.0, 0).Quaternion();
+    Placement.PieceIndex = Piece;
     FVector ReachPoint = Hit.ImpactPoint;
     if (Source)
     {
-        const FVector TowardViewer = GetAimCamera().GetComponentLocation() - Hit.ImpactPoint;
+        const FVector TowardViewer = Eye - Hit.ImpactPoint;
         if (!Placement.SnapTo(*Source, Hit.ImpactPoint, Hit.ImpactNormal, TowardViewer))
         {
             return {};
@@ -2931,6 +3058,14 @@ void ASurvivalCharacter::PlacePlan()
 {
     if (bBuildMode)
     {
+        if (!HasAuthority())
+        {
+            FHitResult Hit;
+            const bool bPlan = FindPlanAimHit(BuildReach, Hit);
+            if (bPlan || FindWorldAimHit(BuildReach, Hit))
+                ServerQueuePlan(GetSelectedPiece(), QuarterTurns, bPlan, FVector_NetQuantize10(Hit.ImpactPoint));
+            return;
+        }
         const TOptional<FSurvivalBuildPlacement> Placement = FindPlacement();
         ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
         if (Placement.IsSet() && Placement->bClear && GameMode)
@@ -2949,6 +3084,13 @@ void ASurvivalCharacter::RemovePlan()
     if (ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>())
     {
         GameMode->RemovePlan(FindPlan());
+    }
+    else
+    {
+        FHitResult Hit;
+        const auto Target = FindPlan();
+        if (const auto* Plan = Target.GetPlan(); Plan && FindPlanAimHit(InteractReach, Hit))
+            ServerActOnPlan(Target.Chunk, Target.PlanIndex, *Plan, FVector_NetQuantize10(Hit.ImpactPoint), false);
     }
 }
 
@@ -3157,7 +3299,9 @@ void ASurvivalCharacter::RotateCharacterPortrait(float Degrees)
 
 bool ASurvivalCharacter::CanQuickSlot(ESurvivalItem Item)
 {
-    return IsWeaponItem(Item) || Item == ESurvivalItem::Food
+    return IsWeaponItem(Item) || ASurvivalStation::IsKit(Item) || Item == ESurvivalItem::Hammer
+        || Item == ESurvivalItem::StoneAxe || Item == ESurvivalItem::StoneSpear || Item == ESurvivalItem::StrainedWater
+        || Item == ESurvivalItem::RawWater || Item == ESurvivalItem::GrilledMeal || Item == ESurvivalItem::OvenMeal || Item == ESurvivalItem::Food
         || Item == ESurvivalItem::Water || Item == ESurvivalItem::EmptyBottle
         || Item == ESurvivalItem::Bandage || Item == ESurvivalItem::FieldDressing;
 }
@@ -3488,4 +3632,80 @@ void ASurvivalCharacter::RefreshAttachments()
             Light->RegisterComponent();
             AttachmentLights.Add(Light);
         }
+}
+
+bool ASurvivalCharacter::TraceBuildContact(const FVector& Point, double Reach, bool bPlan, FHitResult& Hit) const
+{
+    if (Point.ContainsNaN() || !HasReachTo(Point, Reach + 2.)) return false;
+    const FVector Eye = FirstPersonCamera->GetComponentLocation();
+    return GetWorld()->LineTraceSingleByChannel(Hit, Eye, Point + (Point-Eye).GetSafeNormal()*4.,
+        bPlan ? ECC_GameTraceChannel1 : ECC_Visibility, FCollisionQueryParams(SCENE_QUERY_STAT(SharedPlan), false, this))
+        && FVector::DistSquared(Point, Hit.ImpactPoint) < 36.;
+}
+
+void ASurvivalCharacter::ServerQueuePlan_Implementation(int32 Piece, int32 Turns, bool bPlan, FVector_NetQuantize10 Contact)
+{
+    FHitResult Hit;
+    if (HealthPoints <= 0 || !GetPlayerBuildPieces().Contains(Piece) || Turns < 0 || Turns > 3 ||
+        !TraceBuildContact(Contact, BuildReach, bPlan, Hit)) return;
+    const auto Placement = PlacementAt(Hit, bPlan, Piece, Turns, FirstPersonCamera->GetComponentLocation());
+    if (Placement.IsSet() && Placement->bClear)
+        if (auto* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>()) Mode->AddPlan(*Placement);
+}
+
+void ASurvivalCharacter::ServerActOnPlan_Implementation(ASurvivalBuildChunk* Chunk, int32 Index,
+    FSurvivalBuildPlacement Expected, FVector_NetQuantize10 Contact, bool bFinish)
+{
+    FHitResult Hit;
+    auto* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
+    const FSurvivalPlanTarget Target{Chunk, Index};
+    const auto* Plan = Target.GetPlan();
+    bool bOK = false;
+    if (HealthPoints > 0 && Mode && Plan && Plan->PieceIndex == Expected.PieceIndex &&
+        Plan->Base.Equals(Expected.Base,.1) && Plan->FrameOffset.Equals(Expected.FrameOffset,.1) &&
+        Plan->Rotation.Equals(Expected.Rotation,.001) && TraceBuildContact(Contact, InteractReach, true, Hit) &&
+        Hit.GetActor() == Chunk && Chunk->GetPlanTarget(Hit).PlanIndex == Index)
+    {
+        if (!bFinish) Mode->RemovePlan(Target);
+        else if (CanFinish(*Plan))
+        {
+            // The owning inventory has already reserved this exact blueprint cost.
+            FSurvivalMaterials Reserved = Plan->GetPiece().Cost;
+            bOK = Mode->FinishPlan(Target, Reserved);
+        }
+    }
+    if (bFinish) ClientFieldResult(bOK, static_cast<uint8>(ESurvivalItem::None));
+}
+
+void ASurvivalCharacter::RefreshPrimitiveTool()
+{
+    const auto Item = GetHotbarItem(ActiveHotbarSlot);
+    const bool bTool = Item == ESurvivalItem::Hammer || Item == ESurvivalItem::StoneAxe || Item == ESurvivalItem::StoneSpear;
+    const bool bShow = bTool && !bInventoryOpen && !bBuildMode && HealthPoints > 0;
+    PrimitiveHandle->SetVisibility(bShow);
+    PrimitiveHandle->SetHiddenInGame(!bShow);
+    PrimitiveHead->SetHiddenInGame(!bShow);
+    if (!bShow) return;
+    const bool bSpear = Item == ESurvivalItem::StoneSpear;
+    const bool bHammer = Item == ESurvivalItem::Hammer;
+    const FName Hand(TEXT("RightHand"));
+    if (bThirdPerson && GetMesh()->DoesSocketExist(Hand))
+    {
+        PrimitiveToolRoot->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, Hand);
+    }
+    else
+    {
+        PrimitiveToolRoot->AttachToComponent(FirstPersonCamera, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+        PrimitiveToolRoot->SetRelativeLocation(FVector(39,20,-13));
+    }
+    PrimitiveHandle->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cylinder.Cylinder")));
+    PrimitiveHead->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, bSpear ? TEXT("/Engine/BasicShapes/Cone.Cone") :
+        bHammer ? TEXT("/Engine/BasicShapes/Cube.Cube") : TEXT("/Engine/BasicShapes/Sphere.Sphere")));
+    PrimitiveHandle->SetRelativeScale3D(bSpear ? FVector(.032,.032,.96) : FVector(.038,.038,.36));
+    PrimitiveHead->SetRelativeLocation(FVector(0,0,bSpear ? 52. : 17.));
+    PrimitiveHead->SetRelativeScale3D(bSpear ? FVector(.06,.06,.17) : bHammer ? FVector(.15,.09,.08) : FVector(.18,.04,.13));
+    if (auto* Wood = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Art/Crossroads/Building/M_CrossroadsTimber.M_CrossroadsTimber"), nullptr, LOAD_NoWarn))
+        PrimitiveHandle->SetMaterial(0, Wood);
+    if (auto* StoneMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Art/Crossroads/Surfaces/M_Concrete034.M_Concrete034"), nullptr, LOAD_NoWarn))
+        PrimitiveHead->SetMaterial(0, StoneMaterial);
 }

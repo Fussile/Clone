@@ -31,6 +31,7 @@ const FLinearColor Blocked(1.0f, 0.51f, 0.36f);
 void ASurvivalHUD::BeginPlay()
 {
     Super::BeginPlay();
+    FieldWorkshopAtlas = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Art/Crossroads/Interface/T_UI_FieldWorkshop.T_UI_FieldWorkshop"), nullptr, LOAD_NoWarn);
     WorkshopAtlas = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Art/Crossroads/Interface/T_UI_WorkshopItems.T_UI_WorkshopItems"), nullptr, LOAD_NoWarn);
     FieldAtlas = LoadObject<UTexture2D>(nullptr,TEXT("/Game/Art/Crossroads/Interface/T_UI_FieldWeapons.T_UI_FieldWeapons"));
     FirearmAtlas = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Art/Crossroads/Interface/T_UI_Firearms.T_UI_Firearms"));
@@ -53,6 +54,7 @@ void ASurvivalHUD::BeginPlay()
 
 UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item, int32 Model) const
 {
+    if (Item > ESurvivalItem::RawWater && IsWorkshopItem(Item)) return FieldWorkshopAtlas.Get();
     if (IsWorkshopItem(Item)) return WorkshopAtlas.Get();
     if (IsFieldWeapon(Item)) return FieldAtlas.Get();
     if (FirearmAtlas && Model >= 0 && Model < UE_ARRAY_COUNT(Arsenal)) return FirearmAtlas.Get();
@@ -67,6 +69,12 @@ UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item, int32 Model) const
 
 FBox2f ASurvivalHUD::GetItemIconUV(ESurvivalItem Item, int32 Model) const
 {
+    if (Item > ESurvivalItem::RawWater && IsWorkshopItem(Item))
+    {
+        const int32 Cell = static_cast<int32>(Item) - static_cast<int32>(ESurvivalItem::StrainedWater);
+        const FVector2f Start((Cell % 8) * .125f, (Cell / 8) * .125f);
+        return FBox2f(Start, Start + FVector2f(.125f, .125f));
+    }
     if (IsWorkshopItem(Item))
     {
         const int32 Cell = WorkshopIndex(Item);
@@ -324,6 +332,9 @@ void ASurvivalHUD::DrawHUD()
     if (Character->IsHeadUnderwater() || Character->GetOxygenPercent() < 100)
         Meter(392.0f, TEXT("O2"), Character->GetOxygenPercent(),
               Character->GetOxygenPercent() <= 25 ? Blocked : Cyan);
+    if (Character->GetWaterIllness() > 0)
+        DrawText(FString::Printf(TEXT("Waterborne illness  %ds"), FMath::CeilToInt(Character->GetWaterIllness())),
+            Blocked, 22.f, 66.f);
     if (Character->GetWetnessPercent() > 0)
         Meter(Character->IsHeadUnderwater() || Character->GetOxygenPercent() < 100 ? 485.0f : 392.0f,
               TEXT("Wet"), Character->GetWetnessPercent(), Cyan);
@@ -426,7 +437,9 @@ void ASurvivalHUD::DrawHUD()
     }
 
     const FSurvivalPlanTarget Target = Character->FindPlan();
-    if (const ASurvivalWorldDoor* Door = Character->FindWorldDoor())
+    const FString Field = Character->FieldPrompt();
+    if (!Field.IsEmpty()) DrawText(Field, Cyan, CenterX + 14.0f, CenterY + 12.0f);
+    else if (const ASurvivalWorldDoor* Door = Character->FindWorldDoor())
     {
         DrawText(Door->IsOpen() ? TEXT("[E] Close door") : TEXT("[E] Open door"),
             Cyan, CenterX + 14.0f, CenterY + 12.0f);

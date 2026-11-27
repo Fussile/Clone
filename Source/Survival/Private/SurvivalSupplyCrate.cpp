@@ -148,6 +148,8 @@ FSurvivalLoot ASurvivalSupplyCrate::GetAuthoredLoot() const
         Loot.Items.Cloth = FMath::Max(0, ClothAmount);
         // Existing baked forage actors already have stable parcel IDs. Ore follows the parcel across loot cycles.
         const FString SourceId = GetLootId().ToString();
+        if (SourceId.StartsWith(TEXT("CrossroadsForage_")) && SourceId.EndsWith(TEXT("_wood")))
+            Loot.Items.WorkshopStacks[WorkshopIndex(ESurvivalItem::PlantFiber)] = 5;
         if (SourceId.StartsWith(TEXT("CrossroadsForage_")) && SourceId.EndsWith(TEXT("_stone")))
         {
             const auto Ore = FCrc::StrCrc32(*SourceId) % 2 ? ESurvivalItem::IronOre : ESurvivalItem::CopperOre;

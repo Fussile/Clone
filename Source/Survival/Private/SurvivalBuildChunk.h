@@ -2,10 +2,46 @@
 
 #include "GameFramework/Actor.h"
 #include "SurvivalBuilding.h"
+#include "SurvivalVitals.h"
 #include "SurvivalBuildChunk.generated.h"
 
 class UInstancedStaticMeshComponent;
 class UStaticMeshComponent;
+
+USTRUCT()
+struct FSurvivalPlayerPieceState
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FVector Base = FVector::ZeroVector;
+    UPROPERTY()
+    FVector Offset = FVector::ZeroVector;
+    UPROPERTY()
+    FQuat Rotation = FQuat::Identity;
+    UPROPERTY()
+    int32 PieceIndex = 0;
+    UPROPERTY()
+    int32 Id = INDEX_NONE;
+    UPROPERTY()
+    int32 Tier = 0;
+    UPROPERTY()
+    int32 Health = 0;
+    UPROPERTY()
+    int32 DoorHealth = 0;
+    UPROPERTY()
+    bool bOpen = false;
+    UPROPERTY()
+    bool bNegative = false;
+};
+
+struct FSurvivalBuildTier
+{
+    const TCHAR* Name;
+    ESurvivalItem Material;
+    int32 Cost;
+    int32 HitPoints;
+};
 
 struct FSurvivalFinishedPiece
 {
@@ -17,6 +53,10 @@ struct FSurvivalFinishedPiece
     bool bDoorOpen = false;
     bool bSwingNegative = false;
     int32 DoorHealth = 0;
+
+    int32 Tier = INDEX_NONE;
+    const FSurvivalBuildTier* NextTier() const;
+    FString UpgradePrompt() const;
 
     FSurvivalMaterials RepairCost() const
     {
@@ -32,10 +72,12 @@ class ASurvivalBuildChunk : public AActor
 public:
     ASurvivalBuildChunk();
 
+    virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Props) const override;
+    bool Upgrade(const FHitResult& Hit, int32 ExpectedId, int32 ExpectedTier);
     bool AddPlan(const FSurvivalBuildPlacement& Placement);
     void RemovePlan(int32 Index);
     bool FinishPlan(int32 Index, int32 StructureId);
-    bool AddFinishedPiece(const FSurvivalBuildPlacement& Placement, int32 StructureId);
+    bool AddFinishedPiece(const FSurvivalBuildPlacement& Placement, int32 StructureId, bool bFrame = false);
     void RemoveFinishedPieces(const TSet<int32>& StructureIds, int32& DebrisSlots);
     const FSurvivalBuildPlacement* GetPlan(int32 Index) const;
     FSurvivalPlanTarget GetPlanTarget(const FHitResult& Hit);
@@ -51,10 +93,24 @@ protected:
 
 private:
     bool AddInstances(UInstancedStaticMeshComponent& Component, const FSurvivalBuildPlacement& Placement,
-        TArray<int32>& Indices);
+        TArray<int32>& Indices, bool bFrame = false);
+    UFUNCTION()
     void RebuildGhosts();
+    void RebuildSolids();
+    void PublishPlayerPieces();
+    UPROPERTY(ReplicatedUsing=ReceivePlayerPieces)
+    TArray<FSurvivalPlayerPieceState> PlayerPieces;
+    UFUNCTION()
+    void ReceivePlayerPieces();
+    UPROPERTY()
+    TObjectPtr<UInstancedStaticMeshComponent> Metal;
+    TMap<int32, int32> MetalOwners;
+    UPROPERTY()
+    TObjectPtr<UInstancedStaticMeshComponent> Bracing;
+    TMap<int32, int32> BraceOwners;
     int32 FindFinishedIndex(const FHitResult& Hit) const;
     bool AddFinishedInstances(int32 Index);
+    void CreateDoorLeaf(FSurvivalFinishedPiece& Piece);
     void RemoveDoorLeaf(FSurvivalFinishedPiece& Piece);
     void SpawnDebris(const FSurvivalBuildPlacement& Placement);
 
@@ -67,6 +123,7 @@ private:
     UPROPERTY()
     TObjectPtr<UInstancedStaticMeshComponent> Ghosts;
 
+    UPROPERTY(ReplicatedUsing=RebuildGhosts)
     TArray<FSurvivalBuildPlacement> Plans;
     TMap<int32, int32> GhostOwners;
     TArray<FSurvivalFinishedPiece> Finished;

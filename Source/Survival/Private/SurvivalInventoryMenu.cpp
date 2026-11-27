@@ -1,4 +1,5 @@
 #include "SurvivalInventoryMenu.h"
+#include "SurvivalStation.h"
 
 #include "Brushes/SlateColorBrush.h"
 #include "Engine/Texture2D.h"
@@ -125,7 +126,9 @@ FText DescribeItem(const ASurvivalCharacter* Character, ESurvivalItem Item, int3
     if (Item == ESurvivalItem::EmptyBottle)
         Text += TEXT("\nUse while standing in a river or lake to fill one bottle.");
     if (Item == ESurvivalItem::RawWater)
-        Text += TEXT("\nIn Crafting, use a filter pump and cloth to make bottled water.");
+        Text += TEXT("\nVery dirty. Cloth straining reduces the risk slightly. Purify at a station with a pot.");
+    if (ASurvivalStation::IsKit(Item)) Text += TEXT("\nMove to your belt, aim at level ground, and left-click to place.");
+    if (Item == ESurvivalItem::StrainedWater) Text += TEXT("\nStill dirty. Purify at a station with a pot.");
     if (Character->CanUseItem(Item))
     {
         Text += TEXT("\nRight-click to use");
@@ -744,7 +747,7 @@ void LoadGearBrushes(TArray<FSlateBrush>& GearIcons, TStrongObjectPtr<UTexture2D
             {0,153,329,475,639,800}, {0,151,326,477,637,800}, {0,151,340,482,641,800},
             {0,152,322,480,639,800}, {0,155,327,478,637,800}, {0,153,327,476,635,800}};
         constexpr int32 Cells[] = { 0,1,3,10,11,12,13,20,21,22,23,-1,-1,-1,33,30,31,32,34,
-            40,41,42,43,50,51,52,53,60,61,62,64,70,71,73,74 };
+            40,41,42,43,50,51,52,53,60,61,62,64,70,71,73,74,22,32 };
         static_assert(UE_ARRAY_COUNT(Cells) == UE_ARRAY_COUNT(SurvivalGear));
         for (int32 Index = 0; Index < UE_ARRAY_COUNT(Cells); ++Index)
         {
@@ -1295,6 +1298,10 @@ void SSurvivalInventoryMenu::Construct(const FArguments& Args)
                                     })
                                 ]
                                 + SVerticalBox::Slot().AutoHeight()
+                                [SNew(SButton).Text(FText::FromString(TEXT("Scrap one (20% recovery)")))
+                                    .Visibility_Lambda([this]{ return Player.IsValid() && Player->CanRecycle() ? EVisibility::Visible : EVisibility::Collapsed; })
+                                    .OnClicked_Lambda([this]{ if (Player.IsValid()) Player->Recycle(); return FReply::Handled(); })]
+                                + SVerticalBox::Slot().AutoHeight()
                                 [SNew(SButton).Text(FText::FromString(TEXT("Drop one garment")))
                                     .Visibility_Lambda([this]{ return Player.IsValid() && Player->GetPackCell(Player->GetSelectedPackSlot()).GearIndex != INDEX_NONE ? EVisibility::Visible : EVisibility::Collapsed; })
                                     .OnClicked_Lambda([this]{ if (Player.IsValid()) Player->ServerDropGear(Player->GetPackCell(Player->GetSelectedPackSlot()).GearIndex); return FReply::Handled(); })]
@@ -1758,7 +1765,7 @@ void SSurvivalInventoryMenu::SelectFirstMatchingRecipe()
 
 TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeBrowser()
 {
-    TSharedRef<SHorizontalBox> Categories = SNew(SHorizontalBox);
+    TSharedRef<SWrapBox> Categories = SNew(SWrapBox).UseAllottedSize(true);
     TArray<FString> RecipeCategories = {TEXT("All")};
     for (const FSurvivalRecipe& Recipe : GetSurvivalRecipes())
     {
@@ -1766,7 +1773,7 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeBrowser()
     }
     for (const FString& Label : RecipeCategories)
     {
-        Categories->AddSlot().FillWidth(1).Padding(0, 0, 4, 0)
+        Categories->AddSlot().Padding(0, 0, 4, 3)
         [
             SNew(SButton).ButtonStyle(&MenuButtonStyle()).HAlign(HAlign_Center).Text(FText::FromString(Label))
             .ButtonColorAndOpacity_Lambda([this, Label]()
@@ -1808,7 +1815,8 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeBrowser()
                 + SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[SNew(SImage).Image(FindIcon(Item))]
                 + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center)
                 [
-                    SNew(STextBlock).Text(FText::FromString(SurvivalItemName(Item)))
+                    SNew(STextBlock).Text(FText::FromString(Recipes[Index].Station == ESurvivalItem::None ?
+                        FString(SurvivalItemName(Item)) : FString::Printf(TEXT("%s  /  %s"), SurvivalItemName(Item), SurvivalItemName(Recipes[Index].Station))))
                 ]
             ]
         ];
@@ -1838,10 +1846,16 @@ FText SSurvivalInventoryMenu::GetIngredientText() const
 
     FString Ingredients;
     const FSurvivalRecipe& Recipe = Recipes[SelectedRecipe];
+    if (Recipe.Station != ESurvivalItem::None)
+    {
+        Ingredients += FString::Printf(TEXT("Station   %s\n"), SurvivalItemName(Recipe.Station));
+        if (Recipe.Module != ESurvivalItem::None)
+            Ingredients += FString::Printf(TEXT("Install   %s\n"), SurvivalItemName(Recipe.Module));
+    }
     if (Recipe.RequiredTraining != ETraining::Count && Player.IsValid()
         && Player->GetProgression().Rank(Recipe.RequiredTraining) == 0)
     {
-        Ingredients = FString::Printf(TEXT("Locked — learn %s in Skills or read its schematic.\n\n"),
+        Ingredients += FString::Printf(TEXT("Locked — learn %s in Skills or read its schematic.\n\n"),
             GetTrainingInfo(Recipe.RequiredTraining).Name);
     }
     if (Recipe.RequiredTool != ESurvivalItem::None)
@@ -1853,18 +1867,30 @@ FText SSurvivalInventoryMenu::GetIngredientText() const
     for (const FSurvivalIngredient& Ingredient : Recipe.Ingredients)
     {
         const int32 Held = Player.IsValid() ? Player->GetItemCount(Ingredient.Item) : 0;
-        Ingredients += FString::Printf(TEXT("%s   %d / %d\n"), SurvivalItemName(Ingredient.Item), Held, Ingredient.Count * Quantity);
+        Ingredients += FString::Printf(TEXT("%s   %d / %d\n"), SurvivalItemName(Ingredient.Item), Held, Player.IsValid() ? Player->IngredientCost(Recipe, Ingredient, Quantity) : Ingredient.Count * Quantity);
     }
     return FText::FromString(Ingredients.TrimEnd());
 }
 
 TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeDetails()
 {
+    auto StationPanel = SNew(SVerticalBox);
+    StationPanel->AddSlot().AutoHeight()[SNew(STextBlock).Text_Lambda([this]{
+        return Player.IsValid() ? FText::FromString(Player->StationStatus()) : FText::GetEmpty(); })];
+    for (int32 Index = 0; Index < 3; ++Index)
+        StationPanel->AddSlot().AutoHeight()[SNew(SButton)
+            .Visibility_Lambda([this, Index]{ return Player.IsValid() && Player->StationSlot(Index) != ESurvivalItem::None ?
+                EVisibility::Visible : EVisibility::Collapsed; })
+            .Text_Lambda([this, Index]{ return FText::FromString(FString::Printf(TEXT("Fit / remove  %s"),
+                Player.IsValid() ? SurvivalItemName(Player->StationSlot(Index)) : TEXT(""))); })
+            .IsEnabled_Lambda([this, Index]{ return Player.IsValid() && Player->CanToggleModule(Index); })
+            .OnClicked_Lambda([this, Index]{ if (Player.IsValid()) Player->ToggleModule(Index); return FReply::Handled(); })];
     return SNew(SBorder).Padding(FMargin(20.0f))
         .BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
         .BorderBackgroundColor(PanelColor)
         [
             SNew(SVerticalBox)
+            + SVerticalBox::Slot().AutoHeight()[StationPanel]
             + SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Left).Padding(0,0,0,8)
             [SNew(SImage).DesiredSizeOverride(FVector2D(65,65)).Image_Lambda([this]() {
                 const auto Recipes = GetSurvivalRecipes();

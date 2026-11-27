@@ -69,7 +69,7 @@ TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces()
 TConstArrayView<int32> GetPlayerBuildPieces()
 {
     // The other stable indices are reserved for authored prefabs.
-    static const int32 Pieces[] = {0, 6, 5, 3};
+    static const int32 Pieces[] = {0, 2, 5, 3};
     return MakeArrayView(Pieces);
 }
 

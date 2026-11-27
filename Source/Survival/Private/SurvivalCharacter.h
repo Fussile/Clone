@@ -9,6 +9,7 @@
 #include "SurvivalSupplyCrate.h"
 #include "SurvivalCharacter.generated.h"
 
+class ASurvivalStation;
 class ASurvivalSidearm;
 class ASurvivalZombie;
 class ASurvivalWorldDoor;
@@ -78,6 +79,15 @@ public:
     void UseToolbeltSlot(int32 Slot);
     void UseItem(ESurvivalItem Item, int32 BeltSlot = INDEX_NONE);
     bool CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const;
+    float GetWaterIllness() const { return WaterIllness; }
+    FString FieldPrompt() const;
+    FString StationStatus() const;
+    ESurvivalItem StationSlot(int32 Index) const;
+    bool CanToggleModule(int32 Index) const;
+    void ToggleModule(int32 Index);
+    int32 IngredientCost(const FSurvivalRecipe& Recipe, const FSurvivalIngredient& Ingredient, int32 Quantity) const;
+    bool CanRecycle() const;
+    void Recycle();
     void CraftRecipe(int32 RecipeIndex, int32 Quantity);
     void ToggleInventory();
     const FSurvivalLootSlot* GetContainerSlot(int32 Index) const;
@@ -222,6 +232,58 @@ private:
     void UpdateWaterState(float DeltaSeconds);
     void SwimVertical(float Value);
     bool bWaterSwimming = false;
+    TWeakObjectPtr<ASurvivalStation> OpenStation;
+    ESurvivalItem PendingFieldItem = ESurvivalItem::None;
+    bool bFieldRequestPending = false;
+    FVector StationContact = FVector::ZeroVector;
+    float WaterIllness = 0;
+    double NextFieldAction = 0;
+    double NextRest = 0;
+    TMap<ESurvivalItem, int32> ScrapRemainders;
+    TOptional<FSurvivalBuildPlacement> PlacementAt(const FHitResult& Hit, bool bPlan, int32 Piece, int32 Turns, const FVector& Eye) const;
+    bool TraceBuildContact(const FVector& Point, double Reach, bool bPlan, FHitResult& Hit) const;
+    UFUNCTION(Server, Reliable)
+    void ServerQueuePlan(int32 Piece, int32 Turns, bool bPlan, FVector_NetQuantize10 Contact);
+    UFUNCTION(Server, Reliable)
+    void ServerActOnPlan(ASurvivalBuildChunk* Chunk, int32 Index, FSurvivalBuildPlacement Expected, FVector_NetQuantize10 Contact, bool bFinish);
+    bool StationInReach() const;
+    bool FieldInteract();
+    bool FindFieldHit(FHitResult& Hit) const;
+    void DrinkFieldWater(ESurvivalItem Quality);
+    void PlaceKit(ESurvivalItem Item);
+    void UsePrimitiveTool(ESurvivalItem Item);
+    void RefreshPrimitiveTool();
+    UPROPERTY()
+    TObjectPtr<USceneComponent> PrimitiveToolRoot;
+    UPROPERTY()
+    TObjectPtr<UStaticMeshComponent> PrimitiveHandle;
+    UPROPERTY()
+    TObjectPtr<UStaticMeshComponent> PrimitiveHead;
+    double ToolSwingStart = -10.;
+    void HammerUpgrade();
+    int32 PendingMaterialCount = 1;
+    UFUNCTION(Server, Reliable)
+    void ServerUseBuiltPiece(ASurvivalBuildChunk* Chunk, int32 Id, uint8 Action, FVector_NetQuantize10 Point);
+    UFUNCTION(Server, Reliable)
+    void ServerHammer(ASurvivalBuildChunk* Chunk, int32 Id, int32 Tier, FVector_NetQuantize10 Point);
+    void FieldMessage(const FString& Text) const;
+    UFUNCTION(Server, Reliable)
+    void ServerPlaceKit(uint8 ItemId, FVector_NetQuantize10 Point);
+    UFUNCTION(Server, Reliable)
+    void ServerChangeModule(ASurvivalStation* Station, uint8 ModuleId, bool bInstall, FVector_NetQuantize10 Point);
+    UFUNCTION(Client, Reliable)
+    void ClientFieldResult(bool bSuccess, uint8 ReturnId);
+    UFUNCTION(Server, Reliable)
+    void ServerWearFiber(uint8 ItemId);
+    UFUNCTION(Server, Reliable)
+    void ServerRecycleGear(int32 Gear);
+    UFUNCTION(Client, Reliable)
+    void ClientGearRecycled(int32 Gear);
+    UFUNCTION(Server, Reliable)
+    void ServerPrimitiveHit(AActor* Target, FVector_NetQuantize10 Point, uint8 ToolId);
+    UFUNCTION(Client, Reliable)
+    void ClientGather(int32 Timber, int32 Fiber);
+    double NextServerFieldAction = 0;
     bool bTouchingWater = false;
     bool bHeadUnderwater = false;
     float OxygenReserve = 100.0f;
@@ -293,7 +355,7 @@ private:
     TArray<FSurvivalPackCell> PendingLootItems;
     TMap<int32, int32> PendingGearTargets;
 
-    bool HasRoomForExchange(TConstArrayView<FSurvivalIngredient> Ingredients, ESurvivalItem Output, int32 Quantity) const;
+    bool HasRoomForExchange(TConstArrayView<FSurvivalIngredient> Ingredients, ESurvivalItem Output, int32 Quantity, bool bBatchCosts = false) const;
     void ChangeItemCount(ESurvivalItem Item, int32 Delta);
     void SetInventoryOpen(bool bOpen);
     void SyncPack();

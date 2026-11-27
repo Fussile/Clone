@@ -16,12 +16,23 @@ enum class ESurvivalItem : uint8
     PrimitiveBow, WoodenBow, CompoundBow, Crossbow, Knife, Arrows, Bolts, WoodenStave, WoodenString,
     CompoundRiser, CompoundLimbs, CompoundCams, CrossbowStock, CrossbowProd, CrossbowString, CrossbowLatch,
     IronOre, CopperOre, ScrapIron, TinScrap, IronIngot, CopperIngot, BronzeIngot, MachineSpring, Gear,
-    SalvageTools, FieldCrucible, FilterPump, EmptyBottle, RawWater, Count
+    SalvageTools, FieldCrucible, FilterPump, EmptyBottle, RawWater,
+    StrainedWater, PlantFiber, Plastic, Steel, Hammer, StoneAxe,
+    StoneSpear, Bedroll, FiberShirt, FiberPants, ChemSet, MachineBench,
+    Forge, Campfire, Stove, Printer, Catalyst, Decanter,
+    Chamber, Lathe, Sawmill, Mill, Bellows, Mold,
+    Pot, Grill, Oven, PowerSupply, Filament, ToughFilament,
+    FuelCell, GrilledMeal, OvenMeal, ToolManual, ScienceManual, SteelManual, Count
 };
+
+constexpr float SurvivalWaterIllnessChance(ESurvivalItem Water)
+{
+    return Water == ESurvivalItem::RawWater ? .80f : Water == ESurvivalItem::StrainedWater ? .65f : 0.f;
+}
 
 constexpr bool IsWorkshopItem(ESurvivalItem Item)
 {
-    return Item >= ESurvivalItem::IronOre && Item <= ESurvivalItem::RawWater;
+    return Item >= ESurvivalItem::IronOre && Item < ESurvivalItem::Count;
 }
 
 constexpr int32 WorkshopIndex(ESurvivalItem Item)
@@ -132,6 +143,8 @@ struct FSurvivalRecipe
     TArray<FSurvivalIngredient> Ingredients;
     ETraining RequiredTraining = ETraining::Count;
     ESurvivalItem RequiredTool = ESurvivalItem::None;
+    ESurvivalItem Station = ESurvivalItem::None;
+    ESurvivalItem Module = ESurvivalItem::None;
 };
 
 TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes();
@@ -175,8 +188,8 @@ struct FSurvivalItems
 
     static_assert(FSurvivalWeaponAssembly::PartCount == 4);
     UPROPERTY()
-    int32 WorkshopStacks[14]{};
-    static_assert(WorkshopIndex(ESurvivalItem::RawWater) + 1 == UE_ARRAY_COUNT(WorkshopStacks));
+    int32 WorkshopStacks[50]{};
+    static_assert(WorkshopIndex(ESurvivalItem::Count) == UE_ARRAY_COUNT(WorkshopStacks));
     void Add(const FSurvivalItems& Other);
 };
 

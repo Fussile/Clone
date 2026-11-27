@@ -1,6 +1,8 @@
 #include "SurvivalBuildChunk.h"
 
 #include "CollisionQueryParams.h"
+#include "Net/UnrealNetwork.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/HitResult.h"
@@ -18,15 +20,22 @@ const FSurvivalBuildPlacement* FSurvivalPlanTarget::GetPlan() const
 
 ASurvivalBuildChunk::ASurvivalBuildChunk()
 {
+    bReplicates = true;
     Timber = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("Timber"));
     SetRootComponent(Timber);
     Stone = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("Stone"));
     Stone->SetupAttachment(Timber);
+    Metal = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("ConstructionMetal"));
+    Metal->SetupAttachment(Timber);
+    Metal->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+    Bracing = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("Reinforcement"));
+    Bracing->SetupAttachment(Timber);
+    Bracing->SetCollisionProfileName(TEXT("BlockAllDynamic"));
     Ghosts = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("Ghosts"));
     Ghosts->SetupAttachment(Timber);
 
     static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
-    for (UInstancedStaticMeshComponent* Component : {Timber.Get(), Stone.Get(), Ghosts.Get()})
+    for (UInstancedStaticMeshComponent* Component : {Timber.Get(), Stone.Get(), Metal.Get(), Bracing.Get(), Ghosts.Get()})
     {
         Component->SetMobility(EComponentMobility::Movable);
         if (Cube.Succeeded())
@@ -58,6 +67,10 @@ void ASurvivalBuildChunk::BeginPlay()
             TEXT("/Game/Art/Crossroads/Building/M_Timber.M_Timber"), nullptr, LOAD_NoWarn);
     }
     Timber->SetMaterial(0, TimberMaterial);
+    if (auto* Mat = Metal->CreateDynamicMaterialInstance(0))
+        Mat->SetVectorParameterValue(TEXT("Color"), FLinearColor(.24f,.27f,.28f));
+    if (auto* Mat = Bracing->CreateDynamicMaterialInstance(0))
+        Mat->SetVectorParameterValue(TEXT("Color"), FLinearColor(.12f,.14f,.15f));
     Stone->SetMaterial(0, LoadObject<UMaterialInterface>(nullptr,
         TEXT("/Game/Art/Crossroads/Surfaces/M_Concrete034.M_Concrete034")));
     Ghosts->SetMaterial(0, LoadObject<UMaterialInterface>(nullptr,
@@ -65,7 +78,7 @@ void ASurvivalBuildChunk::BeginPlay()
 }
 
 bool ASurvivalBuildChunk::AddInstances(UInstancedStaticMeshComponent& Component,
-    const FSurvivalBuildPlacement& Placement, TArray<int32>& Indices)
+    const FSurvivalBuildPlacement& Placement, TArray<int32>& Indices, bool bFrame)
 {
     if (!Component.GetStaticMesh())
     {
@@ -89,6 +102,30 @@ bool ASurvivalBuildChunk::AddInstances(UInstancedStaticMeshComponent& Component,
     };
     for (const FBox& Box : Placement.GetPiece().Boxes)
     {
+        if (bFrame)
+        {
+            // Outline each collision box so stairs and door frames retain their actual shape.
+            const FVector Beam = Box.GetSize().ComponentMin(FVector(8.));
+            if ((Box.GetSize().X <= 8. && Box.GetSize().Y <= 8.) ||
+                (Box.GetSize().X <= 8. && Box.GetSize().Z <= 8.) || (Box.GetSize().Z <= 8. && Box.GetSize().Y <= 8.))
+            {
+                if (!AddBox(Box)) return false;
+                continue;
+            }
+            for (int32 Axis = 0; Axis < 3; ++Axis)
+            {
+                const int32 U = (Axis + 1) % 3, V = (Axis + 2) % 3;
+                for (int32 SideU = 0; SideU < (Box.GetSize()[U] <= 8. ? 1 : 2); ++SideU)
+                    for (int32 SideV = 0; SideV < (Box.GetSize()[V] <= 8. ? 1 : 2); ++SideV)
+                    {
+                        FVector Low = Box.Min, High = Box.Max;
+                        if (SideU) Low[U] = High[U] - Beam[U]; else High[U] = Low[U] + Beam[U];
+                        if (SideV) Low[V] = High[V] - Beam[V]; else High[V] = Low[V] + Beam[V];
+                        if (!AddBox(FBox(Low, High))) return false;
+                    }
+            }
+            continue;
+        }
         if (!AddBox(Box))
         {
             return false;
@@ -124,7 +161,7 @@ void ASurvivalBuildChunk::RemovePlan(int32 Index)
 bool ASurvivalBuildChunk::FinishPlan(int32 Index, int32 StructureId)
 {
     const FSurvivalBuildPlacement* Plan = GetPlan(Index);
-    if (!Plan || !AddFinishedPiece(*Plan, StructureId))
+    if (!Plan || !AddFinishedPiece(*Plan, StructureId, !Plan->GetPiece().bStone))
     {
         return false;
     }
@@ -162,6 +199,15 @@ bool ASurvivalBuildChunk::TryInstallDoor(const FHitResult& Hit)
         return false;
     }
 
+    Piece.DoorHealth = 55;
+    Piece.bDoorOpen = false;
+    CreateDoorLeaf(Piece);
+    if (Piece.Tier != INDEX_NONE) PublishPlayerPieces();
+    return true;
+}
+
+void ASurvivalBuildChunk::CreateDoorLeaf(FSurvivalFinishedPiece& Piece)
+{
     UStaticMeshComponent* Leaf = NewObject<UStaticMeshComponent>(this);
     AddInstanceComponent(Leaf);
     Leaf->SetupAttachment(GetRootComponent());
@@ -176,12 +222,9 @@ bool ASurvivalBuildChunk::TryInstallDoor(const FHitResult& Hit)
     }
     Leaf->SetCollisionProfileName(TEXT("BlockAllDynamic"));
     Leaf->SetCanEverAffectNavigation(false);
-    Leaf->SetWorldTransform(Transform);
+    Leaf->SetWorldTransform(DoorTransform(Piece.Placement, Piece.bDoorOpen ? (Piece.bSwingNegative ? -90. : 90.) : 0.));
     Leaf->RegisterComponent();
     Piece.Door = Leaf;
-    Piece.DoorHealth = 55;
-    Piece.bDoorOpen = false;
-    return true;
 }
 
 void ASurvivalBuildChunk::RemoveDoorLeaf(FSurvivalFinishedPiece& Piece)
@@ -223,6 +266,7 @@ bool ASurvivalBuildChunk::TryToggleDoor(const FHitResult& Hit, const FVector& Us
     Piece.bSwingNegative = bNegative;
     Piece.bDoorOpen = !Piece.bDoorOpen;
     Leaf->SetWorldTransform(DoorTransform(Piece.Placement, Piece.bDoorOpen ? SwingSign * 90.0 : 0.0));
+    if (Piece.Tier != INDEX_NONE) PublishPlayerPieces();
     return true;
 }
 
@@ -248,15 +292,17 @@ bool ASurvivalBuildChunk::HasReservedCellConflict(const FSurvivalBuildPlacement&
     return false;
 }
 
-bool ASurvivalBuildChunk::AddFinishedPiece(const FSurvivalBuildPlacement& Placement, int32 StructureId)
+bool ASurvivalBuildChunk::AddFinishedPiece(const FSurvivalBuildPlacement& Placement, int32 StructureId, bool bFrame)
 {
-    const int32 MaxHealth = Placement.GetPiece().bStone ? 140 : 70;
+    const int32 MaxHealth = bFrame ? 35 : Placement.GetPiece().bStone ? 140 : 70;
     const int32 FinishedIndex = Finished.Add(FSurvivalFinishedPiece{Placement, MaxHealth, MaxHealth, StructureId});
+    Finished[FinishedIndex].Tier = bFrame ? 0 : INDEX_NONE;
     if (!AddFinishedInstances(FinishedIndex))
     {
         Finished.Pop();
         return false;
     }
+    if (bFrame) PublishPlayerPieces();
     return true;
 }
 
@@ -265,22 +311,40 @@ bool ASurvivalBuildChunk::AddFinishedInstances(int32 Index)
     const FSurvivalBuildPlacement& Placement = Finished[Index].Placement;
     const bool bStone = Placement.GetPiece().bStone;
     TArray<int32> Indices;
-    if (!AddInstances(bStone ? *Stone : *Timber, Placement, Indices))
+    const int32 Tier = Finished[Index].Tier;
+    if (!AddInstances(Tier >= 3 ? *Metal : bStone ? *Stone : *Timber, Placement, Indices, Tier == 0))
     {
         return false;
     }
-    TMap<int32, int32>& Owners = bStone ? StoneOwners : TimberOwners;
+    TMap<int32, int32>& Owners = Tier >= 3 ? MetalOwners : bStone ? StoneOwners : TimberOwners;
     for (int32 Instance : Indices)
     {
         Owners.Add(Instance, Index);
     }
+    // Straps follow solid boxes, including lintels and stair treads, leaving openings clear.
+    if (Tier == 2 || Tier >= 4)
+        for (const FBox& Box : Placement.GetPiece().Boxes)
+        {
+            const int32 Count = Tier == 5 ? 3 : Tier == 4 ? 2 : 1;
+            for (int32 Band = 1; Band <= Count; ++Band)
+            {
+                FVector Size = Box.GetSize() + FVector(1.);
+                Size.X = FMath::Min(5., Size.X);
+                FVector Center = Box.GetCenter();
+                Center.X = FMath::Lerp(Box.Min.X, Box.Max.X, double(Band)/(Count+1));
+                const FTransform Pose(Placement.Rotation, Placement.MeshOrigin() + Placement.Rotation.RotateVector(Center), Size / 100.);
+                BraceOwners.Add(Bracing->AddInstance(Pose, true), Index);
+            }
+        }
     return true;
 }
 
 int32 ASurvivalBuildChunk::FindFinishedIndex(const FHitResult& Hit) const
 {
     const TMap<int32, int32>* Owners = nullptr;
-    if (Hit.GetComponent() == Stone.Get())
+    if (Hit.GetComponent() == Bracing.Get()) Owners = &BraceOwners;
+    else if (Hit.GetComponent() == Metal.Get()) Owners = &MetalOwners;
+    else if (Hit.GetComponent() == Stone.Get())
     {
         Owners = &StoneOwners;
     }
@@ -324,11 +388,13 @@ bool ASurvivalBuildChunk::DamageFinished(const FHitResult& Hit, int32 Amount)
         {
             RemoveDoorLeaf(Piece);
         }
+        if (Piece.Tier != INDEX_NONE) PublishPlayerPieces();
         return true;
     }
     if (Amount < Piece.Health)
     {
         Piece.Health -= Amount;
+        if (Piece.Tier != INDEX_NONE) PublishPlayerPieces();
         return true;
     }
     if (ASurvivalGameMode* GameMode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>())
@@ -356,6 +422,17 @@ void ASurvivalBuildChunk::RemoveFinishedPieces(const TSet<int32>& StructureIds, 
         }
         return true;
     });
+    RebuildSolids();
+    PublishPlayerPieces();
+    for (const auto& Placement : Debris) SpawnDebris(Placement);
+}
+
+void ASurvivalBuildChunk::RebuildSolids()
+{
+    Bracing->ClearInstances();
+    BraceOwners.Reset();
+    Metal->ClearInstances();
+    MetalOwners.Reset();
     Timber->ClearInstances();
     Stone->ClearInstances();
     TimberOwners.Reset();
@@ -365,10 +442,7 @@ void ASurvivalBuildChunk::RemoveFinishedPieces(const TSet<int32>& StructureIds, 
         const bool bAdded = AddFinishedInstances(Remaining);
         ensure(bAdded);
     }
-    for (const FSurvivalBuildPlacement& Placement : Debris)
-    {
-        SpawnDebris(Placement);
-    }
+
 }
 
 void ASurvivalBuildChunk::SpawnDebris(const FSurvivalBuildPlacement& Placement)
@@ -410,6 +484,7 @@ bool ASurvivalBuildChunk::RepairFinished(const FHitResult& Hit, FSurvivalMateria
     }
     Inventory.Spend(Cost);
     Piece.Health = FMath::Min(Piece.MaxHealth, Piece.Health + RepairHealth);
+    if (Piece.Tier != INDEX_NONE) PublishPlayerPieces();
     return true;
 }
 
@@ -445,4 +520,96 @@ void ASurvivalBuildChunk::RebuildGhosts()
             }
         }
     }
+}
+
+namespace
+{
+constexpr FSurvivalBuildTier BuildTiers[] = {
+    {TEXT("Wood frame"), ESurvivalItem::Timber, 0, 35},
+    {TEXT("Wood infill"), ESurvivalItem::Timber, 4, 70},
+    {TEXT("Reinforced wood"), ESurvivalItem::Timber, 8, 120},
+    {TEXT("Scrap metal"), ESurvivalItem::ScrapIron, 6, 200},
+    {TEXT("Iron"), ESurvivalItem::IronIngot, 3, 320},
+    {TEXT("Forged steel"), ESurvivalItem::Steel, 3, 520},
+};
+}
+
+const FSurvivalBuildTier* FSurvivalFinishedPiece::NextTier() const
+{
+    return Tier >= 0 && Tier + 1 < UE_ARRAY_COUNT(BuildTiers) ? &BuildTiers[Tier + 1] : nullptr;
+}
+
+FString FSurvivalFinishedPiece::UpgradePrompt() const
+{
+    if (const auto* Next = NextTier())
+        return FString::Printf(TEXT("%s  [RMB] %s  (%d %s)"), BuildTiers[Tier].Name, Next->Name, Next->Cost, SurvivalItemName(Next->Material));
+    return Tier == INDEX_NONE ? FString() : FString(TEXT("Forged steel (fully upgraded)"));
+}
+
+bool ASurvivalBuildChunk::Upgrade(const FHitResult& Hit, int32 ExpectedId, int32 ExpectedTier)
+{
+    const int32 Index = FindFinishedIndex(Hit);
+    if (!HasAuthority() || !Finished.IsValidIndex(Index)) return false;
+    auto& Piece = Finished[Index];
+    const auto* Next = Piece.NextTier();
+    if (!Next || Piece.StructureId != ExpectedId || Piece.Tier != ExpectedTier) return false;
+    if (Piece.Tier == 0)
+        for (const FBox& Box : Piece.Placement.GetPiece().Boxes)
+            if (GetWorld()->OverlapAnyTestByObjectType(Piece.Placement.WorldCenter(Box), Piece.Placement.Rotation,
+                FCollisionObjectQueryParams(ECC_Pawn), FCollisionShape::MakeBox(Box.GetExtent() - FVector(.1)))) return false;
+    ++Piece.Tier;
+    Piece.Health = Piece.MaxHealth = Next->HitPoints;
+    RebuildSolids();
+    PublishPlayerPieces();
+    return true;
+}
+
+void ASurvivalBuildChunk::PublishPlayerPieces()
+{
+    PlayerPieces.Reset();
+    for (const auto& Piece : Finished)
+    {
+        if (Piece.Tier == INDEX_NONE) continue;
+        auto& State = PlayerPieces.AddDefaulted_GetRef();
+        State.Base = Piece.Placement.Base;
+        State.Offset = Piece.Placement.FrameOffset;
+        State.Rotation = Piece.Placement.Rotation;
+        State.PieceIndex = Piece.Placement.PieceIndex;
+        State.Id = Piece.StructureId;
+        State.Tier = Piece.Tier;
+        State.Health = Piece.Health;
+        State.DoorHealth = Piece.DoorHealth;
+        State.bOpen = Piece.bDoorOpen;
+        State.bNegative = Piece.bSwingNegative;
+    }
+    ForceNetUpdate();
+}
+
+void ASurvivalBuildChunk::ReceivePlayerPieces()
+{
+    for (auto& Piece : Finished) RemoveDoorLeaf(Piece);
+    Finished.Reset();
+    for (const auto& State : PlayerPieces)
+    {
+        FSurvivalBuildPlacement P;
+        P.Base = State.Base;
+        P.FrameOffset = State.Offset;
+        P.Rotation = State.Rotation;
+        P.PieceIndex = State.PieceIndex;
+        const int32 Index = Finished.Add(FSurvivalFinishedPiece{P, State.Health, BuildTiers[State.Tier].HitPoints, State.Id});
+        auto& Piece = Finished[Index];
+        Piece.Tier = State.Tier;
+        Piece.DoorHealth = State.DoorHealth;
+        Piece.bDoorOpen = State.bOpen;
+        Piece.bSwingNegative = State.bNegative;
+        if (Piece.DoorHealth > 0) CreateDoorLeaf(Piece);
+    }
+    RebuildSolids();
+}
+
+void ASurvivalBuildChunk::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Props) const
+{
+    Super::GetLifetimeReplicatedProps(Props);
+    DOREPLIFETIME(ASurvivalBuildChunk, PlayerPieces);
+    DOREPLIFETIME(ASurvivalBuildChunk, Plans);
 }

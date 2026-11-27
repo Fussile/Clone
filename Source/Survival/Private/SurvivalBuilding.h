@@ -46,14 +46,20 @@ struct FSurvivalBuildPiece
 TConstArrayView<FSurvivalBuildPiece> GetSurvivalBuildPieces();
 TConstArrayView<int32> GetPlayerBuildPieces();
 
+USTRUCT()
 struct FSurvivalBuildPlacement
 {
+    GENERATED_BODY()
     static constexpr double GridSize = 105.0;
     static constexpr double HalfWallHeight = GridSize / 2;
 
+    UPROPERTY()
     FVector Base = FVector::ZeroVector;
+    UPROPERTY()
     FVector FrameOffset = FVector::ZeroVector;
+    UPROPERTY()
     FQuat Rotation = FQuat::Identity;
+    UPROPERTY()
     int32 PieceIndex = 0;
     bool bClear = false;
 

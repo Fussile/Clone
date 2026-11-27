@@ -82,6 +82,42 @@ constexpr FItemValue Values[] = {
     {EItem::FilterPump, 65, 0},
     {EItem::EmptyBottle, 2, 0},
     {EItem::RawWater, 3, 0},
+    {EItem::StrainedWater, 4, 0},
+    {EItem::PlantFiber, 1, 0},
+    {EItem::Plastic, 2, 0},
+    {EItem::Steel, 25, 0},
+    {EItem::Hammer, 12, 0},
+    {EItem::StoneAxe, 12, 0},
+    {EItem::StoneSpear, 14, 0},
+    {EItem::Bedroll, 12, 0},
+    {EItem::FiberShirt, 10, 0},
+    {EItem::FiberPants, 10, 0},
+    {EItem::ChemSet, 65, 0},
+    {EItem::MachineBench, 72, 0},
+    {EItem::Forge, 45, 0},
+    {EItem::Campfire, 10, 0},
+    {EItem::Stove, 50, 0},
+    {EItem::Printer, 80, 0},
+    {EItem::Catalyst, 16, 0},
+    {EItem::Decanter, 12, 0},
+    {EItem::Chamber, 23, 0},
+    {EItem::Lathe, 25, 0},
+    {EItem::Sawmill, 24, 0},
+    {EItem::Mill, 28, 0},
+    {EItem::Bellows, 19, 0},
+    {EItem::Mold, 15, 0},
+    {EItem::Pot, 10, 0},
+    {EItem::Grill, 16, 0},
+    {EItem::Oven, 25, 0},
+    {EItem::PowerSupply, 25, 0},
+    {EItem::Filament, 5, 0},
+    {EItem::ToughFilament, 12, 0},
+    {EItem::FuelCell, 6, 0},
+    {EItem::GrilledMeal, 16, 0},
+    {EItem::OvenMeal, 16, 0},
+    {EItem::ToolManual, 35, 0},
+    {EItem::ScienceManual, 35, 0},
+    {EItem::SteelManual, 35, 0},
 };
 static_assert(UE_ARRAY_COUNT(Values) == static_cast<int32>(EItem::Count));
 static_assert([]{
@@ -99,7 +135,7 @@ struct FPoolEntry
 
 constexpr FPoolEntry General[] = {
     {EItem::Food, 24, 3}, {EItem::Water, 23, 3}, {EItem::Cloth, 16, 10},
-    {EItem::Timber, 18, 8}, {EItem::Stone, 14, 7}, {EItem::Bandage, 8, 2},
+    {EItem::EmptyBottle, 9, 2}, {EItem::Plastic, 6, 3}, {EItem::Bandage, 8, 2},
     {EItem::Knife, 7}, {EItem::WoodenBow, 5}, {EItem::CompoundBow, 2}, {EItem::Crossbow, 2},
     {EItem::Arrows, 9, 8}, {EItem::Bolts, 5, 5}, {EItem::BowSight, 2}, {EItem::BowBinding, 4},
     {EItem::KnifeWrap, 4}, {EItem::KnifeBalance, 2},
@@ -112,7 +148,7 @@ constexpr FPoolEntry Food[] = {
 constexpr FPoolEntry Building[] = {
     {EItem::ScrapIron, 30, 8}, {EItem::TinScrap, 15, 4}, {EItem::MachineSpring, 9, 3},
     {EItem::Gear, 8, 2}, {EItem::SalvageTools, 5},
-    {EItem::Timber, 36, 40}, {EItem::Stone, 32, 32}, {EItem::Cloth, 12, 15},
+    {EItem::Timber, 2, 4}, {EItem::Stone, 1, 3}, {EItem::Plastic, 16, 6}, {EItem::Pot, 3}, {EItem::Cloth, 12, 15},
     {EItem::WoodenStave, 2}, {EItem::WoodenString, 2}, {EItem::CompoundRiser, 2}, {EItem::CompoundLimbs, 2}, {EItem::CompoundCams, 2},
     {EItem::CrossbowStock, 2}, {EItem::CrossbowProd, 2}, {EItem::CrossbowString, 2}, {EItem::CrossbowLatch, 2},
     {EItem::TimberDoor, 9, 3}, {EItem::BuilderGuide, 4}
@@ -122,10 +158,12 @@ constexpr FPoolEntry Medical[] = {
     {EItem::Cloth, 12, 12}, {EItem::DressingSchematic, 4}
 };
 constexpr FPoolEntry Office[] = {
+    {EItem::ToolManual, 4}, {EItem::ScienceManual, 4}, {EItem::SteelManual, 4},
     {EItem::ScavengerNotes, 22}, {EItem::BuilderGuide, 20}, {EItem::Food, 14, 3},
     {EItem::Water, 16, 4}, {EItem::Cloth, 15, 10}, {EItem::None, 8}
 };
 constexpr FPoolEntry Vehicle[] = {
+    {EItem::Plastic, 24, 6}, {EItem::Grill, 3}, {EItem::FuelCell, 8, 3},
     {EItem::ScrapIron, 32, 8}, {EItem::TinScrap, 12, 4}, {EItem::MachineSpring, 18, 3}, {EItem::Gear, 12, 2},
     {EItem::Water, 26, 3}, {EItem::Food, 26, 3}, {EItem::Cloth, 20, 10},
     {EItem::Bandage, 11, 3}, {EItem::None, 13}
