@@ -438,11 +438,13 @@ def prepare(force_structures=False, force_biomes=False):
     failures = []
     def import_arsenal():
         runpy.run_path(str(TOOLS / "prepare_arsenal.py"))["prepare"](TOOLS, SOURCE, ART, import_asset, import_skeletal_pack)
+    def import_archery():
+        runpy.run_path(str(TOOLS / "prepare_archery.py"))["prepare"](TOOLS, SOURCE, ART, import_asset)
     if os.environ.get("SURVIVAL_PREPARED_MARKER"):
         import equipment_art
         equipment_art.prepare()
     for label, action in (("viewmodel cloth", import_viewmodel_cloth),
-                          ("sidearm", import_sidearm), ("rifle", import_rifle), ("arsenal", import_arsenal),
+                          ("sidearm", import_sidearm), ("rifle", import_rifle), ("arsenal", import_arsenal), ("bows and knife", import_archery),
                           ("characters", import_characters), ("interface", import_interface)):
         unreal.log(f"Crossroads: importing {label}.")
         try:

@@ -11,12 +11,26 @@ enum class ESurvivalItem : uint8
     RifleStock, RifleReceiver, RifleBarrel, RifleMagazine, SidearmGrip, SidearmFrame, SidearmBarrel, SidearmSlide,
     GripWrap, BarrelWeight, IRSight, VariableScope, GreenLaser, RedLaser, IRLaser, Bipod,
     Suppressor, MuzzleBrake, ExtendedMagazine, QuickMagazine, Sling, FasterBolt, Flashlight, IRIlluminator,
-    LightStock, CloseQuartersStock, HeavyStock, ThermalSight, FactoryScope, ReflexSight, BurstTrigger, AutoTrigger, None
+    LightStock, CloseQuartersStock, HeavyStock, ThermalSight, FactoryScope, ReflexSight, BurstTrigger, AutoTrigger, None,
+    BowBinding, BowSight, KnifeWrap, KnifeBalance,
+    PrimitiveBow, WoodenBow, CompoundBow, Crossbow, Knife, Arrows, Bolts, WoodenStave, WoodenString,
+    CompoundRiser, CompoundLimbs, CompoundCams, CrossbowStock, CrossbowProd, CrossbowString, CrossbowLatch, Count
 };
 
 inline constexpr bool IsAttachmentItem(ESurvivalItem Item)
 {
-    return Item >= ESurvivalItem::GripWrap && Item < ESurvivalItem::None;
+    return (Item >= ESurvivalItem::GripWrap && Item <= ESurvivalItem::AutoTrigger)
+        || (Item >= ESurvivalItem::BowBinding && Item <= ESurvivalItem::KnifeBalance);
+}
+
+inline constexpr bool IsFieldWeapon(ESurvivalItem Item)
+{
+    return Item >= ESurvivalItem::PrimitiveBow && Item <= ESurvivalItem::Knife;
+}
+
+inline constexpr bool IsWeaponItem(ESurvivalItem Item)
+{
+    return IsFieldWeapon(Item) || Item == ESurvivalItem::Sidearm || Item == ESurvivalItem::Rifle;
 }
 
 const TCHAR* SurvivalItemName(ESurvivalItem Item);
@@ -26,15 +40,34 @@ struct FSurvivalWeaponAssembly
     static constexpr int32 PartCount = 4;
     static constexpr int32 FactoryQuality = 40;
     static constexpr int32 MaxQuality = 999;
+    static constexpr int32 SlotsFor(ESurvivalItem Weapon)
+    {
+        switch (Weapon)
+        {
+        case ESurvivalItem::Sidearm: case ESurvivalItem::Rifle: case ESurvivalItem::Crossbow: return 4;
+        case ESurvivalItem::CompoundBow: return 3;
+        case ESurvivalItem::WoodenBow: return 2;
+        default: return 0;
+        }
+    }
+    void Initialize(ESurvivalItem Weapon, int32 Quality);
     static constexpr ESurvivalItem FirstPart(ESurvivalItem Weapon)
     {
-        return Weapon == ESurvivalItem::Sidearm ? ESurvivalItem::SidearmGrip : ESurvivalItem::RifleStock;
+        switch (Weapon)
+        {
+        case ESurvivalItem::Rifle: return ESurvivalItem::RifleStock;
+        case ESurvivalItem::Sidearm: return ESurvivalItem::SidearmGrip;
+        case ESurvivalItem::WoodenBow: return ESurvivalItem::WoodenStave;
+        case ESurvivalItem::CompoundBow: return ESurvivalItem::CompoundRiser;
+        case ESurvivalItem::Crossbow: return ESurvivalItem::CrossbowStock;
+        default: return ESurvivalItem::None;
+        }
     }
 
     static constexpr int32 PartIndex(ESurvivalItem Item, ESurvivalItem Weapon = ESurvivalItem::Rifle)
     {
         const int32 Slot = static_cast<int32>(Item) - static_cast<int32>(FirstPart(Weapon));
-        return Slot >= 0 && Slot < PartCount ? Slot : INDEX_NONE;
+        return Slot >= 0 && Slot < SlotsFor(Weapon) ? Slot : INDEX_NONE;
     }
 
     static const TCHAR* PartName(int32 Slot, ESurvivalItem Weapon = ESurvivalItem::Rifle);
@@ -47,6 +80,8 @@ struct FSurvivalWeaponAssembly
     int32 SwapPart(int32 Slot, int32 NewQuality);
 
 private:
+    int32 ActiveSlots = PartCount;
+    int32 BodyQuality = FactoryQuality;
     int32 Parts[PartCount] = {FactoryQuality, FactoryQuality, FactoryQuality, FactoryQuality};
 };
 static_assert(FSurvivalWeaponAssembly::PartIndex(ESurvivalItem::RifleMagazine) == FSurvivalWeaponAssembly::PartCount - 1);
@@ -67,7 +102,8 @@ struct FSurvivalPackCell
 int32 SurvivalItemMaxStack(ESurvivalItem Item);
 inline bool SurvivalItemHasQuality(ESurvivalItem Item)
 {
-    return FSurvivalWeaponAssembly::PartIndex(Item) != INDEX_NONE || FSurvivalWeaponAssembly::PartIndex(Item, ESurvivalItem::Sidearm) != INDEX_NONE;
+    return (Item >= ESurvivalItem::RifleStock && Item <= ESurvivalItem::SidearmSlide)
+        || (Item >= ESurvivalItem::WoodenStave && Item <= ESurvivalItem::CrossbowLatch);
 }
 
 struct FSurvivalIngredient
@@ -107,6 +143,10 @@ struct FSurvivalItems
     int32 TimberDoors = 0;
     UPROPERTY()
     int32 RifleRounds = 0;
+    UPROPERTY()
+    int32 Arrows = 0;
+    UPROPERTY()
+    int32 Bolts = 0;
     UPROPERTY()
     int32 BuilderGuides = 0;
     UPROPERTY()

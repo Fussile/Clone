@@ -42,6 +42,8 @@ private:
 
     UPROPERTY(Transient)
     TObjectPtr<UTexture2D> FirearmAtlas;
+    UPROPERTY()
+    TObjectPtr<UTexture2D> FieldAtlas;
 
     TSharedPtr<SWidget> InventoryWidget;
     TSharedPtr<SWidget> LootWidget;

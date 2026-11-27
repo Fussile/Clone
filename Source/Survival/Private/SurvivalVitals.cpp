@@ -3,7 +3,7 @@
 
 const TCHAR* SurvivalItemName(ESurvivalItem Item)
 {
-    if (IsAttachmentItem(Item)) return WeaponMods[static_cast<int32>(Item) - static_cast<int32>(ESurvivalItem::GripWrap)].Name;
+    if (IsAttachmentItem(Item)) return WeaponMods[AttachmentIndex(Item)].Name;
     switch (Item)
     {
     case ESurvivalItem::Sidearm: return TEXT("Sidearm");
@@ -29,16 +29,30 @@ const TCHAR* SurvivalItemName(ESurvivalItem Item)
     case ESurvivalItem::SidearmFrame: return TEXT("Sidearm frame");
     case ESurvivalItem::SidearmBarrel: return TEXT("Sidearm barrel");
     case ESurvivalItem::SidearmSlide: return TEXT("Sidearm slide");
+    case ESurvivalItem::PrimitiveBow: return TEXT("Primitive bow");
+    case ESurvivalItem::WoodenBow: return TEXT("Wooden bow");
+    case ESurvivalItem::CompoundBow: return TEXT("Compound bow");
+    case ESurvivalItem::Crossbow: return TEXT("Crossbow");
+    case ESurvivalItem::Knife: return TEXT("Field knife");
+    case ESurvivalItem::Arrows: return TEXT("Arrows");
+    case ESurvivalItem::Bolts: return TEXT("Crossbow bolts");
+    case ESurvivalItem::WoodenStave: return TEXT("Wooden bow stave");
+    case ESurvivalItem::WoodenString: return TEXT("Wooden bowstring");
+    case ESurvivalItem::CompoundRiser: return TEXT("Compound riser");
+    case ESurvivalItem::CompoundLimbs: return TEXT("Compound limb set");
+    case ESurvivalItem::CompoundCams: return TEXT("Compound cam set");
+    case ESurvivalItem::CrossbowStock: return TEXT("Crossbow stock");
+    case ESurvivalItem::CrossbowProd: return TEXT("Crossbow limb assembly");
+    case ESurvivalItem::CrossbowString: return TEXT("Crossbow string");
+    case ESurvivalItem::CrossbowLatch: return TEXT("Crossbow latch");
     default: return TEXT("Empty");
     }
 }
 
 const TCHAR* FSurvivalWeaponAssembly::PartName(int32 Slot, ESurvivalItem Weapon)
 {
-    const TCHAR* Names[] = {TEXT("Stock"), TEXT("Receiver"), TEXT("Barrel"), TEXT("Magazine")};
-    static_assert(UE_ARRAY_COUNT(Names) == PartCount);
-    const TCHAR* SidearmNames[] = {TEXT("Grip"), TEXT("Frame"), TEXT("Barrel"), TEXT("Slide")};
-    return Weapon == ESurvivalItem::Sidearm ? SidearmNames[Slot] : Names[Slot];
+    if (Slot < 0 || Slot >= SlotsFor(Weapon)) return TEXT("");
+    return SurvivalItemName(static_cast<ESurvivalItem>(static_cast<int32>(FirstPart(Weapon)) + Slot));
 }
 
 int32 FSurvivalWeaponAssembly::SpareQuality(int32 Slot)
@@ -48,21 +62,30 @@ int32 FSurvivalWeaponAssembly::SpareQuality(int32 Slot)
     return Quality[Slot];
 }
 
+void FSurvivalWeaponAssembly::Initialize(ESurvivalItem Weapon, int32 Quality)
+{
+    ActiveSlots = SlotsFor(Weapon);
+    BodyQuality = FMath::Clamp(Quality, 1, MaxQuality);
+    for (int32 Slot = 0; Slot < PartCount; ++Slot)
+        Parts[Slot] = Slot < ActiveSlots ? BodyQuality : 0;
+}
+
 bool FSurvivalWeaponAssembly::IsComplete() const
 {
-    for (int32 Part : Parts)
-        if (Part == 0) return false;
+    for (int32 Slot = 0; Slot < ActiveSlots; ++Slot)
+        if (Parts[Slot] == 0) return false;
     return true;
 }
 
 int32 FSurvivalWeaponAssembly::GetQuality() const
 {
+    if (ActiveSlots == 0) return BodyQuality;
     int32 Sum = 0;
-    for (int32 Part : Parts)
+    for (int32 Slot = 0; Slot < ActiveSlots; ++Slot)
     {
-        Sum += Part;
+        Sum += Parts[Slot];
     }
-    return FMath::RoundToInt(static_cast<float>(Sum) / PartCount);
+    return FMath::RoundToInt(static_cast<float>(Sum) / ActiveSlots);
 }
 
 float FSurvivalWeaponAssembly::GetDamage() const
@@ -75,7 +98,7 @@ float FSurvivalWeaponAssembly::GetDamage() const
 
 int32 FSurvivalWeaponAssembly::SwapPart(int32 Slot, int32 NewQuality)
 {
-    if (Slot < 0 || Slot >= PartCount)
+    if (Slot < 0 || Slot >= ActiveSlots)
     {
         return NewQuality;
     }
@@ -96,6 +119,7 @@ int32 SurvivalItemMaxStack(ESurvivalItem Item)
     case ESurvivalItem::Timber:
     case ESurvivalItem::Stone: return 500;
     case ESurvivalItem::Cloth: return 100;
+    case ESurvivalItem::Arrows: case ESurvivalItem::Bolts: return 50;
     case ESurvivalItem::Rounds:
     case ESurvivalItem::RifleRounds: return 200;
     case ESurvivalItem::TimberDoor:
@@ -109,6 +133,12 @@ int32 SurvivalItemMaxStack(ESurvivalItem Item)
 TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes()
 {
     static const FSurvivalRecipe Recipes[] = {
+        {ESurvivalItem::PrimitiveBow, TEXT("Weapons"), TEXT("A simple bow. Uses arrows and needs no separate parts."),
+            {{ESurvivalItem::Timber, 4}, {ESurvivalItem::Cloth, 2}}},
+        {ESurvivalItem::Knife, TEXT("Weapons"), TEXT("A one-piece field knife. Melee Weapon Crafting sets its quality."),
+            {{ESurvivalItem::Stone, 3}, {ESurvivalItem::Cloth, 1}}},
+        {ESurvivalItem::Arrows, TEXT("Ammunition"), TEXT("Ammunition for handheld bows."), {{ESurvivalItem::Timber, 1}}},
+        {ESurvivalItem::Bolts, TEXT("Ammunition"), TEXT("Ammunition for crossbows."), {{ESurvivalItem::Timber, 1}, {ESurvivalItem::Stone, 1}}},
         {ESurvivalItem::Bandage, TEXT("Medical"), TEXT("Treats injuries. Medicine skill improves healing."), {{ESurvivalItem::Cloth, 2}}},
         {ESurvivalItem::TimberDoor, TEXT("Building"), TEXT("Install into a completed door frame."),
             {{ESurvivalItem::Timber, 4}}},
@@ -127,6 +157,8 @@ void FSurvivalItems::Add(const FSurvivalItems& Other)
     Rounds += Other.Rounds;
     TimberDoors += Other.TimberDoors;
     RifleRounds += Other.RifleRounds;
+    Arrows += Other.Arrows;
+    Bolts += Other.Bolts;
     BuilderGuides += Other.BuilderGuides;
     ScavengerNotes += Other.ScavengerNotes;
     DressingSchematics += Other.DressingSchematics;

@@ -60,13 +60,13 @@ UStaticMesh* FirearmWorldMesh(int32 Model)
 {
     if (Model < 0 || Model >= UE_ARRAY_COUNT(Arsenal)) return nullptr;
     const TCHAR* AssetName = Model == 0 ? TEXT("Sidearm") : Model == 1 ? TEXT("Sniper") : Arsenal[Model].Asset;
-    const TCHAR* Directory = Model == 3 || Model >= 5 ? TEXT("UnifiedSurface") :
+    const TCHAR* Directory = IsFieldWeapon(Arsenal[Model].Family) ? TEXT("Field") : Model == 3 || Model >= 5 ? TEXT("UnifiedSurface") :
         Model == 2 ? TEXT("WeaponSurface") : TEXT("Assembly/Geometry");
     const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/%s/World.World"), AssetName, Directory);
     return LoadObject<UStaticMesh>(nullptr, *Path, nullptr, LOAD_NoWarn);
 }
 // Model-space length for sizing inventory and held attachments consistently.
-constexpr double FirearmLength[] = {24, 118, 16, 30, 100, 95, 83, 41, 61};
+constexpr double FirearmLength[] = {24, 118, 16, 30, 100, 95, 83, 41, 61, 30, 30, 30, 82, 24};
 static_assert(UE_ARRAY_COUNT(FirearmLength) == UE_ARRAY_COUNT(Arsenal));
 
 FTransform PlaceWeaponSurface(UStaticMeshComponent* Model, double Length, FRotator Facing, FVector RearPosition)
@@ -731,10 +731,6 @@ bool PlaceLootStack(TArray<FSurvivalPackCell>& Pack, const FSurvivalLootSlot& Lo
     return false;
 }
 
-bool IsWeaponLoot(ESurvivalItem Item)
-{
-    return Item == ESurvivalItem::Sidearm || Item == ESurvivalItem::Rifle;
-}
 }
 
 void ASurvivalCharacter::TakeContainerLoot(int32 Index, int32 PackTarget)
@@ -799,6 +795,11 @@ void ASurvivalCharacter::ServerMoveContainerLoot_Implementation(ASurvivalSupplyC
 void ASurvivalCharacter::ClientReceiveLoot_Implementation(const TArray<FSurvivalLootSlot>& Taken,
     int32 PackTarget, bool bApplyAppraisal)
 {
+    StoreInventoryLoot(Taken, PackTarget, bApplyAppraisal);
+}
+
+void ASurvivalCharacter::StoreInventoryLoot(TConstArrayView<FSurvivalLootSlot> Taken, int32 PackTarget, bool bApplyAppraisal)
+{
     for (const auto& Loot : Taken)
     {
         const auto Item = Loot.Item();
@@ -809,16 +810,15 @@ void ASurvivalCharacter::ClientReceiveLoot_Implementation(const TArray<FSurvival
             continue; // The replicated OwnedGear array supplies the actual item.
         }
         int32 WeaponId = INDEX_NONE;
-        if (IsWeaponLoot(Item))
+        if (IsWeaponItem(Item))
         {
             const int32 Quality = Loot.Quality > 0 ? Loot.Quality : FSurvivalWeaponAssembly::FactoryQuality;
             FWeaponInstance Instance{Item, {}, Item == ESurvivalItem::Sidearm ? SidearmCapacity : 1, 0};
             Instance.Firearm = FirearmIndex(Item, Loot.Firearm);
             Instance.Mods = Loot.InstalledMods;
             if (Instance.Firearm == 1) Instance.Mods |= 1u << FactoryScope;
-            Instance.Ammo = Item == ESurvivalItem::Sidearm ? Arsenal[Instance.Firearm].Capacity : 1;
-            for (int32 Slot = 0; Slot < FSurvivalWeaponAssembly::PartCount; ++Slot)
-                Instance.Assembly.SwapPart(Slot, Quality);
+            Instance.Ammo = Item == ESurvivalItem::Sidearm ? Arsenal[Instance.Firearm].Capacity : Item == ESurvivalItem::Rifle ? 1 : 0;
+            Instance.Assembly.Initialize(Item, Quality);
             WeaponId = WeaponItems.Add(Instance);
 
             if (Item == ESurvivalItem::Sidearm && !bHasSidearm)
@@ -1051,7 +1051,7 @@ void ASurvivalCharacter::UpdateSidearmView()
     UpdateFirearmModel();
     UpdateRifleView();
     HeldWeaponSurface->SetHiddenInGame(!HeldWeaponSurface->GetStaticMesh() || bThirdPerson || bBuildMode
-        || bInventoryOpen || HealthPoints <= 0 || (!IsSidearmSelected() && !IsRifleSelected()));
+        || bInventoryOpen || HealthPoints <= 0 || !IsWeaponItem(GetHotbarItem(ActiveHotbarSlot)));
     const bool bVisible = IsSidearmSelected() && !bBuildMode && !bInventoryOpen && HealthPoints > 0;
     SidearmViewmodel->SetHiddenInGame(!bVisible || bThirdPerson || !bViewmodelReady);
     RefreshAttachments();
@@ -1084,7 +1084,7 @@ const TCHAR* ASurvivalCharacter::GetWeaponLabel(ESurvivalItem Weapon) const
 
 const TCHAR* ASurvivalCharacter::GetInstanceLabel(ESurvivalItem Weapon, int32 Id) const
 {
-    if (!WeaponItems.IsValidIndex(Id)) return SurvivalItemName(Weapon);
+    if (!WeaponItems.IsValidIndex(Id) || WeaponItems[Id].Item != Weapon) return SurvivalItemName(Weapon);
     return Arsenal[FirearmIndex(Weapon, WeaponItems[Id].Firearm)].Label;
 }
 
@@ -1118,7 +1118,7 @@ float ASurvivalCharacter::ActionDuration(bool bReload, UAnimSequence* Clip, floa
 void ASurvivalCharacter::UpdateFirearmModel()
 {
     const auto& Active = Toolbelt[ActiveHotbarSlot];
-    const bool bWeapon = Active.Item == ESurvivalItem::Sidearm || Active.Item == ESurvivalItem::Rifle;
+    const bool bWeapon = IsWeaponItem(Active.Item);
     if (!bWeapon || !WeaponItems.IsValidIndex(Active.WeaponId)) return;
     const int32 Model = FirearmIndex(Active.Item, WeaponItems[Active.WeaponId].Firearm);
     if (Model == EquippedFirearm) return;
@@ -1168,6 +1168,34 @@ void ASurvivalCharacter::UpdateFirearmModel()
             HeldWeaponSurface->GetSocketTransform(TEXT("MountOptic"), RTS_Component).GetLocation() : Surface->GetBounds().Origin;
         HeldSurfaceAim = FVector(36, 0, -2) - Pose.TransformVector(Rail);
     };
+    if (IsFieldWeapon(Active.Item))
+    {
+        const FString Directory = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/Field/"), Arsenal[Model].Asset);
+        auto* Rig = LoadObject<USkeletalMesh>(nullptr, *(Directory + TEXT("Rig0.Rig0")), nullptr, LOAD_NoWarn);
+        RifleHold = LoadObject<UAnimSequence>(nullptr, *(Directory + TEXT("Presentation0.Presentation0")), nullptr, LOAD_NoWarn);
+        if (!Rig || !RifleHold || !Surface)
+        {
+            UseStaticSurface();
+            return;
+        }
+        View->SetSkeletalMesh(Rig);
+        View->PlayAnimation(RifleHold, false);
+        View->SetPlayRate(0.f);
+        View->SetPosition(0.f, false);
+        View->TickAnimation(0.f, false);
+        View->RefreshBoneTransforms(nullptr);
+        const FTransform Rear = View->GetSocketTransform(TEXT("MountRear"), RTS_Component);
+        const FVector Front = View->GetSocketTransform(TEXT("MountMuzzle"), RTS_Component).GetLocation();
+        const double Fit = FirearmLength[Model] / FMath::Max(.01, FVector::Dist(Rear.GetLocation(), Front));
+        const FQuat Facing = Rear.GetRotation().Inverse();
+        const FVector Grip = Active.Item == ESurvivalItem::Crossbow ? FVector(12,14,-17) :
+            Active.Item == ESurvivalItem::Knife ? FVector(35,16,-18) : FVector(43,16,-12);
+        RifleHip = Grip - Facing.RotateVector(Rear.GetLocation() * Fit);
+        const FVector Sight = View->GetSocketTransform(TEXT("MountOptic"), RTS_Component).GetLocation();
+        RifleAim = FVector(42,0,-2.5) - Facing.RotateVector(Sight * Fit);
+        View->SetRelativeTransform(FTransform(Facing, RifleHip, FVector(Fit)));
+        return;
+    }
     if (Model < 2)
     {
         if (bPistol) LoadSidearmViewmodel(); else LoadRifleViewmodel();
@@ -1413,6 +1441,12 @@ void ASurvivalCharacter::UpdateSidearmSightAlignment()
 
 void ASurvivalCharacter::UpdateWeaponAim(float DeltaSeconds)
 {
+    const ESurvivalItem FieldItem = GetHotbarItem(ActiveHotbarSlot);
+    if (IsFieldWeapon(FieldItem))
+    {
+        UpdateFieldPresentation(FieldItem, DeltaSeconds);
+        return;
+    }
     const bool bHipShotPlaying = GetWorld()->GetTimeSeconds() < NextShotAt && ViewmodelFire && CurrentViewmodelAnimation == ViewmodelFire;
     const bool bPistolAiming = IsAimingSidearm() && !bHipShotPlaying;
     const bool bThermal = HasWeaponMod(GetHotbarItem(ActiveHotbarSlot), ThermalSight) || HasWeaponMod(GetHotbarItem(ActiveHotbarSlot), IRSight);
@@ -1527,6 +1561,15 @@ void ASurvivalCharacter::PressTrigger()
 
 void ASurvivalCharacter::ReleaseAutomatic()
 {
+    if (FieldDrawAt >= 0)
+    {
+        const double Charge = FieldDrawFraction();
+        FieldDrawAt = -1;
+        const auto Weapon = GetHotbarItem(ActiveHotbarSlot);
+        if (Weapon >= ESurvivalItem::PrimitiveBow && Weapon <= ESurvivalItem::CompoundBow && Charge > .08
+            && HealthPoints > 0 && !bBuildMode && !bInventoryOpen && !HasOpenContainer())
+            ShootFieldArrow(Weapon, Charge);
+    }
     if (BurstRemaining == 0) ReleaseTrigger();
 }
 
@@ -1539,6 +1582,12 @@ void ASurvivalCharacter::PrimaryAction()
     if (bBuildMode)
     {
         PlacePlan();
+        return;
+    }
+    const auto Weapon = GetHotbarItem(ActiveHotbarSlot);
+    if (IsFieldWeapon(Weapon))
+    {
+        UseFieldWeapon(Weapon);
         return;
     }
     if (IsRifleSelected())
@@ -1586,7 +1635,90 @@ void ASurvivalCharacter::PrimaryAction()
     AddControllerPitchInput((bAimedShot ? -0.38f : -0.65f) * WeaponRecoil(ESurvivalItem::Sidearm));
 }
 
-bool ASurvivalCharacter::FireRound(const FVector& Origin, double Range, bool bRifleRound)
+double ASurvivalCharacter::FieldDrawFraction() const
+{
+    if (FieldDrawAt < 0) return 0.;
+    const double Duration = HasWeaponMod(GetHotbarItem(ActiveHotbarSlot), BowBinding) ? .64 : .85;
+    return FMath::Clamp((GetWorld()->GetTimeSeconds() - FieldDrawAt) / Duration, 0., 1.);
+}
+
+void ASurvivalCharacter::UpdateFieldPresentation(ESurvivalItem Weapon, float DeltaSeconds)
+{
+    const bool bPlayable = HealthPoints > 0 && !bInventoryOpen && !bBuildMode && !HasOpenContainer();
+    if (!bPlayable) FieldDrawAt = -1;
+    const bool bAim = bPlayable && bAimHeld && !bThirdPerson && Weapon != ESurvivalItem::Knife;
+    RifleADS = FMath::FInterpConstantTo(RifleADS, bAim ? 1.f : 0.f, DeltaSeconds, 6.f);
+    AimBlend = ScopeBlend = 0.f;
+    const bool bVariable = HasWeaponMod(Weapon, VariableScope);
+    if (const auto* PC = Cast<APlayerController>(Controller); bAim && bVariable && PC && PC->WasInputKeyJustPressed(EKeys::Z))
+        bHighOpticZoom = !bHighOpticZoom;
+    const float Zoom = bVariable ? (bHighOpticZoom ? 58.f : 34.f) :
+        HasWeaponMod(Weapon, BowSight) || HasWeaponMod(Weapon, ReflexSight) ? 19.f : 7.f;
+    FirstPersonCamera->SetFieldOfView(90.f - Zoom * RifleADS);
+    if (HeldWeaponSurface->GetStaticMesh())
+        HeldWeaponSurface->SetRelativeLocation(FMath::Lerp(HeldSurfaceHip,HeldSurfaceAim,RifleADS));
+    if (!RifleHold) return;
+    RifleViewmodel->SetRelativeLocation(FMath::Lerp(RifleHip,RifleAim,RifleADS));
+    const double Now = GetWorld()->GetTimeSeconds();
+    const double Phase = Weapon == ESurvivalItem::Knife || Weapon == ESurvivalItem::Crossbow
+        ? (FieldActionAt >= 0 && Now < FieldReadyAt ? (Now - FieldActionAt) / (FieldReadyAt - FieldActionAt) : 0.)
+        : FieldDrawFraction();
+    RifleViewmodel->SetPosition(RifleHold->GetPlayLength() * static_cast<float>(Phase), false);
+}
+
+void ASurvivalCharacter::UseFieldWeapon(ESurvivalItem Weapon)
+{
+    const double Now = GetWorld()->GetTimeSeconds();
+    if (Now < FieldReadyAt || !GetWeaponAssembly(Weapon).IsComplete()) return;
+    if (Weapon == ESurvivalItem::Crossbow)
+    {
+        ShootFieldArrow(Weapon, 1.);
+        return;
+    }
+    if (Weapon != ESurvivalItem::Knife)
+    {
+        if (Items.Arrows > 0 && FieldDrawAt < 0) FieldDrawAt = Now;
+        return;
+    }
+    FieldActionAt = Now;
+    FieldReadyAt = Now + (HasWeaponMod(Weapon, KnifeWrap) ? .56 : .7);
+    FHitResult Hit;
+    if (!FindWorldAimHit(175., Hit) || !HasReachTo(Hit.ImpactPoint, 175.)) return;
+    const float Damage = (18.f + .032f * GetWeaponAssembly(Weapon).GetQuality()) * (HasWeaponMod(Weapon, KnifeBalance) ? 1.15f : 1.f);
+    if (auto* Zombie = Cast<ASurvivalZombie>(Hit.GetActor()))
+    {
+        Zombie->HitByShot(this, FMath::RoundToInt(Damage));
+        NotifyFieldHit(true, true);
+    }
+    else if (UGameplayStatics::ApplyDamage(Hit.GetActor(), Damage, GetController(), this, nullptr) > 0.f)
+        NotifyFieldHit(false, true);
+}
+
+void ASurvivalCharacter::ShootFieldArrow(ESurvivalItem Weapon, double Charge)
+{
+    const bool bCrossbow = Weapon == ESurvivalItem::Crossbow;
+    const auto Ammo = bCrossbow ? ESurvivalItem::Bolts : ESurvivalItem::Arrows;
+    if (GetItemCount(Ammo) <= 0 || !GetWeaponAssembly(Weapon).IsComplete()) return;
+    const float Damage = (bCrossbow ? 43.f : Weapon == ESurvivalItem::CompoundBow ? 36.f :
+        Weapon == ESurvivalItem::WoodenBow ? 29.f : 22.f) + .025f * GetWeaponAssembly(Weapon).GetQuality();
+    const FVector Origin = FirstPersonCamera->GetComponentLocation() + GetAimCamera().GetForwardVector() * 26.;
+    if (!FireRound(Origin, 7000., false, Damage * (.4f + .6f * Charge), 1800.f + 2900.f * Charge)) return;
+    ChangeItemCount(Ammo, -1);
+    FieldActionAt = GetWorld()->GetTimeSeconds();
+    FieldReadyAt = FieldActionAt + (bCrossbow ? (HasWeaponMod(Weapon, BowBinding) ? .92 : 1.2) : .22);
+}
+
+void ASurvivalCharacter::NotifyFieldHit(bool bHitZombie, bool bBlade)
+{
+    HitMarkerUntil = GetWorld()->GetTimeSeconds() + .15;
+    if (bHitZombie && HealthPoints > 0)
+    {
+        Progression.AwardPractice(bBlade ? ETraining::BladeWeapons : ETraining::Archery, 10);
+        Progression.AwardXP(10);
+    }
+}
+
+bool ASurvivalCharacter::FireRound(const FVector& Origin, double Range, bool bRifleRound, float ArrowDamage, float ArrowSpeed)
 {
     const UCameraComponent& Camera = GetAimCamera();
     FHitResult Aim;
@@ -1611,7 +1743,8 @@ bool ASurvivalCharacter::FireRound(const FVector& Origin, double Range, bool bRi
     Parameters.Instigator = this;
     Parameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
     ASurvivalRound* Round = GetWorld()->SpawnActor<ASurvivalRound>(Muzzle, Direction.Rotation(), Parameters);
-    if (Round && bRifleRound)
+    if (Round && ArrowDamage > 0.f) Round->SetArrow(ArrowDamage, ArrowSpeed);
+    else if (Round && bRifleRound)
     {
         Round->SetRifleRound(GetWeaponAssembly(ESurvivalItem::Rifle).GetDamage());
     }
@@ -1699,7 +1832,7 @@ void ASurvivalCharacter::LoadRifleViewmodel()
 
 void ASurvivalCharacter::UpdateRifleView()
 {
-    const bool bVisible = bHasRifle && IsRifleSelected() && !bBuildMode && !bInventoryOpen && HealthPoints > 0;
+    const bool bVisible = ((bHasRifle && IsRifleSelected()) || IsFieldWeapon(GetHotbarItem(ActiveHotbarSlot))) && !bBuildMode && !bInventoryOpen && HealthPoints > 0;
     RifleViewmodel->SetHiddenInGame(!bVisible || bThirdPerson || !RifleHold);
     RifleWorldMesh->SetHiddenInGame(!bVisible || !bThirdPerson ||
         !GetMesh()->DoesSocketExist(FName(TEXT("RightHand"))));
@@ -1966,6 +2099,7 @@ void ASurvivalCharacter::ToggleInventory()
 
 void ASurvivalCharacter::SetInventoryOpen(bool bOpen)
 {
+    FieldDrawAt = -1.;
     ReleaseTrigger();
     if (bInventoryOpen == bOpen)
     {
@@ -2005,6 +2139,8 @@ int32 ASurvivalCharacter::GetItemCount(ESurvivalItem Item) const
     }
     switch (Item)
     {
+    case ESurvivalItem::PrimitiveBow: case ESurvivalItem::WoodenBow: case ESurvivalItem::CompoundBow:
+    case ESurvivalItem::Crossbow: case ESurvivalItem::Knife:
     case ESurvivalItem::Sidearm:
     case ESurvivalItem::Rifle:
     {
@@ -2021,6 +2157,8 @@ int32 ASurvivalCharacter::GetItemCount(ESurvivalItem Item) const
     case ESurvivalItem::Rounds: return Items.Rounds;
     case ESurvivalItem::TimberDoor: return Items.TimberDoors;
     case ESurvivalItem::RifleRounds: return Items.RifleRounds;
+    case ESurvivalItem::Arrows: return Items.Arrows;
+    case ESurvivalItem::Bolts: return Items.Bolts;
     case ESurvivalItem::BuilderGuide: return Items.BuilderGuides;
     case ESurvivalItem::ScavengerNotes: return Items.ScavengerNotes;
     case ESurvivalItem::DressingSchematic: return Items.DressingSchematics;
@@ -2222,7 +2360,7 @@ bool ASurvivalCharacter::SwapWeaponPart(int32 PackSlot)
 bool ASurvivalCharacter::RemoveWeaponPart(int32 PartSlot)
 {
     if (!CanInspectWeapon(InspectedWeapon) || !WeaponItems.IsValidIndex(InspectedWeaponId) ||
-        PartSlot < 0 || PartSlot >= FSurvivalWeaponAssembly::PartCount)
+        PartSlot < 0 || PartSlot >= FSurvivalWeaponAssembly::SlotsFor(InspectedWeapon))
         return false;
 
     FSurvivalWeaponAssembly& Assembly = WeaponItems[InspectedWeaponId].Assembly;
@@ -2366,10 +2504,10 @@ void ASurvivalCharacter::SyncPack()
             }
         }
     }
-    for (int32 Index = 0; Index < static_cast<int32>(ESurvivalItem::None); ++Index)
+    for (int32 Index = 0; Index < static_cast<int32>(ESurvivalItem::Count); ++Index)
     {
         const ESurvivalItem Item = static_cast<ESurvivalItem>(Index);
-        if (IsAttachmentItem(Item) || SurvivalItemHasQuality(Item) || IsWeaponLoot(Item))
+        if (Item == ESurvivalItem::None || IsAttachmentItem(Item) || SurvivalItemHasQuality(Item) || IsWeaponItem(Item))
         {
             continue;
         }
@@ -2483,7 +2621,22 @@ void ASurvivalCharacter::CraftRecipe(int32 RecipeIndex, int32 Quantity)
     {
         ChangeItemCount(Ingredient.Item, -Ingredient.Count * Quantity);
     }
-    ChangeItemCount(Recipe.Output, Quantity);
+    if (IsWeaponItem(Recipe.Output))
+    {
+        const bool bKnife = Recipe.Output == ESurvivalItem::Knife;
+        const auto Skill = bKnife ? ETraining::WeaponCraft : ETraining::BasicCraft;
+        const int32 MaxRank = GetTrainingInfo(Skill).MaxRank;
+        for (int32 Index = 0; Index < Quantity; ++Index)
+        {
+            FSurvivalLootSlot Made;
+            Made.ItemId = static_cast<uint8>(Recipe.Output);
+            Made.Count = 1;
+            Made.Quality = 1 + (FSurvivalWeaponAssembly::MaxQuality - 1) * Progression.Rank(Skill) / MaxRank;
+            StoreInventoryLoot(MakeArrayView(&Made, 1), INDEX_NONE, false);
+            if (bKnife) Progression.AwardPractice(Skill, 4);
+        }
+    }
+    else ChangeItemCount(Recipe.Output, Quantity);
     Progression.AwardPractice(ETraining::BasicCraft, 4 * Quantity);
     Progression.AwardXP(4 * Quantity);
 }
@@ -2501,6 +2654,8 @@ void ASurvivalCharacter::ChangeItemCount(ESurvivalItem Item, int32 Delta)
     case ESurvivalItem::Cloth: Items.Cloth += Delta; break;
     case ESurvivalItem::Rounds: Items.Rounds += Delta; break;
     case ESurvivalItem::RifleRounds: Items.RifleRounds += Delta; break;
+    case ESurvivalItem::Arrows: Items.Arrows += Delta; break;
+    case ESurvivalItem::Bolts: Items.Bolts += Delta; break;
     case ESurvivalItem::BuilderGuide: Items.BuilderGuides += Delta; break;
     case ESurvivalItem::ScavengerNotes: Items.ScavengerNotes += Delta; break;
     case ESurvivalItem::DressingSchematic: Items.DressingSchematics += Delta; break;
@@ -2885,7 +3040,7 @@ void ASurvivalCharacter::RotateCharacterPortrait(float Degrees)
 
 bool ASurvivalCharacter::CanQuickSlot(ESurvivalItem Item)
 {
-    return Item == ESurvivalItem::Rifle || Item == ESurvivalItem::Sidearm || Item == ESurvivalItem::Food
+    return IsWeaponItem(Item) || Item == ESurvivalItem::Food
         || Item == ESurvivalItem::Water || Item == ESurvivalItem::Bandage || Item == ESurvivalItem::FieldDressing;
 }
 
@@ -2961,6 +3116,7 @@ void ASurvivalCharacter::SelectToolbeltItem(int32 Slot)
 void ASurvivalCharacter::CancelWeaponReloadOnSwitch(int32 PreviousWeaponId)
 {
     if (PreviousWeaponId == Toolbelt[ActiveHotbarSlot].WeaponId) return;
+    FieldDrawAt = FieldActionAt = -1.;
     ReleaseTrigger();
     ReloadCompleteAt = -1.0;
     RifleReloadAt = -1.0;
@@ -2993,9 +3149,10 @@ int32 ASurvivalCharacter::GetRifleAmmo() const
 bool ASurvivalCharacter::CanInspectWeapon(ESurvivalItem Item) const
 {
     if (!bInventoryOpen || HealthPoints <= 0) return false;
+    if (IsFieldWeapon(Item)) return Item != ESurvivalItem::PrimitiveBow && GetWeaponId(Item) != INDEX_NONE;
     if (Item == ESurvivalItem::Sidearm || FSurvivalWeaponAssembly::PartIndex(Item, ESurvivalItem::Sidearm) != INDEX_NONE)
         return bHasSidearm && !IsReloading();
-    return (Item == ESurvivalItem::Rifle || SurvivalItemHasQuality(Item)) && CanModifyRifle();
+    return (Item == ESurvivalItem::Rifle || FSurvivalWeaponAssembly::PartIndex(Item) != INDEX_NONE) && CanModifyRifle();
 }
 
 bool ASurvivalCharacter::HasWeaponMod(ESurvivalItem Weapon, int32 Mod) const
@@ -3023,10 +3180,10 @@ bool ASurvivalCharacter::FitAttachment(int32 PackSlot, int32 Mount)
     if (!Pack.IsValidIndex(PackSlot) || !CanInspectWeapon(InspectedWeapon)) return false;
     auto& Cell = Pack[PackSlot];
     if (!IsAttachmentItem(Cell.Item) || Cell.Count != 1) return false;
-    const int32 Mod = static_cast<int32>(Cell.Item) - static_cast<int32>(ESurvivalItem::GripWrap);
+    const int32 Mod = AttachmentIndex(Cell.Item);
     const int32 Target = static_cast<int32>(WeaponMods[Mod].Slot);
     if (!SupportsAttachment(Mod) || (Mount != INDEX_NONE && Mount != Target) ||
-        GetWeaponQuality(InspectedWeaponId) < MountQuality[Target]) return false;
+        GetWeaponQuality(InspectedWeaponId) < RequiredMountQuality(InspectedWeapon, Target)) return false;
     auto& Installed = WeaponItems[InspectedWeaponId].Mods;
     const int32 Previous = InstalledOnMount(Target);
     if (Previous == Mod) return false;
@@ -3072,8 +3229,8 @@ void ASurvivalCharacter::RefreshAttachments()
     AttachmentMeshes.Reset();
     const bool bPreview = bInventoryOpen && InspectedWeapon != ESurvivalItem::None && InspectionWeapon->IsVisible();
     const ESurvivalItem Weapon = bPreview ? InspectedWeapon : GetHotbarItem(ActiveHotbarSlot);
-    const bool bRifle = Weapon == ESurvivalItem::Rifle;
-    if ((!bRifle && Weapon != ESurvivalItem::Sidearm) || (bInventoryOpen && !bPreview) || bBuildMode || HealthPoints <= 0) return;
+    const bool bRifle = Weapon != ESurvivalItem::Sidearm;
+    if (!IsWeaponItem(Weapon) || (bInventoryOpen && !bPreview) || bBuildMode || HealthPoints <= 0) return;
     UStaticMeshComponent* WorldMesh = bRifle ? RifleWorldMesh.Get() : Sidearm ? Sidearm->GetWeaponMesh() : nullptr;
     UStaticMeshComponent* Model = bPreview ? InspectionWeapon.Get() : WorldMesh;
     const int32 InstanceId = GetWeaponId(Weapon);
@@ -3178,7 +3335,7 @@ void ASurvivalCharacter::RefreshAttachments()
     for (int32 Index=0; Index<UE_ARRAY_COUNT(WeaponMods); ++Index)
         if (HasWeaponMod(Weapon,Index))
         {
-            if (Index == FactoryScope || Index == BurstTrigger || Index == AutoTrigger) continue;
+            if (Index == FactoryScope || Index == BurstTrigger || Index == AutoTrigger || Index == BowBinding || Index == KnifeWrap || Index == KnifeBalance) continue;
             const auto& Mod = WeaponMods[Index];
             const TCHAR* Art = nullptr;
             if (Index == Suppressor) Art = bRifle ? TEXT("SuppressorRifle") : TEXT("SuppressorPistol");
@@ -3188,7 +3345,7 @@ void ASurvivalCharacter::RefreshAttachments()
             else if (Index == Flashlight) Art = TEXT("Flashlight");
             else if (Index == Bipod) Art = TEXT("Bipod");
             else if (Mod.Slot == EWeaponMount::Stock) Art = TEXT("Stock");
-            else if (Index == ReflexSight) Art = TEXT("ReflexSight");
+            else if (Index == ReflexSight || Index == BowSight) Art = TEXT("ReflexSight");
             else if (Index == ThermalSight) Art = TEXT("ThermalSight");
             else if (Mod.Slot == EWeaponMount::Laser || Index == IRIlluminator) Art = TEXT("PEQ15");
             Mount(Mod, Art);

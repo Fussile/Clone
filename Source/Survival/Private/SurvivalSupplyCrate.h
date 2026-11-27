@@ -97,7 +97,7 @@ class ASurvivalSupplyCrate : public AActor
 public:
     ASurvivalSupplyCrate();
 
-    static constexpr int32 MaxLootSlots = 36;
+    static constexpr int32 MaxLootSlots = 56;
     static constexpr int32 ChestSlots = 16;
     const TArray<FSurvivalLootSlot>& GetSlots() const { return State.Slots; }
     int32 GetLootRevision() const { return LootRevision; }

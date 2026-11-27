@@ -1,8 +1,15 @@
 #pragma once
 #include "SurvivalArsenal.h"
 
-enum class EWeaponMount : uint8 { Optic, Muzzle, Laser, Magazine, Light, Underbarrel, Sling, Action, Stock };
-inline constexpr int32 MountQuality[] = {1, 100, 200, 300, 400, 500, 600, 725, 850};
+enum class EWeaponMount : uint8 { Optic, Muzzle, Laser, Magazine, Light, Underbarrel, Sling, Action, Stock, Binding, Handle, Balance };
+inline constexpr int32 MountQuality[] = {1, 100, 200, 300, 400, 500, 600, 725, 850, 1, 1, 200};
+inline constexpr int32 RequiredMountQuality(ESurvivalItem Weapon, int32 Mount)
+{
+    if (Mount == static_cast<int32>(EWeaponMount::Binding) &&
+        (Weapon == ESurvivalItem::CompoundBow || Weapon == ESurvivalItem::Crossbow)) return 150;
+    return MountQuality[Mount];
+}
+
 struct FWeaponModDefinition
 {
     const TCHAR* Name;
@@ -35,21 +42,43 @@ inline const FWeaponModDefinition WeaponMods[] = {
     {TEXT("Compact reflex sight"), {4,3,3}, 1.f, EWeaponMount::Optic},
     {TEXT("Burst trigger module"), {}, 1.f, EWeaponMount::Action},
     {TEXT("Automatic trigger module"), {}, 1.f, EWeaponMount::Action},
+    {TEXT("Bowstring serving"), {}, 1.f, EWeaponMount::Binding},
+    {TEXT("Archery reflex sight"), {5,3,4}, 1.f, EWeaponMount::Optic},
+    {TEXT("Knife handle wrap"), {}, 1.f, EWeaponMount::Handle},
+    {TEXT("Knife balance weight"), {}, 1.f, EWeaponMount::Balance},
 };
 enum EWeaponModIndex { GripWrap, BarrelWeight, IRSight, VariableScope, GreenLaser, RedLaser, IRLaser,
     Bipod, Suppressor, MuzzleBrake, ExtendedMagazine, QuickMagazine, Sling, FasterBolt, Flashlight, IRIlluminator,
-    LightStock, CloseQuartersStock, HeavyStock, ThermalSight, FactoryScope, ReflexSight, BurstTrigger, AutoTrigger, WeaponModCount };
+    LightStock, CloseQuartersStock, HeavyStock, ThermalSight, FactoryScope, ReflexSight, BurstTrigger, AutoTrigger, BowBinding, BowSight, KnifeWrap, KnifeBalance, WeaponModCount };
 static_assert(WeaponModCount == UE_ARRAY_COUNT(WeaponMods) && WeaponModCount <= 32);
 
 inline constexpr ESurvivalItem AttachmentItem(int32 Mod)
 {
-    return static_cast<ESurvivalItem>(static_cast<int32>(ESurvivalItem::GripWrap) + Mod);
+    return static_cast<ESurvivalItem>(static_cast<int32>(ESurvivalItem::GripWrap) + Mod + (Mod >= BowBinding ? 1 : 0));
 }
-static_assert(AttachmentItem(WeaponModCount) == ESurvivalItem::None);
+inline constexpr int32 AttachmentIndex(ESurvivalItem Item)
+{
+    return static_cast<int32>(Item) - static_cast<int32>(ESurvivalItem::GripWrap)
+        - (Item >= ESurvivalItem::BowBinding ? 1 : 0);
+}
+static_assert(AttachmentItem(KnifeBalance) == ESurvivalItem::KnifeBalance);
 
 inline bool FirearmAccepts(int32 Model, int32 Mod)
 {
     if (Model < 0 || Model >= UE_ARRAY_COUNT(Arsenal) || Mod < 0 || Mod >= WeaponModCount) return false;
+    const ESurvivalItem Family = Arsenal[Model].Family;
+    if (IsFieldWeapon(Family))
+    {
+        switch (Family)
+        {
+        case ESurvivalItem::WoodenBow: return Mod == BowBinding;
+        case ESurvivalItem::CompoundBow: return Mod == BowBinding || Mod == BowSight;
+        case ESurvivalItem::Crossbow: return Mod == BowBinding || Mod == ReflexSight || Mod == VariableScope;
+        case ESurvivalItem::Knife: return Mod == KnifeWrap || Mod == KnifeBalance;
+        default: return false;
+        }
+    }
+    if (Mod >= BowBinding) return false;
     const bool Pistol = Arsenal[Model].Family == ESurvivalItem::Sidearm;
     const bool LongRifle = Model == 1 || Model == 4 || Model == 5 || Model == 6;
     switch (Mod)

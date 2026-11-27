@@ -198,6 +198,7 @@ public:
     int32 GetRifleReserve() const { return Items.RifleRounds; }
     bool IsRifleReloading() const { return RifleReloadAt >= 0.0; }
     bool ShowHitMarker() const;
+    void NotifyFieldHit(bool bHitZombie, bool bBlade);
     void NotifyRoundHit(bool bHitZombie, bool bRifleRound);
     const FSurvivalProgression& GetProgression() const { return Progression; }
     int32 GetLootGameStage() const { return LootGameStage; }
@@ -235,6 +236,8 @@ private:
     void ServerToggleWorldDoor(ASurvivalWorldDoor* Door, FVector_NetQuantize10 ImpactPoint);
     UFUNCTION(Server, Reliable)
     void ServerScavenge(ASurvivalSupplyCrate* Crate, FVector_NetQuantize10 ImpactPoint);
+
+    void StoreInventoryLoot(TConstArrayView<FSurvivalLootSlot> Taken, int32 PackTarget, bool bApplyAppraisal);
 
     UFUNCTION(Client, Reliable)
     void ClientReceiveLoot(const TArray<FSurvivalLootSlot>& Taken, int32 PackTarget, bool bApplyAppraisal);
@@ -304,7 +307,14 @@ private:
     void PressTrigger();
     void PrimaryAction();
     void EquipSidearm();
-    bool FireRound(const FVector& Muzzle, double Range, bool bRifleRound);
+    bool FireRound(const FVector& Muzzle, double Range, bool bRifleRound, float ArrowDamage = 0.f, float ArrowSpeed = 0.f);
+    void UseFieldWeapon(ESurvivalItem Weapon);
+    void ShootFieldArrow(ESurvivalItem Weapon, double Charge);
+    void UpdateFieldPresentation(ESurvivalItem Weapon, float DeltaSeconds);
+    double FieldDrawFraction() const;
+    double FieldDrawAt = -1.;
+    double FieldActionAt = -1.;
+    double FieldReadyAt = 0.;
     void FireRifle();
     void ReloadRifle();
     void UpdateRifle();
