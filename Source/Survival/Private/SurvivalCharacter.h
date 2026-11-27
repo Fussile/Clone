@@ -135,7 +135,8 @@ private:
     FVector HeldSurfaceHip = FVector::ZeroVector;
     FVector HeldSurfaceAim = FVector::ZeroVector;
     float RifleADS = 0;
-    float ActionDuration(bool bReload, UAnimSequence* Clip, float Fallback) const;
+    float ActiveAutomaticInterval() const;
+    double RifleShotEndsAt = -1.;
     int32 WeaponCapacity(ESurvivalItem Family) const;
     float WeaponRecoil(ESurvivalItem Weapon) const;
 public:

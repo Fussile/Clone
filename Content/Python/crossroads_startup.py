@@ -108,8 +108,10 @@ def prepare_if_needed():
         rig, idle = {"Sidearm": ("SK_SidearmViewmodel", "ViewmodelIdle"),
                      "Sniper": ("SK_SniperViewmodel", "SniperHold")}.get(model, ("Rig0", "Presentation0"))
         portable = model in ("AK12", "HK416", "MP7", "Scorpion", "Python357")
-        geometry = "UnifiedSurface" if portable else "WeaponSurface" if model == "Makarov" else "Assembly/Geometry"
-        rigs = "Unified" if portable else "FittedArms" if model in ("Sidearm", "ScrapRifle", "Sniper") else "PlayerArms"
+        geometry = "BareSurface" if model in ("AK12", "MP7", "Scorpion") else "UnifiedSurface" if portable else "WeaponSurface" if model == "Makarov" else "Assembly/Geometry"
+        rigs = "Actions" if portable else "FittedArms" if model in ("Sidearm", "ScrapRifle", "Sniper") else "PlayerArms"
+        if portable:
+            required += tuple(f"{directory}/{rigs}/{role}" for role in ("Idle", "Walk", "Fire", "Reload"))
         required += (f"{directory}/{rigs}/{rig}", f"{directory}/{rigs}/{idle}", f"{directory}/{geometry}/World")
     required += tuple(f"/Game/Art/Crossroads/World/Props/{name}/SM_{name}"
                       for name in ("OfficeWorkstation", "OfficeFiles", "OfficeDrawer", "OfficeCooler"))

@@ -60,7 +60,8 @@ UStaticMesh* FirearmWorldMesh(int32 Model)
 {
     if (Model < 0 || Model >= UE_ARRAY_COUNT(Arsenal)) return nullptr;
     const TCHAR* AssetName = Model == 0 ? TEXT("Sidearm") : Model == 1 ? TEXT("Sniper") : Arsenal[Model].Asset;
-    const TCHAR* Directory = IsFieldWeapon(Arsenal[Model].Family) ? TEXT("Field") : Model == 3 || Model >= 5 ? TEXT("UnifiedSurface") :
+    const TCHAR* Directory = IsFieldWeapon(Arsenal[Model].Family) ? TEXT("Field") : Model == 5 || Model == 7 || Model == 8 ? TEXT("BareSurface") :
+        Model == 3 || Model >= 5 ? TEXT("UnifiedSurface") :
         Model == 2 ? TEXT("WeaponSurface") : TEXT("Assembly/Geometry");
     const FString Path = FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/%s/World.World"), AssetName, Directory);
     return LoadObject<UStaticMesh>(nullptr, *Path, nullptr, LOAD_NoWarn);
@@ -224,14 +225,19 @@ void ASurvivalCharacter::Tick(float DeltaSeconds)
     }
     if (HasAuthority() && (bSearchingContainer || bViewingContainer))
         UpdateContainerSearch(DeltaSeconds);
-    if (TriggerWeapon != INDEX_NONE && GetWorld()->GetTimeSeconds() >= NextShotAt)
+    if (TriggerWeapon != INDEX_NONE)
     {
-        if (Toolbelt[ActiveHotbarSlot].WeaponId != TriggerWeapon || !IsSidearmSelected() || IsReloading() ||
-            GetAmmo() <= 0 || HealthPoints <= 0 || bBuildMode || bInventoryOpen || HasOpenContainer()) ReleaseTrigger();
-        else
+        const bool bRifle = IsRifleSelected();
+        const bool bBlocked = Toolbelt[ActiveHotbarSlot].WeaponId != TriggerWeapon ||
+            (!bRifle && !IsSidearmSelected()) || HealthPoints <= 0 || bBuildMode || bInventoryOpen || HasOpenContainer() ||
+            (bRifle ? IsRifleReloading() || GetRifleAmmo() <= 0 : IsReloading() || GetAmmo() <= 0);
+        if (bBlocked) ReleaseTrigger();
+        else if (GetWorld()->GetTimeSeconds() >= (bRifle ? RifleReadyAt : NextShotAt))
         {
+            const int32 Before = bRifle ? GetRifleAmmo() : GetAmmo();
             PrimaryAction();
-            if (BurstRemaining > 0 && --BurstRemaining == 0) ReleaseTrigger();
+            if ((bRifle ? GetRifleAmmo() : GetAmmo()) == Before || (BurstRemaining > 0 && --BurstRemaining == 0))
+                ReleaseTrigger();
         }
     }
     UpdateVitals(DeltaSeconds);
@@ -817,7 +823,9 @@ void ASurvivalCharacter::StoreInventoryLoot(TConstArrayView<FSurvivalLootSlot> T
             Instance.Firearm = FirearmIndex(Item, Loot.Firearm);
             Instance.Mods = Loot.InstalledMods;
             if (Instance.Firearm == 1) Instance.Mods |= 1u << FactoryScope;
-            Instance.Ammo = Item == ESurvivalItem::Sidearm ? Arsenal[Instance.Firearm].Capacity : Item == ESurvivalItem::Rifle ? 1 : 0;
+            const auto& Definition = Arsenal[Instance.Firearm];
+            Instance.Ammo = Item == ESurvivalItem::Sidearm || Definition.AutomaticInterval > 0.f
+                ? Definition.Capacity : Item == ESurvivalItem::Rifle ? 1 : 0;
             Instance.Assembly.Initialize(Item, Quality);
             WeaponId = WeaponItems.Add(Instance);
 
@@ -1095,24 +1103,10 @@ int32 ASurvivalCharacter::WeaponCapacity(ESurvivalItem Family) const
     return Arsenal[FirearmIndex(Family, Model)].Capacity * (HasWeaponMod(Family, ExtendedMagazine) ? 2 : 1);
 }
 
-namespace
+float ASurvivalCharacter::ActiveAutomaticInterval() const
 {
-struct FActionRange { float Start; float End; };
-
-// Seconds in the source's combined take, measured from its first time code.
-FActionRange ActionRange(int32 Model, bool bReload)
-{
-    if (Model == 3) return bReload ? FActionRange{.60f, 7.25f} : FActionRange{0, .38f};
-    if (Model == 6) return bReload ? FActionRange{9.55f, 12.65f} : FActionRange{.82f, 1.15f};
-    return {0, 0};
-}
-}
-
-float ASurvivalCharacter::ActionDuration(bool bReload, UAnimSequence* Clip, float Fallback) const
-{
-    const auto Range = ActionRange(EquippedFirearm, bReload);
-    if (Clip && Range.End > Range.Start) return Range.End - Range.Start;
-    return Clip ? Clip->GetPlayLength() : Fallback;
+    const int32 Model = GetFirearmModel(Toolbelt[ActiveHotbarSlot].WeaponId);
+    return Model >= 0 && Model < UE_ARRAY_COUNT(Arsenal) ? Arsenal[Model].AutomaticInterval : 0.f;
 }
 
 void ASurvivalCharacter::UpdateFirearmModel()
@@ -1122,6 +1116,7 @@ void ASurvivalCharacter::UpdateFirearmModel()
     if (!bWeapon || !WeaponItems.IsValidIndex(Active.WeaponId)) return;
     const int32 Model = FirearmIndex(Active.Item, WeaponItems[Active.WeaponId].Firearm);
     if (Model == EquippedFirearm) return;
+    SidearmAimedShotAt = -1.;
     EquippedFirearm = Model;
     const bool bPistol = Active.Item == ESurvivalItem::Sidearm;
     UStaticMeshComponent* WorldPart = bPistol ? (Sidearm ? Sidearm->GetWeaponMesh() : nullptr) : RifleWorldMesh.Get();
@@ -1204,7 +1199,7 @@ void ASurvivalCharacter::UpdateFirearmModel()
     }
     const auto Path = [Model](const TCHAR* Name)
     {
-        const TCHAR* Folder = Model == 3 || Model >= 5 ? TEXT("Unified") :
+        const TCHAR* Folder = Model == 3 || Model >= 5 ? TEXT("Actions") :
             Model == 4 ? TEXT("FittedArms") : TEXT("PlayerArms");
         return FString::Printf(TEXT("/Game/Art/Crossroads/Arsenal/%s/%s/%s.%s"), Arsenal[Model].Asset, Folder, Name, Name);
     };
@@ -1231,8 +1226,8 @@ void ASurvivalCharacter::UpdateFirearmModel()
         SidearmHipRotation = SidearmAimRotation = FQuat::Identity;
         ViewmodelIdle = Presentation;
         ViewmodelWalk = Clip(TEXT("Walk"));
-        ViewmodelFire = Model == 3 ? Presentation : Clip(TEXT("Fire"));
-        ViewmodelReload = Model == 3 ? Presentation : Clip(TEXT("Reload"));
+        ViewmodelFire = Clip(TEXT("Fire"));
+        ViewmodelReload = Clip(TEXT("Reload"));
         ViewmodelReloadEmpty = ViewmodelReload;
         bViewmodelReady = true;
         CurrentViewmodelAnimation = nullptr;
@@ -1243,13 +1238,13 @@ void ASurvivalCharacter::UpdateFirearmModel()
         RifleAim = Hip + FVector(0,-8,5);
         RifleWalk = Clip(TEXT("Walk"));
         RifleHold = Presentation;
-        RifleFire = Model == 6 ? Presentation : Clip(TEXT("Fire"));
-        RifleReload = Model == 6 ? Presentation : Clip(TEXT("Reload"));
+        RifleFire = Clip(TEXT("Fire"));
+        RifleReload = Clip(TEXT("Reload"));
         CurrentRifleAnimation = nullptr;
     }
-    const float HoldTime = Model == 5 || Model == 8 ? Presentation->GetPlayLength() : Model == 6 ? .5f : 0.f;
     View->PlayAnimation(Presentation, false);
-    View->SetPosition(HoldTime, false);
+    View->SetPlayRate(1.f);
+    View->SetPosition(0.f, false);
     View->TickAnimation(0.f, false);
     View->RefreshBoneTransforms(nullptr);
     if (View->DoesSocketExist(TEXT("GunRear")) && View->DoesSocketExist(TEXT("GunFront")) && View->DoesSocketExist(TEXT("GunTop")))
@@ -1264,8 +1259,16 @@ void ASurvivalCharacter::UpdateFirearmModel()
             const FQuat Alignment = FRotationMatrix::MakeFromXZ(Barrel, Up).ToQuat().Inverse();
             const double Lengths[] = {0, 0, 16, 22, 77, 59, 60, 30, 41};
             const double FitScale = Lengths[Model] / Barrel.Size();
-            const FVector HipPose = FVector(bPistol ? 37 : 18, 12, -13) - Alignment.RotateVector(Rear * FitScale);
-            const FVector AimPose = FVector(bPistol ? 42 : 16, 0, 0) - Alignment.RotateVector(Top * FitScale);
+            const bool bAutomatic = Arsenal[Model].AutomaticInterval > 0.f;
+            const FVector HipEye = bAutomatic ? FVector(35, 16, -16) : FVector(bPistol ? 37 : 18, 12, -13);
+            const FVector HipPose = HipEye - Alignment.RotateVector(Rear * FitScale);
+            FVector AimPose = FVector(bPistol ? 42 : 16, 0, 0) - Alignment.RotateVector(Top * FitScale);
+            if (bAutomatic)
+            {
+                // Heights above GunRear in the aligned frame of each bare mesh.
+                const double SightHeight = Model == 5 ? 4.4 : Model == 6 ? 5.8 : Model == 7 ? 3.4 : 5.9;
+                AimPose = FVector(42, 0, -SightHeight) - Alignment.RotateVector(Rear * FitScale);
+            }
             View->SetRelativeTransform(FTransform(Alignment, HipPose, FVector(FitScale)));
             if (bPistol)
             {
@@ -1359,15 +1362,8 @@ void ASurvivalCharacter::PlaySidearmAnimation(UAnimSequence* Sequence, bool bLoo
     {
         bPlayingSidearmLoop = bLoop;
         CurrentViewmodelAnimation = Sequence;
-        const bool bLoopClip = bLoop && EquippedFirearm != 3;
-        SidearmViewmodel->PlayAnimation(Sequence, bLoopClip);
-        const bool bReloadClip = !bLoop && IsReloading();
-        const bool bFireClip = !bLoop && !bReloadClip;
-        const auto Range = ActionRange(EquippedFirearm, bReloadClip);
-        const float Start = (bFireClip || bReloadClip) ? Range.Start : 0;
-        const float Rate = EquippedFirearm == 3 && !bFireClip && !bReloadClip ? 0.f : 1.f;
-        SidearmViewmodel->SetPosition(Start, false);
-        SidearmViewmodel->SetPlayRate(Rate);
+        SidearmViewmodel->PlayAnimation(Sequence, bLoop);
+        SidearmViewmodel->SetPlayRate(IsReloading() && HasWeaponMod(ESurvivalItem::Sidearm, QuickMagazine) ? 1.35f : 1.f);
     }
 }
 
@@ -1447,7 +1443,7 @@ void ASurvivalCharacter::UpdateWeaponAim(float DeltaSeconds)
         UpdateFieldPresentation(FieldItem, DeltaSeconds);
         return;
     }
-    const bool bHipShotPlaying = GetWorld()->GetTimeSeconds() < NextShotAt && ViewmodelFire && CurrentViewmodelAnimation == ViewmodelFire;
+    const bool bHipShotPlaying = SidearmAimedShotAt < 0. && GetWorld()->GetTimeSeconds() < NextShotAt && ViewmodelFire && CurrentViewmodelAnimation == ViewmodelFire;
     const bool bPistolAiming = IsAimingSidearm() && !bHipShotPlaying;
     const bool bThermal = HasWeaponMod(GetHotbarItem(ActiveHotbarSlot), ThermalSight) || HasWeaponMod(GetHotbarItem(ActiveHotbarSlot), IRSight);
     const bool bMagnified = bThermal || HasWeaponMod(ESurvivalItem::Rifle, FactoryScope) || HasWeaponMod(ESurvivalItem::Rifle, VariableScope) || HasWeaponMod(ESurvivalItem::Rifle, IRSight);
@@ -1476,7 +1472,8 @@ void ASurvivalCharacter::UpdateWeaponAim(float DeltaSeconds)
             UpdateSidearmSightAlignment();
         }
         const double ShotAge = GetWorld()->GetTimeSeconds() - SidearmAimedShotAt;
-        const double Kick = FMath::Square(FMath::Clamp(1.0 - ShotAge / .14, 0.0, 1.0)) * PistolAlpha;
+        const double Kick = !ViewmodelFire && SidearmAimedShotAt >= 0.
+            ? FMath::Square(FMath::Clamp(1.0 - ShotAge / .14, 0.0, 1.0)) * PistolAlpha : 0.;
         const FQuat Recoil = FRotator(2.4 * Kick, 0, 0).Quaternion();
         const FVector RearPivot(SidearmEyeRelief, 0, 0);
         const FVector Pose = FMath::Lerp(ViewmodelHip, ViewmodelAim, PistolAlpha);
@@ -1538,7 +1535,7 @@ void ASurvivalCharacter::StartReload()
         Clip = ViewmodelReloadEmpty.Get();
     }
     const float Rate = HasWeaponMod(ESurvivalItem::Sidearm, QuickMagazine) ? 1.35f : 1.0f;
-    ReloadCompleteAt = Now + ActionDuration(true, Clip, 1.4f) / Rate;
+    ReloadCompleteAt = Now + (Clip ? Clip->GetPlayLength() : 1.4f) / Rate;
     PlaySidearmAnimation(Clip, false);
     SidearmViewmodel->SetPlayRate(Rate);
 }
@@ -1551,8 +1548,16 @@ bool ASurvivalCharacter::ShowHitMarker() const
 void ASurvivalCharacter::PressTrigger()
 {
     if (TriggerWeapon != INDEX_NONE) return;
+    const bool bAutomaticRifle = IsRifleSelected() && ActiveAutomaticInterval() > 0.f;
     const int32 Before = GetAmmo();
     PrimaryAction();
+    if (bAutomaticRifle)
+    {
+        if (!bBuildMode && !bInventoryOpen && !HasOpenContainer() && HealthPoints > 0 &&
+            !IsRifleReloading() && GetRifleAmmo() > 0 && GetWeaponAssembly(ESurvivalItem::Rifle).IsComplete())
+            TriggerWeapon = Toolbelt[ActiveHotbarSlot].WeaponId;
+        return;
+    }
     if (!IsSidearmSelected() || GetAmmo() >= Before) return;
     if (HasWeaponMod(ESurvivalItem::Sidearm, BurstTrigger)) BurstRemaining = 2;
     if (BurstRemaining > 0 || HasWeaponMod(ESurvivalItem::Sidearm, AutoTrigger))
@@ -1617,17 +1622,11 @@ void ASurvivalCharacter::PrimaryAction()
 
     --WeaponItems[Toolbelt[ActiveHotbarSlot].WeaponId].Ammo;
     const bool bFastTrigger = HasWeaponMod(ESurvivalItem::Sidearm, AutoTrigger) || HasWeaponMod(ESurvivalItem::Sidearm, BurstTrigger);
-    NextShotAt = Now + (bFastTrigger ? .12f : ActionDuration(false, ViewmodelFire, .23f));
+    NextShotAt = Now + (bFastTrigger ? .12f : (ViewmodelFire ? ViewmodelFire->GetPlayLength() : .23f));
     const bool bAimedShot = bViewmodelReady && IsAimingSidearm();
-    if (bAimedShot)
-    {
-        PlaySidearmAnimation(ViewmodelIdle.Get(), true);
-        SidearmAimedShotAt = Now;
-    }
-    else
-    {
-        PlaySidearmAnimation(ViewmodelFire.Get(), false);
-    }
+    SidearmAimedShotAt = bAimedShot ? Now : -1.;
+    if (ViewmodelFire) PlaySidearmAnimation(ViewmodelFire.Get(), false);
+    else PlaySidearmAnimation(ViewmodelIdle.Get(), true);
     if (Sidearm)
     {
         Sidearm->PlayShotSound(HasWeaponMod(ESurvivalItem::Sidearm, Suppressor) ? .25f : 1.f);
@@ -1852,8 +1851,11 @@ void ASurvivalCharacter::FireRifle()
     }
     --WeaponItems[Toolbelt[ActiveHotbarSlot].WeaponId].Ammo;
     CurrentRifleAnimation = nullptr;
-    RifleReadyAt = Now + ActionDuration(false, RifleFire, EquippedFirearm >= 5 ? .14f : 1.f) / (HasWeaponMod(ESurvivalItem::Rifle, FasterBolt) ? 1.25 : 1.0);
-    AddControllerPitchInput(-1.35f * WeaponRecoil(ESurvivalItem::Rifle));
+    const float Interval = ActiveAutomaticInterval();
+    const float ClipRate = HasWeaponMod(ESurvivalItem::Rifle, FasterBolt) ? 1.25f : 1.f;
+    RifleShotEndsAt = Now + (RifleFire ? RifleFire->GetPlayLength() : Interval > 0.f ? .16f : 1.f) / ClipRate;
+    RifleReadyAt = Interval > 0.f ? Now + Interval : RifleShotEndsAt;
+    AddControllerPitchInput((Interval > 0.f ? -.35f : -1.35f) * WeaponRecoil(ESurvivalItem::Rifle));
     if (USoundBase* Sound = LoadObject<USoundBase>(nullptr,
         TEXT("/Game/Audio/Weapons/SW_SidearmShot.SW_SidearmShot"), nullptr, LOAD_NoWarn))
     {
@@ -1868,7 +1870,7 @@ void ASurvivalCharacter::ReloadRifle()
         && GetRifleAmmo() < WeaponCapacity(ESurvivalItem::Rifle) && Items.RifleRounds > 0 && Now >= RifleReadyAt)
     {
         CurrentRifleAnimation = nullptr;
-        RifleReloadAt = Now + ActionDuration(true, RifleReload, 1.8f) / (HasWeaponMod(ESurvivalItem::Rifle, QuickMagazine) ? 1.35 : 1.0);
+        RifleReloadAt = Now + (RifleReload ? RifleReload->GetPlayLength() : 1.8f) / (HasWeaponMod(ESurvivalItem::Rifle, QuickMagazine) ? 1.35 : 1.0);
     }
 }
 
@@ -1889,24 +1891,21 @@ void ASurvivalCharacter::UpdateRifle()
     {
         Desired = RifleReload.Get();
     }
-    else if (Now < RifleReadyAt && RifleFire)
+    else if (Now < RifleShotEndsAt && RifleFire)
     {
         Desired = RifleFire.Get();
     }
-    const int32 Phase = IsRifleReloading() ? 2 : Now < RifleReadyAt ? 1 : 0;
+    const int32 Phase = IsRifleReloading() ? 2 : Now < RifleShotEndsAt ? 1 : 0;
     if (Desired && (Desired != CurrentRifleAnimation || Phase != RifleAnimationPhase))
     {
         RifleAnimationPhase = Phase;
         CurrentRifleAnimation = Desired;
-        RifleViewmodel->PlayAnimation(Desired, Phase == 0 && EquippedFirearm < 5);
+        RifleViewmodel->PlayAnimation(Desired, Phase == 0);
         const bool bFire = Phase == 1 && RifleFire;
         const bool bReload = Phase == 2 && RifleReload;
         const float Rate = bFire && HasWeaponMod(ESurvivalItem::Rifle, FasterBolt) ? 1.25f :
             bReload && HasWeaponMod(ESurvivalItem::Rifle, QuickMagazine) ? 1.35f :
-            (EquippedFirearm >= 5 && !bFire && !bReload) ? 0.f : 1.f;
-        const float Start = bFire || bReload ? ActionRange(EquippedFirearm, bReload).Start :
-            EquippedFirearm == 6 ? .5f : (EquippedFirearm == 5 || EquippedFirearm == 8) ? Desired->GetPlayLength() : 0.f;
-        RifleViewmodel->SetPosition(Start, false);
+            1.f;
         RifleViewmodel->SetPlayRate(Rate);
     }
 }
@@ -3116,7 +3115,7 @@ void ASurvivalCharacter::SelectToolbeltItem(int32 Slot)
 void ASurvivalCharacter::CancelWeaponReloadOnSwitch(int32 PreviousWeaponId)
 {
     if (PreviousWeaponId == Toolbelt[ActiveHotbarSlot].WeaponId) return;
-    FieldDrawAt = FieldActionAt = -1.;
+    FieldDrawAt = FieldActionAt = RifleShotEndsAt = -1.;
     ReleaseTrigger();
     ReloadCompleteAt = -1.0;
     RifleReloadAt = -1.0;
