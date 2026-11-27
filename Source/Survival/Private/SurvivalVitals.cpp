@@ -289,7 +289,7 @@ TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes()
             {{Item::ScrapIron, 4}, {Item::TinScrap, 2}}},
         {Item::Oven, TEXT("Expansions"), TEXT("Install at the electric stove."),
             {{Item::ScrapIron, 6}, {Item::TinScrap, 3}}},
-        {Item::PowerSupply, TEXT("Expansions"), TEXT("Install at the electric stove."),
+        {Item::PowerSupply, TEXT("Expansions"), TEXT("Install at an electric stove or 3D printer to cut batch power consumption."),
             {{Item::CopperIngot, 2}, {Item::ScrapIron, 3}}},
         {Item::Steel, TEXT("Metals"), TEXT("Refine forged steel for the last construction tier."),
             {{Item::IronIngot, 3}, {Item::Timber, 2}}, ETraining::Steelworking, Item::None, Item::Forge, Item::FieldCrucible},

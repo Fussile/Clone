@@ -195,7 +195,7 @@ int32 ASurvivalCharacter::IngredientCost(const FSurvivalRecipe& Recipe, const FS
     if (OpenStation.IsValid() && OpenStation->Kind() == Recipe.Station)
     {
         if ((Recipe.Station == I::Forge && Ingredient.Item == I::Timber && OpenStation->Installed(I::Bellows)) ||
-            (Recipe.Station == I::Stove && Ingredient.Item == I::FuelCell && OpenStation->Installed(I::PowerSupply)))
+            ((Recipe.Station == I::Stove || Recipe.Station == I::Printer) && Ingredient.Item == I::FuelCell && OpenStation->Installed(I::PowerSupply)))
             return (Cost + 1) / 2;
     }
     return Cost;

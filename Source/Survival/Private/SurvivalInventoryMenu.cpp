@@ -1794,7 +1794,15 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeBrowser()
     const TConstArrayView<FSurvivalRecipe> Recipes = GetSurvivalRecipes();
     for (int32 Index = 0; Index < Recipes.Num(); ++Index)
     {
-        const ESurvivalItem Item = Recipes[Index].Output;
+        const auto& Recipe = Recipes[Index];
+        const ESurvivalItem Item = Recipe.Output;
+        FString Label = SurvivalItemName(Item);
+        if (Item == ESurvivalItem::Water || Item == ESurvivalItem::StrainedWater)
+        {
+            Label = FString::Printf(TEXT("%s → %s"), SurvivalItemName(Recipe.Ingredients[0].Item), SurvivalItemName(Item));
+            if (Recipe.RequiredTool == ESurvivalItem::FilterPump) Label += TEXT(" (pump)");
+        }
+        if (Recipe.Station != ESurvivalItem::None) Label += FString::Printf(TEXT("  /  %s"), SurvivalItemName(Recipe.Station));
         Rows->AddSlot().Padding(0, 3)
         [
             SNew(SButton).ButtonStyle(&MenuButtonStyle()).HAlign(HAlign_Fill).ButtonColorAndOpacity_Lambda([this, Index]()
@@ -1815,8 +1823,7 @@ TSharedRef<SWidget> SSurvivalInventoryMenu::MakeRecipeBrowser()
                 + SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)[SNew(SImage).Image(FindIcon(Item))]
                 + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center)
                 [
-                    SNew(STextBlock).Text(FText::FromString(Recipes[Index].Station == ESurvivalItem::None ?
-                        FString(SurvivalItemName(Item)) : FString::Printf(TEXT("%s  /  %s"), SurvivalItemName(Item), SurvivalItemName(Recipes[Index].Station))))
+                    SNew(STextBlock).AutoWrapText(true).Text(FText::FromString(Label))
                 ]
             ]
         ];

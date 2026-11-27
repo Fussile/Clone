@@ -24,6 +24,7 @@ TConstArrayView<ESurvivalItem> ASurvivalStation::Slots(ESurvivalItem Kind)
     static constexpr I Forge[]{I::Bellows, I::FieldCrucible, I::Mold};
     static constexpr I Fire[]{I::Pot, I::Grill};
     static constexpr I Stove[]{I::Oven, I::Pot, I::PowerSupply};
+    static constexpr I Printer[]{I::PowerSupply};
     switch (Kind)
     {
     case I::ChemSet: return MakeArrayView(Chemistry);
@@ -31,6 +32,7 @@ TConstArrayView<ESurvivalItem> ASurvivalStation::Slots(ESurvivalItem Kind)
     case I::Forge: return MakeArrayView(Forge);
     case I::Campfire: return MakeArrayView(Fire);
     case I::Stove: return MakeArrayView(Stove);
+    case I::Printer: return MakeArrayView(Printer);
     default: return {};
     }
 }
@@ -152,7 +154,7 @@ void ASurvivalStation::Refresh()
         if (!Installed(Options[Index])) continue;
         const auto Bounds = Extent(KitKind);
         const double X = (Index - (Options.Num()-1)*.5) * Bounds.X * .55;
-        const double Base = KitKind == I::Campfire ? 16 : KitKind == I::Stove ? 87 : 92;
+        const double Base = KitKind == I::Campfire ? 16 : KitKind == I::Printer ? 12 : KitKind == I::Stove ? 87 : 92;
         Part({X,-9,Base+7},{22,21,14},Steel,Options[Index] == I::Pot || Options[Index] == I::Decanter);
     }
 }
