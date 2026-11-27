@@ -1,8 +1,36 @@
 #include "SurvivalVitals.h"
 #include "SurvivalWeaponMods.h"
 
+namespace
+{
+struct FWorkshopItem
+{
+    const TCHAR* Name;
+    int32 StackSize;
+};
+
+constexpr FWorkshopItem WorkshopItems[] = {
+    {TEXT("Iron ore"), 100},
+    {TEXT("Copper ore"), 100},
+    {TEXT("Scrap iron"), 100},
+    {TEXT("Salvaged tin"), 100},
+    {TEXT("Iron ingot"), 50},
+    {TEXT("Copper ingot"), 50},
+    {TEXT("Bronze ingot"), 50},
+    {TEXT("Machine spring"), 50},
+    {TEXT("Gear"), 50},
+    {TEXT("Salvage tool roll"), 1},
+    {TEXT("Field crucible"), 1},
+    {TEXT("Hand-crank filter pump"), 1},
+    {TEXT("Empty bottle"), 20},
+    {TEXT("Untreated water"), 20},
+};
+static_assert(UE_ARRAY_COUNT(WorkshopItems) == WorkshopIndex(ESurvivalItem::RawWater) + 1);
+}
+
 const TCHAR* SurvivalItemName(ESurvivalItem Item)
 {
+    if (IsWorkshopItem(Item)) return WorkshopItems[WorkshopIndex(Item)].Name;
     if (IsAttachmentItem(Item)) return WeaponMods[AttachmentIndex(Item)].Name;
     switch (Item)
     {
@@ -110,6 +138,7 @@ int32 FSurvivalWeaponAssembly::SwapPart(int32 Slot, int32 NewQuality)
 // Provisional stack limits. Tune freely: the backpack lays stacks out from these.
 int32 SurvivalItemMaxStack(ESurvivalItem Item)
 {
+    if (IsWorkshopItem(Item)) return WorkshopItems[WorkshopIndex(Item)].StackSize;
     switch (Item)
     {
     case ESurvivalItem::Food:
@@ -132,6 +161,7 @@ int32 SurvivalItemMaxStack(ESurvivalItem Item)
 
 TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes()
 {
+    using Item = ESurvivalItem;
     static const FSurvivalRecipe Recipes[] = {
         {ESurvivalItem::PrimitiveBow, TEXT("Weapons"), TEXT("A simple bow. Uses arrows and needs no separate parts."),
             {{ESurvivalItem::Timber, 4}, {ESurvivalItem::Cloth, 2}}},
@@ -144,12 +174,33 @@ TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes()
             {{ESurvivalItem::Timber, 4}}},
         {ESurvivalItem::FieldDressing, TEXT("Medical"), TEXT("A heavy dressing for treating deeper injuries."),
             {{ESurvivalItem::Bandage, 1}, {ESurvivalItem::Cloth, 2}}, ETraining::FieldDressings},
+        {Item::SalvageTools, TEXT("Tools"), TEXT("Work reclaimed metal and assemble mechanisms. Carrying the roll also restores 50% more structural health per repair."),
+            {{Item::ScrapIron, 3}, {Item::Timber, 2}, {Item::Cloth, 2}}},
+        {Item::FieldCrucible, TEXT("Tools"), TEXT("Carry this portable forge kit to refine ore. Each batch uses timber for fuel."),
+            {{Item::Stone, 8}, {Item::ScrapIron, 3}, {Item::Cloth, 1}}, ETraining::Count, Item::SalvageTools},
+        {Item::IronIngot, TEXT("Metals"), TEXT("Refine the iron-bearing host rock found around geodes."),
+            {{Item::IronOre, 2}, {Item::Timber, 1}}, ETraining::Count, Item::FieldCrucible},
+        {Item::CopperIngot, TEXT("Metals"), TEXT("Refine copper-bearing rock into a workable ingot."),
+            {{Item::CopperOre, 2}, {Item::Timber, 1}}, ETraining::Count, Item::FieldCrucible},
+        {Item::BronzeIngot, TEXT("Metals"), TEXT("Cast a bronze blank for a pump housing."),
+            {{Item::CopperIngot, 1}, {Item::TinScrap, 1}, {Item::Timber, 1}}, ETraining::Count, Item::FieldCrucible},
+        {Item::MachineSpring, TEXT("Components"), TEXT("Rework scrap into a replacement machine spring."),
+            {{Item::ScrapIron, 2}}, ETraining::Count, Item::SalvageTools},
+        {Item::Gear, TEXT("Components"), TEXT("Shape an iron gear for a hand-driven mechanism."),
+            {{Item::IronIngot, 1}}, ETraining::Count, Item::SalvageTools},
+        {Item::FilterPump, TEXT("Tools"), TEXT("A reusable hand pump for filtering bottled river or lake water."),
+            {{Item::BronzeIngot, 1}, {Item::Gear, 1}, {Item::MachineSpring, 1}, {Item::Cloth, 3}},
+            ETraining::Count, Item::SalvageTools},
+        {Item::Water, TEXT("Water"), TEXT("Run one bottle of untreated water through the pump. Each batch uses a fresh cloth filter."),
+            {{Item::RawWater, 1}, {Item::Cloth, 1}}, ETraining::Count, Item::FilterPump},
     };
     return MakeArrayView(Recipes);
 }
 
 void FSurvivalItems::Add(const FSurvivalItems& Other)
 {
+    for (int32 Index = 0; Index < UE_ARRAY_COUNT(WorkshopStacks); ++Index)
+        WorkshopStacks[Index] += Other.WorkshopStacks[Index];
     Food += Other.Food;
     Water += Other.Water;
     Cloth += Other.Cloth;

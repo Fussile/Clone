@@ -1,4 +1,5 @@
 #include "SurvivalSupplyCrate.h"
+#include "Misc/Crc.h"
 #include "SurvivalGear.h"
 #include "SurvivalWeaponMods.h"
 
@@ -77,6 +78,7 @@ FName ASurvivalSupplyCrate::GetLootId() const
 
 int32* FSurvivalLoot::StackCount(ESurvivalItem Item)
 {
+    if (IsWorkshopItem(Item)) return &Items.WorkshopStacks[WorkshopIndex(Item)];
     switch (Item)
     {
     case ESurvivalItem::Timber: return &Materials.Timber;
@@ -116,6 +118,8 @@ int32 FSurvivalLoot::Count(ESurvivalItem Item) const
 bool FSurvivalLoot::IsEmpty() const
 {
     if (IsAttachmentItem(static_cast<ESurvivalItem>(LooseAttachment))) return false;
+    for (const int32 Count : Items.WorkshopStacks)
+        if (Count > 0) return false;
     if (GearIndex != INDEX_NONE || !Materials.IsEmpty() || bSidearm || bRifle || Items.Food || Items.Water || Items.Cloth
         || Items.Bandages || Items.Rounds || Items.TimberDoors || Items.RifleRounds || Items.BuilderGuides
         || Items.Arrows || Items.Bolts || Items.ScavengerNotes || Items.DressingSchematics || Items.FieldDressings)
@@ -142,6 +146,13 @@ FSurvivalLoot ASurvivalSupplyCrate::GetAuthoredLoot() const
         Loot.Items.Food = FMath::Max(0, FoodAmount);
         Loot.Items.Water = FMath::Max(0, WaterAmount);
         Loot.Items.Cloth = FMath::Max(0, ClothAmount);
+        // Existing baked forage actors already have stable parcel IDs. Ore follows the parcel across loot cycles.
+        const FString SourceId = GetLootId().ToString();
+        if (SourceId.StartsWith(TEXT("CrossroadsForage_")) && SourceId.EndsWith(TEXT("_stone")))
+        {
+            const auto Ore = FCrc::StrCrc32(*SourceId) % 2 ? ESurvivalItem::IronOre : ESurvivalItem::CopperOre;
+            Loot.Items.WorkshopStacks[WorkshopIndex(Ore)] = 4;
+        }
     }
     Loot.Items.BuilderGuides = FMath::Max(0, BuilderGuideAmount);
     Loot.Items.ScavengerNotes = FMath::Max(0, ScavengerNotesAmount);

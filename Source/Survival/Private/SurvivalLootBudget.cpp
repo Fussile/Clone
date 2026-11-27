@@ -68,6 +68,20 @@ constexpr FItemValue Values[] = {
     {EItem::CrossbowProd, 28, 12},
     {EItem::CrossbowString, 12, 12},
     {EItem::CrossbowLatch, 22, 12},
+    {EItem::IronOre, 3, 0},
+    {EItem::CopperOre, 4, 0},
+    {EItem::ScrapIron, 2, 0},
+    {EItem::TinScrap, 4, 0},
+    {EItem::IronIngot, 9, 0},
+    {EItem::CopperIngot, 12, 0},
+    {EItem::BronzeIngot, 21, 0},
+    {EItem::MachineSpring, 6, 0},
+    {EItem::Gear, 10, 0},
+    {EItem::SalvageTools, 22, 0},
+    {EItem::FieldCrucible, 26, 0},
+    {EItem::FilterPump, 65, 0},
+    {EItem::EmptyBottle, 2, 0},
+    {EItem::RawWater, 3, 0},
 };
 static_assert(UE_ARRAY_COUNT(Values) == static_cast<int32>(EItem::Count));
 static_assert([]{
@@ -92,9 +106,12 @@ constexpr FPoolEntry General[] = {
     {EItem::None, 8}, {EItem::ScavengerNotes, 3}
 };
 constexpr FPoolEntry Food[] = {
+    {EItem::EmptyBottle, 12, 3},
     {EItem::Food, 45, 5}, {EItem::Water, 40, 5}, {EItem::Cloth, 8, 7}
 };
 constexpr FPoolEntry Building[] = {
+    {EItem::ScrapIron, 30, 8}, {EItem::TinScrap, 15, 4}, {EItem::MachineSpring, 9, 3},
+    {EItem::Gear, 8, 2}, {EItem::SalvageTools, 5},
     {EItem::Timber, 36, 40}, {EItem::Stone, 32, 32}, {EItem::Cloth, 12, 15},
     {EItem::WoodenStave, 2}, {EItem::WoodenString, 2}, {EItem::CompoundRiser, 2}, {EItem::CompoundLimbs, 2}, {EItem::CompoundCams, 2},
     {EItem::CrossbowStock, 2}, {EItem::CrossbowProd, 2}, {EItem::CrossbowString, 2}, {EItem::CrossbowLatch, 2},
@@ -109,6 +126,7 @@ constexpr FPoolEntry Office[] = {
     {EItem::Water, 16, 4}, {EItem::Cloth, 15, 10}, {EItem::None, 8}
 };
 constexpr FPoolEntry Vehicle[] = {
+    {EItem::ScrapIron, 32, 8}, {EItem::TinScrap, 12, 4}, {EItem::MachineSpring, 18, 3}, {EItem::Gear, 12, 2},
     {EItem::Water, 26, 3}, {EItem::Food, 26, 3}, {EItem::Cloth, 20, 10},
     {EItem::Bandage, 11, 3}, {EItem::None, 13}
 };

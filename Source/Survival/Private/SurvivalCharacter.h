@@ -48,7 +48,7 @@ public:
     void InspectWeapon(ESurvivalItem Weapon);
     int32 GetActiveHotbarSlot() const { return ActiveHotbarSlot; }
     int32 GetItemCount(ESurvivalItem Item) const;
-    bool CanUseItem(ESurvivalItem Item) const;
+    bool CanUseItem(ESurvivalItem Item, bool bFromBelt = false) const;
     static ESurvivalItem TrainingBook(ETraining Entry);
     ESurvivalItem GetSelectedInventoryItem() const { return SelectedInventoryItem; }
     void SetSelectedInventoryItem(ESurvivalItem Item)
@@ -76,7 +76,7 @@ public:
     const FSurvivalWeaponAssembly& GetWeaponAssembly(ESurvivalItem Weapon) const;
     void ChooseHotbarSlot(int32 Slot);
     void UseToolbeltSlot(int32 Slot);
-    void UseItem(ESurvivalItem Item);
+    void UseItem(ESurvivalItem Item, int32 BeltSlot = INDEX_NONE);
     bool CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const;
     void CraftRecipe(int32 RecipeIndex, int32 Quantity);
     void ToggleInventory();
@@ -224,6 +224,7 @@ private:
     void UpdateWaterState(float DeltaSeconds);
     void SwimVertical(float Value);
     bool bWaterSwimming = false;
+    bool bTouchingWater = false;
     bool bHeadUnderwater = false;
     float OxygenReserve = 100.0f;
     float WetnessLevel = 0.0f;
@@ -294,6 +295,7 @@ private:
     TArray<FSurvivalPackCell> PendingLootItems;
     TMap<int32, int32> PendingGearTargets;
 
+    bool HasRoomForExchange(TConstArrayView<FSurvivalIngredient> Ingredients, ESurvivalItem Output, int32 Quantity) const;
     void ChangeItemCount(ESurvivalItem Item, int32 Delta);
     void SetInventoryOpen(bool bOpen);
     void SyncPack();

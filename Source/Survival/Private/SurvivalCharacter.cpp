@@ -350,6 +350,7 @@ void ASurvivalCharacter::UpdateWaterState(float DeltaSeconds)
         Center + FVector(0, 0, 10000), Center - FVector(0, 0, HalfHeight),
         ECC_GameTraceChannel3, FCollisionQueryParams(SCENE_QUERY_STAT(WaterSurface), true, this))
         && Surface.GetComponent() && Surface.GetComponent()->GetCollisionProfileName() == WaterProfile;
+    bTouchingWater = bInWater;
     const double Depth = bInWater ? Surface.ImpactPoint.Z - Feet : 0.0;
     bHeadUnderwater = Depth > HalfHeight * 2;
     // A lower exit threshold lets the swimmer hold their head above the surface.
@@ -1089,7 +1090,8 @@ void ASurvivalCharacter::Interact()
                 }
                 else
                 {
-                    const int32 RepairHealth = FMath::RoundToInt(30.0f * Progression.Effect(ETraining::Construction)
+                    const float BaseRepair = GetItemCount(ESurvivalItem::SalvageTools) > 0 ? 45.0f : 30.0f;
+                    const int32 RepairHealth = FMath::RoundToInt(BaseRepair * Progression.Effect(ETraining::Construction)
                         * Progression.Effect(ETraining::Repair) * Progression.Effect(ETraining::BasicCraft));
                     if (Chunk->RepairFinished(Hit, Inventory, RepairHealth))
                     {
@@ -2200,6 +2202,7 @@ void ASurvivalCharacter::SetInventoryOpen(bool bOpen)
 
 int32 ASurvivalCharacter::GetItemCount(ESurvivalItem Item) const
 {
+    if (IsWorkshopItem(Item)) return Items.WorkshopStacks[WorkshopIndex(Item)];
     if (IsAttachmentItem(Item) || SurvivalItemHasQuality(Item))
     {
         // Parts exist only as pack cells, because each carries its own quality.
@@ -2251,7 +2254,7 @@ ESurvivalItem ASurvivalCharacter::TrainingBook(ETraining Entry)
     }
 }
 
-bool ASurvivalCharacter::CanUseItem(ESurvivalItem Item) const
+bool ASurvivalCharacter::CanUseItem(ESurvivalItem Item, bool bFromBelt) const
 {
     if (HealthPoints <= 0 || GetItemCount(Item) <= 0)
     {
@@ -2260,6 +2263,12 @@ bool ASurvivalCharacter::CanUseItem(ESurvivalItem Item) const
     switch (Item)
     {
     case ESurvivalItem::Food: return Vitals.Hunger < FSurvivalVitals::Max;
+    case ESurvivalItem::EmptyBottle:
+    {
+        const FSurvivalIngredient Bottle{Item, 1};
+        const TConstArrayView<FSurvivalIngredient> FromPack(&Bottle, bFromBelt ? 0 : 1);
+        return bTouchingWater && !bHeadUnderwater && HasRoomForExchange(FromPack, ESurvivalItem::RawWater, 1);
+    }
     case ESurvivalItem::Water: return Vitals.Thirst < FSurvivalVitals::Max;
     case ESurvivalItem::Bandage:
     case ESurvivalItem::FieldDressing: return HealthPoints < 100;
@@ -2270,12 +2279,13 @@ bool ASurvivalCharacter::CanUseItem(ESurvivalItem Item) const
     }
 }
 
-void ASurvivalCharacter::UseItem(ESurvivalItem Item)
+void ASurvivalCharacter::UseItem(ESurvivalItem Item, int32 BeltSlot)
 {
-    if (!CanUseItem(Item))
-    {
+    const bool bFromBelt = BeltSlot != INDEX_NONE;
+    if (bFromBelt && (BeltSlot < 0 || BeltSlot >= HotbarSize || Toolbelt[BeltSlot].Item != Item || Toolbelt[BeltSlot].Count <= 0))
         return;
-    }
+    if (!CanUseItem(Item, bFromBelt)) return;
+    if (bFromBelt && --Toolbelt[BeltSlot].Count == 0) Toolbelt[BeltSlot] = {};
     switch (Item)
     {
     case ESurvivalItem::Food:
@@ -2283,11 +2293,31 @@ void ASurvivalCharacter::UseItem(ESurvivalItem Item)
         Progression.AwardPractice(ETraining::Nutrition, FMath::FloorToInt(FMath::Min(34.0f, FSurvivalVitals::Max - Vitals.Hunger)));
         Vitals.Hunger = FMath::Min(FSurvivalVitals::Max, Vitals.Hunger + 34.0f);
         break;
+    case ESurvivalItem::EmptyBottle:
+        ChangeItemCount(Item, -1);
+        SyncPack();
+        ChangeItemCount(ESurvivalItem::RawWater, 1);
+        SyncPack();
+        break;
     case ESurvivalItem::Water:
+    {
         --Items.Water;
+        // Drinking still works with a full pack. Return the bottle when there is room after the drink.
+        SyncPack();
+        if (bFromBelt && Toolbelt[BeltSlot].IsEmpty())
+        {
+            ChangeItemCount(ESurvivalItem::EmptyBottle, 1);
+            Toolbelt[BeltSlot] = {ESurvivalItem::EmptyBottle, 1};
+        }
+        else if (HasRoomForExchange({}, ESurvivalItem::EmptyBottle, 1))
+        {
+            ChangeItemCount(ESurvivalItem::EmptyBottle, 1);
+            SyncPack();
+        }
         Progression.AwardPractice(ETraining::Hydration, FMath::FloorToInt(FMath::Min(42.0f, FSurvivalVitals::Max - Vitals.Thirst)));
         Vitals.Thirst = FMath::Min(FSurvivalVitals::Max, Vitals.Thirst + 42.0f);
         break;
+    }
     case ESurvivalItem::Bandage:
     case ESurvivalItem::FieldDressing:
     {
@@ -2635,13 +2665,7 @@ void ASurvivalCharacter::SyncPack()
 
 void ASurvivalCharacter::UseToolbeltSlot(int32 Slot)
 {
-    if (Slot < 0 || Slot >= HotbarSize || !CanUseItem(Toolbelt[Slot].Item))
-    {
-        return;
-    }
-    FSurvivalPackCell& Cell = Toolbelt[Slot];
-    UseItem(Cell.Item);
-    if (--Cell.Count == 0) Cell = {};
+    if (Slot >= 0 && Slot < HotbarSize) UseItem(Toolbelt[Slot].Item, Slot);
 }
 
 void ASurvivalCharacter::ChooseHotbarSlot(int32 Slot)
@@ -2661,6 +2685,34 @@ void ASurvivalCharacter::ChooseHotbarSlot(int32 Slot)
     UpdateSidearmView();
 }
 
+bool ASurvivalCharacter::HasRoomForExchange(TConstArrayView<FSurvivalIngredient> Ingredients,
+    ESurvivalItem Output, int32 Quantity) const
+{
+    int32 Slots = MaxPackCells - Pack.Num() - PendingLootItems.Num();
+    const int32 StackSize = SurvivalItemMaxStack(Output);
+    int32 Partial = 0;
+    for (const auto& Cell : Pack)
+    {
+        if (Cell.IsEmpty()) ++Slots;
+        else if (Cell.Item == Output) Partial += StackSize - Cell.Count;
+    }
+    if (Partial + FMath::Max(0, Slots) * StackSize >= Quantity) return true;
+
+    // SyncPack spends pack stacks from the end before using items on the toolbelt.
+    for (const auto& Ingredient : Ingredients)
+    {
+        int32 Spent = Ingredient.Count * Quantity;
+        for (int32 Index = Pack.Num() - 1; Index >= 0 && Spent > 0; --Index)
+        {
+            const auto& Cell = Pack[Index];
+            if (Cell.Item != Ingredient.Item || Cell.IsEmpty()) continue;
+            if (Cell.Count <= Spent) ++Slots;
+            Spent -= Cell.Count;
+        }
+    }
+    return Partial + FMath::Max(0, Slots) * StackSize >= Quantity;
+}
+
 bool ASurvivalCharacter::CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const
 {
     const TConstArrayView<FSurvivalRecipe> Recipes = GetSurvivalRecipes();
@@ -2669,6 +2721,7 @@ bool ASurvivalCharacter::CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const
         return false;
     }
     const FSurvivalRecipe& Recipe = Recipes[RecipeIndex];
+    if (Recipe.RequiredTool != ESurvivalItem::None && GetItemCount(Recipe.RequiredTool) < 1) return false;
     if (Recipe.RequiredTraining != ETraining::Count && Progression.Rank(Recipe.RequiredTraining) == 0)
     {
         return false;
@@ -2680,7 +2733,7 @@ bool ASurvivalCharacter::CanCraftRecipe(int32 RecipeIndex, int32 Quantity) const
             return false;
         }
     }
-    return true;
+    return HasRoomForExchange(Recipe.Ingredients, Recipe.Output, Quantity);
 }
 
 void ASurvivalCharacter::CraftRecipe(int32 RecipeIndex, int32 Quantity)
@@ -2694,6 +2747,7 @@ void ASurvivalCharacter::CraftRecipe(int32 RecipeIndex, int32 Quantity)
     {
         ChangeItemCount(Ingredient.Item, -Ingredient.Count * Quantity);
     }
+    SyncPack();
     if (IsWeaponItem(Recipe.Output))
     {
         const bool bKnife = Recipe.Output == ESurvivalItem::Knife;
@@ -2710,12 +2764,18 @@ void ASurvivalCharacter::CraftRecipe(int32 RecipeIndex, int32 Quantity)
         }
     }
     else ChangeItemCount(Recipe.Output, Quantity);
+    SyncPack();
     Progression.AwardPractice(ETraining::BasicCraft, 4 * Quantity);
     Progression.AwardXP(4 * Quantity);
 }
 
 void ASurvivalCharacter::ChangeItemCount(ESurvivalItem Item, int32 Delta)
 {
+    if (IsWorkshopItem(Item))
+    {
+        Items.WorkshopStacks[WorkshopIndex(Item)] += Delta;
+        return;
+    }
     switch (Item)
     {
     case ESurvivalItem::Food: Items.Food += Delta; break;
@@ -3116,7 +3176,8 @@ void ASurvivalCharacter::RotateCharacterPortrait(float Degrees)
 bool ASurvivalCharacter::CanQuickSlot(ESurvivalItem Item)
 {
     return IsWeaponItem(Item) || Item == ESurvivalItem::Food
-        || Item == ESurvivalItem::Water || Item == ESurvivalItem::Bandage || Item == ESurvivalItem::FieldDressing;
+        || Item == ESurvivalItem::Water || Item == ESurvivalItem::EmptyBottle
+        || Item == ESurvivalItem::Bandage || Item == ESurvivalItem::FieldDressing;
 }
 
 bool ASurvivalCharacter::SplitSelection()

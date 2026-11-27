@@ -122,6 +122,10 @@ FText DescribeItem(const ASurvivalCharacter* Character, ESurvivalItem Item, int3
         Text += FString::Printf(TEXT("\nQuality %d"), Quality);
         if (IsModifiable(Item)) Text += TEXT("\nSelect Modify to customize this weapon");
     }
+    if (Item == ESurvivalItem::EmptyBottle)
+        Text += TEXT("\nUse while standing in a river or lake to fill one bottle.");
+    if (Item == ESurvivalItem::RawWater)
+        Text += TEXT("\nIn Crafting, use a filter pump and cloth to make bottled water.");
     if (Character->CanUseItem(Item))
     {
         Text += TEXT("\nRight-click to use");
@@ -1839,6 +1843,12 @@ FText SSurvivalInventoryMenu::GetIngredientText() const
     {
         Ingredients = FString::Printf(TEXT("Locked — learn %s in Skills or read its schematic.\n\n"),
             GetTrainingInfo(Recipe.RequiredTraining).Name);
+    }
+    if (Recipe.RequiredTool != ESurvivalItem::None)
+    {
+        const bool bHeld = Player.IsValid() && Player->GetItemCount(Recipe.RequiredTool) > 0;
+        Ingredients += FString::Printf(TEXT("Reusable tool   %s (%s)\n\n"), SurvivalItemName(Recipe.RequiredTool),
+            bHeld ? TEXT("carried") : TEXT("missing"));
     }
     for (const FSurvivalIngredient& Ingredient : Recipe.Ingredients)
     {

@@ -14,8 +14,20 @@ enum class ESurvivalItem : uint8
     LightStock, CloseQuartersStock, HeavyStock, ThermalSight, FactoryScope, ReflexSight, BurstTrigger, AutoTrigger, None,
     BowBinding, BowSight, KnifeWrap, KnifeBalance,
     PrimitiveBow, WoodenBow, CompoundBow, Crossbow, Knife, Arrows, Bolts, WoodenStave, WoodenString,
-    CompoundRiser, CompoundLimbs, CompoundCams, CrossbowStock, CrossbowProd, CrossbowString, CrossbowLatch, Count
+    CompoundRiser, CompoundLimbs, CompoundCams, CrossbowStock, CrossbowProd, CrossbowString, CrossbowLatch,
+    IronOre, CopperOre, ScrapIron, TinScrap, IronIngot, CopperIngot, BronzeIngot, MachineSpring, Gear,
+    SalvageTools, FieldCrucible, FilterPump, EmptyBottle, RawWater, Count
 };
+
+constexpr bool IsWorkshopItem(ESurvivalItem Item)
+{
+    return Item >= ESurvivalItem::IronOre && Item <= ESurvivalItem::RawWater;
+}
+
+constexpr int32 WorkshopIndex(ESurvivalItem Item)
+{
+    return static_cast<int32>(Item) - static_cast<int32>(ESurvivalItem::IronOre);
+}
 
 inline constexpr bool IsAttachmentItem(ESurvivalItem Item)
 {
@@ -119,6 +131,7 @@ struct FSurvivalRecipe
     const TCHAR* Description;
     TArray<FSurvivalIngredient> Ingredients;
     ETraining RequiredTraining = ETraining::Count;
+    ESurvivalItem RequiredTool = ESurvivalItem::None;
 };
 
 TConstArrayView<FSurvivalRecipe> GetSurvivalRecipes();
@@ -161,6 +174,9 @@ struct FSurvivalItems
     int32 SidearmParts[4]{};
 
     static_assert(FSurvivalWeaponAssembly::PartCount == 4);
+    UPROPERTY()
+    int32 WorkshopStacks[14]{};
+    static_assert(WorkshopIndex(ESurvivalItem::RawWater) + 1 == UE_ARRAY_COUNT(WorkshopStacks));
     void Add(const FSurvivalItems& Other);
 };
 

@@ -31,6 +31,7 @@ const FLinearColor Blocked(1.0f, 0.51f, 0.36f);
 void ASurvivalHUD::BeginPlay()
 {
     Super::BeginPlay();
+    WorkshopAtlas = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Art/Crossroads/Interface/T_UI_WorkshopItems.T_UI_WorkshopItems"), nullptr, LOAD_NoWarn);
     FieldAtlas = LoadObject<UTexture2D>(nullptr,TEXT("/Game/Art/Crossroads/Interface/T_UI_FieldWeapons.T_UI_FieldWeapons"));
     FirearmAtlas = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Art/Crossroads/Interface/T_UI_Firearms.T_UI_Firearms"));
     ItemAtlas = LoadObject<UTexture2D>(nullptr,
@@ -52,6 +53,7 @@ void ASurvivalHUD::BeginPlay()
 
 UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item, int32 Model) const
 {
+    if (IsWorkshopItem(Item)) return WorkshopAtlas.Get();
     if (IsFieldWeapon(Item)) return FieldAtlas.Get();
     if (FirearmAtlas && Model >= 0 && Model < UE_ARRAY_COUNT(Arsenal)) return FirearmAtlas.Get();
     if (ItemAtlas && Item < ESurvivalItem::RifleMagazine && Item != ESurvivalItem::TimberDoor
@@ -65,6 +67,12 @@ UTexture2D* ASurvivalHUD::GetItemIcon(ESurvivalItem Item, int32 Model) const
 
 FBox2f ASurvivalHUD::GetItemIconUV(ESurvivalItem Item, int32 Model) const
 {
+    if (IsWorkshopItem(Item))
+    {
+        const int32 Cell = WorkshopIndex(Item);
+        const FVector2f Start((Cell % 4) * .25f, (Cell / 4) * .25f);
+        return FBox2f(Start, Start + FVector2f(.25f, .25f));
+    }
     if (IsFieldWeapon(Item))
     {
         const int32 Cell = static_cast<int32>(Item) - static_cast<int32>(ESurvivalItem::PrimitiveBow);
@@ -500,7 +508,8 @@ void ASurvivalHUD::DrawHUD()
             const bool bCanRepair = Cost.MissingFrom(Inventory).IsEmpty();
             const FString Prompt = bCanRepair ? FString::Printf(TEXT("[E] Repair for %s"), *Cost.ToText())
                 : FString::Printf(TEXT("Repair needs %s"), *Cost.ToText());
-            DrawText(Prompt, bCanRepair ? Cyan : Blocked, CenterX + 14.0f, CenterY + 32.0f);
+            const bool bToolBonus = bCanRepair && Character->GetItemCount(ESurvivalItem::SalvageTools) > 0;
+            DrawText(bToolBonus ? Prompt + TEXT("  (+50% with tools)") : Prompt, bCanRepair ? Cyan : Blocked, CenterX + 14.0f, CenterY + 32.0f);
         }
     }
 }

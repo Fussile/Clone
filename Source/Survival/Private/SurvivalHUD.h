@@ -39,6 +39,8 @@ private:
 
     UPROPERTY(Transient)
     TObjectPtr<UTexture2D> ItemAtlas;
+    UPROPERTY(Transient)
+    TObjectPtr<UTexture2D> WorkshopAtlas;
 
     UPROPERTY(Transient)
     TObjectPtr<UTexture2D> FirearmAtlas;
