@@ -804,10 +804,20 @@ def place():
                   profile=profiles[kind], chance=chance)
 
     def encounter(key, label, x, y, floor, runner=False, relocate=False):
-        def configure(actor):
-            actor.set_editor_property("aggro_range", 2100.0)
-            actor.set_editor_property("is_runner", runner)
-        spawn(zombie_class, key, label, x, y, floor+1.03, configure, relocate=relocate)
+        old = actor_tags.get(key)
+        if old and isinstance(old, zombie_class):
+            remove_generated(key)
+        marker = spawn(unreal.TargetPoint, key, label+" encounter", x, y, floor+1.03,
+                       lambda actor: None, relocate=True)
+        environment = (key+" "+label).lower()
+        tags = [key, "EnemyEncounter"]
+        if any(word in environment for word in ("hospital", "clinic", "power", "factory", "substation")):
+            tags.append("ToxicHabitat")
+        elif any(word in environment for word in ("farm", "ranch", "village", "yard", "warehouse", "base", "depot")):
+            tags.append("HoundHabitat")
+        if runner:
+            tags.append("RunnerEncounter")
+        marker.set_editor_property("tags", [unreal.Name(tag) for tag in tags])
 
     def place_ribbon(tag, label, route, surface):
         for index, (origin, edges, lengths, breaks) in enumerate(pavement["pavement_chunks"](route)):
@@ -1805,6 +1815,8 @@ def place():
     for site in plan["substations"]:
         resized_site = "CrossroadsUtility_"+site["id"]
         utility["stamp_substation"](site, box, district_mesh, district_mesh, cache, sign, concrete)
+        x, y = site["plot_xy_m"]
+        encounter(resized_site+"_infected", "Substation service yard", x-8, y-6, site["floor_z_m"])
     transmission = plan["grid"]
     for key, pole in transmission["poles"].items():
         district_mesh("CrossroadsPylon_"+key, "High-voltage transmission pylon", "TransmissionPylon",

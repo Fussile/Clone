@@ -309,8 +309,6 @@ void ASurvivalHUD::DrawHUD()
         DrawRect(FLinearColor(.025f, .20f, .22f, .24f), 0, 0, Canvas->SizeX, Canvas->SizeY);
 
     const FSurvivalVitals& Vitals = Character->GetVitals();
-    const int32 Wave = Character->GetDefenseWave();
-    const bool bHordeStarted = Character->HasFirstHordeStarted();
     const auto Meter = [this](float X, const TCHAR* Label, float Value, const FLinearColor& Color)
     {
         DrawRect(Panel, X, 20.0f, 89.0f, 40.0f);
@@ -374,32 +372,10 @@ void ASurvivalHUD::DrawHUD()
         DrawText(TEXT("Dev speed 100 m/s [Caps Lock]"), Cyan, Right - 186.0f, 70.0f);
     }
 
-    const int32 Alive = Character->GetLivingAttackers();
-    FString DefenseStatus;
     const int32 NightAlive = Character->GetLivingNightHorde();
     if (NightAlive > 0)
     {
-        DefenseStatus = FString::Printf(TEXT("First-night horde   %d remaining"), NightAlive);
-    }
-    else if (Alive > 0)
-    {
-        DefenseStatus = FString::Printf(TEXT("Wave %d / %d   |   %d remaining"),
-            Wave, ASurvivalCharacter::DefenseWaveCount, Alive);
-    }
-    else if (Wave >= ASurvivalCharacter::DefenseWaveCount)
-    {
-        DefenseStatus = TEXT("Station defended   [F5] Restart");
-    }
-    else if (Wave > 0)
-    {
-        DefenseStatus = TEXT("Wave clear   [G] Next wave (+6 rounds)");
-    }
-    if (DefenseStatus.IsEmpty() && bHordeStarted)
-    {
-        DefenseStatus = TEXT("First-night horde cleared");
-    }
-    if (!DefenseStatus.IsEmpty())
-    {
+        const FString DefenseStatus = FString::Printf(TEXT("Horde night   %d remaining"), NightAlive);
         float Width = 0.0f;
         float Height = 0.0f;
         GetTextSize(DefenseStatus, Width, Height);

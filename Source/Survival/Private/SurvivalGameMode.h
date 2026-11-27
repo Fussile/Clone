@@ -8,6 +8,8 @@
 
 class ADirectionalLight;
 class ASurvivalBuildChunk;
+class ASurvivalCharacter;
+class ASurvivalZombie;
 
 UCLASS(Config = Game)
 class ASurvivalGameMode : public AGameModeBase
@@ -30,6 +32,7 @@ public:
     float GetDayLengthSeconds() const { return FMath::Max(60.0f, DayLengthSeconds); }
     double GetAmbientTemperature(const FVector& Position) const;
     bool SetTimeOfDay(double Hour);
+    void TriggerHordeTest(ASurvivalCharacter& Player);
     void RegisterScavengeObject(ASurvivalSupplyCrate& Object);
     void UnregisterScavengeObject(ASurvivalSupplyCrate& Object);
     void RememberScavengeObject(FName Id, const FSurvivalScavengeState& State);
@@ -77,8 +80,11 @@ private:
     TWeakObjectPtr<ADirectionalLight> Moon;
     float DaylightIntensity = 0.0f;
     float MoonlightIntensity = 0.0f;
-    double NextHordeAttempt = 0.0;
-    bool bFirstHordeStarted = false;
+    void UpdateEncounters(ASurvivalCharacter& Player);
+    TMap<FName, TWeakObjectPtr<ASurvivalZombie>> AmbientEnemies;
+    TSet<FName> ClearedEncounters;
+    double NextEncounterCheck = 0.0;
+    int32 LastHordeNight = INDEX_NONE;
     double ElapsedSurvivalSeconds = 0.0;
     FSurvivalMaterials PlannedCost;
     FSurvivalStructure Structure;

@@ -335,7 +335,7 @@ void ASurvivalCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
     PlayerInputComponent->BindAction(TEXT("RemovePlan"), IE_Pressed, this, &ASurvivalCharacter::RemovePlan);
     PlayerInputComponent->BindAction(TEXT("Dismantle"), IE_Pressed, this, &ASurvivalCharacter::Dismantle);
     PlayerInputComponent->BindAction(TEXT("ToggleView"), IE_Pressed, this, &ASurvivalCharacter::ToggleView);
-    PlayerInputComponent->BindAction(TEXT("StartDefense"), IE_Pressed, this, &ASurvivalCharacter::StartDefense);
+    PlayerInputComponent->BindAction(TEXT("TestHordeNight"), IE_Pressed, this, &ASurvivalCharacter::TestHordeNight);
     PlayerInputComponent->BindAction(TEXT("RestartDefense"), IE_Pressed, this, &ASurvivalCharacter::RestartDefense);
 }
 
@@ -2017,97 +2017,79 @@ int32 CountLivingZombies(const TArray<TWeakObjectPtr<ASurvivalZombie>>& Group)
 }
 }
 
-int32 ASurvivalCharacter::GetLivingAttackers() const
-{
-    return CountLivingZombies(Attackers);
-}
-
 int32 ASurvivalCharacter::GetLivingNightHorde() const
 {
     return CountLivingZombies(NightHorde);
 }
 
-bool ASurvivalCharacter::TryStartFirstHorde()
+int32 ASurvivalCharacter::GetEncounterStage() const
 {
-    if (!bFirstHordeStarted && HealthPoints > 0 && GetLivingAttackers() == 0)
-    {
-        bFirstHordeStarted = SpawnAttackers(3, NightHorde);
-    }
-    return bFirstHordeStarted;
+    const auto* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>();
+    const int32 Days = Mode ? Mode->GetWorldMinutes() / 1440 : 0;
+    return FMath::Clamp(1 + (Progression.CharacterLevel - 1) / 3 + Days / 3, 1, 8);
 }
 
-void ASurvivalCharacter::StartDefense()
+bool ASurvivalCharacter::StartNightHorde()
 {
-    if (HealthPoints <= 0 || bInventoryOpen || DefenseWave >= DefenseWaveCount
-        || GetLivingAttackers() > 0 || GetLivingNightHorde() > 0)
+    if (!HasAuthority() || HealthPoints <= 0 || GetLivingNightHorde() > 0)
     {
-        return;
+        return false;
     }
 
-    const int32 NextWave = DefenseWave + 1;
-    if (SpawnAttackers(NextWave, Attackers))
+    NightHorde.Reset();
+    const int32 Stage = GetEncounterStage();
+    const int32 TargetCount = 2 + Stage * 2;
+    const float Phase = FMath::FRandRange(0.f, 360.f);
+    for (int32 Attempt = 0; Attempt < TargetCount * 3 && NightHorde.Num() < TargetCount; ++Attempt)
     {
-        DefenseWave = NextWave;
-        if (DefenseWave > 1 && bHasSidearm)
+        const FVector Direction = FVector::ForwardVector.RotateAngleAxis(Phase + Attempt * 137.5, FVector::UpVector);
+        const FVector Position = GetActorLocation() + Direction * FMath::FRandRange(2400.f, 3800.f);
+        const int32 Index = NightHorde.Num();
+        EEncounterEnemy Kind = EEncounterEnemy::Walker;
+        if (Stage >= 4 && Index % 5 == 4)
         {
-            Items.Rounds += 6;
+            Kind = EEncounterEnemy::Toxic;
+        }
+        else if (Stage >= 2 && Index % 4 == 2)
+        {
+            Kind = EEncounterEnemy::Hound;
+        }
+        else if (Index % 4 == 3)
+        {
+            Kind = EEncounterEnemy::Runner;
+        }
+
+        if (auto* Enemy = ASurvivalZombie::SpawnOnGround(*GetWorld(), Position, Kind, Stage, true))
+        {
+            NightHorde.Add(Enemy);
         }
     }
+    return !NightHorde.IsEmpty();
 }
 
-bool ASurvivalCharacter::SpawnAttackers(int32 Count, TArray<TWeakObjectPtr<ASurvivalZombie>>& Group)
+void ASurvivalCharacter::CullDistantHorde()
 {
-    FVector SpawnPoints[] = {
-        FVector(3700.0, 1650.0, 112.0),
-        FVector(3490.0, 1410.0, 112.0),
-        FVector(3920.0, 1240.0, 112.0)
-    };
-    static_assert(UE_ARRAY_COUNT(SpawnPoints) == DefenseWaveCount);
-    const FString MapName = GetWorld()->GetMapName();
-    if (MapName.EndsWith(TEXT("L_Crossroads")) || MapName.EndsWith(TEXT("L_CrossroadsRelief")))
+    NightHorde.RemoveAll([this](const auto& Member)
     {
-        int32 Found = 0;
-        for (TActorIterator<ATargetPoint> Marker(GetWorld()); Marker; ++Marker)
+        ASurvivalZombie* Enemy = Member.Get();
+        if (Enemy && FVector::DistSquared(GetActorLocation(), Enemy->GetActorLocation()) > FMath::Square(16000.0))
         {
-            for (int32 Index = 0; Index < Count; ++Index)
-            {
-                if (Marker->ActorHasTag(FName(*FString::Printf(TEXT("CrossroadsDefenseSpawn%d"), Index + 1))))
-                {
-                    SpawnPoints[Index] = Marker->GetActorLocation();
-                    ++Found;
-                    break;
-                }
-            }
+            Enemy->Destroy();
+            return true;
         }
-        // The station encounter is local. Retry if its terrain is out of streaming range.
-        if (Found != Count || FVector::DistSquared2D(GetActorLocation(), SpawnPoints[0]) > FMath::Square(5000.0))
-        {
-            return false;
-        }
-    }
-    Group.Reset();
-    FActorSpawnParameters SpawnParameters;
-    SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButDontSpawnIfColliding;
-    for (int32 Index = 0; Index < Count; ++Index)
-    {
-        ASurvivalZombie* Zombie = GetWorld()->SpawnActor<ASurvivalZombie>(
-            SpawnPoints[Index], FRotator(0, 90, 0), SpawnParameters);
-        if (!Zombie)
-        {
-            for (const TWeakObjectPtr<ASurvivalZombie>& Spawned : Group)
-            {
-                if (ASurvivalZombie* PartialWave = Spawned.Get())
-                {
-                    PartialWave->Destroy();
-                }
-            }
-            Group.Reset();
-            return false;
-        }
-        Group.Add(Zombie);
-    }
+        return Enemy == nullptr;
+    });
+}
 
-    return true;
+void ASurvivalCharacter::TestHordeNight()
+{
+    if (!bInventoryOpen && HealthPoints > 0)
+    {
+        if (auto* Mode = GetWorld()->GetAuthGameMode<ASurvivalGameMode>())
+        {
+            Mode->TriggerHordeTest(*this);
+        }
+    }
 }
 
 void ASurvivalCharacter::TakeSurvivalDamage(int32 Amount)

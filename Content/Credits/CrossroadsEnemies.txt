@@ -1,0 +1,8 @@
+Zombie Dog by LostBoyz2078
+https://sketchfab.com/3d-models/zombie-dog-b06341d813b0422d900efb5fd07a7551
+
+toxic Zombie 2 Idle (animated) by vicente betoret ferrero
+https://sketchfab.com/3d-models/toxic-zombie-2-idle-animated-796cbc21d9f542a2a53a4d06adbf1987
+
+Both models are licensed under CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+Crossroads combines skinned mesh parts, trims duplicate UV channels, renames animations and scales the characters for gameplay.

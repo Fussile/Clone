@@ -6,6 +6,8 @@
 class ASurvivalCharacter;
 class UAnimSequence;
 
+enum class EEncounterEnemy : uint8 { Walker, Runner, Hound, Toxic };
+
 UCLASS()
 class ASurvivalZombie : public ACharacter
 {
@@ -13,6 +15,8 @@ class ASurvivalZombie : public ACharacter
 
 public:
     ASurvivalZombie();
+    static ASurvivalZombie* SpawnOnGround(UWorld& World, const FVector& Around,
+        EEncounterEnemy Kind, int32 Stage, bool bHorde);
     void HitByShot(ASurvivalCharacter* Shooter, int32 Damage);
 
 protected:
@@ -39,6 +43,9 @@ private:
     double SearchUntil = -1.0;
     double NextSenseTime = 0.0;
     double DetourSide = 1.0;
+    EEncounterEnemy EnemyKind = EEncounterEnemy::Walker;
+    int32 StageBonus = 0;
+    int32 ContactDamage = 15;
     int32 Health = 90;
     double NextAttackTime = 0.0;
     double AttackImpactTime = -1.0;

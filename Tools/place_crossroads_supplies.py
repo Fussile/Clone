@@ -12,7 +12,7 @@ def place():
         raise RuntimeError("Build SurvivalEditor and restart the editor first.")
 
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
-    existing = actors.get_all_level_actors()
+    existing = list(actors.get_all_level_actors())
     crates = (
         ("CrossroadsStationSupplies", "Gas station supply crate", (3700, 5150, 52), (1.2, 0.8, 0.8), 24, 12, False),
         ("CrossroadsStationSidearm", "Gas station sidearm case", (4100, 5050, 39), (0.95, 0.65, 0.54), 0, 0, True),
@@ -77,14 +77,18 @@ def place():
             locker.set_editor_property(prop, value)
 
     zombie_tag = unreal.Name("CrossroadsRoamingZombie")
-    if not any(actor.actor_has_tag(zombie_tag) for actor in existing):
-        zombie_type = unreal.load_class(None, "/Script/Survival.SurvivalZombie")
-        zombie = actors.spawn_actor_from_class(zombie_type, unreal.Vector(6900, 4500, 112)) if zombie_type else None
-        if not zombie:
-            raise RuntimeError("Could not place the Crossroads zombie.")
-        zombie.set_actor_label("Crossroads zombie")
-        zombie.set_editor_property("tags", [zombie_tag])
-        zombie.set_editor_property("aggro_range", 1800.0)
+    marker = next((actor for actor in existing if actor.actor_has_tag(zombie_tag)), None)
+    if marker and not isinstance(marker, unreal.TargetPoint):
+        if not actors.destroy_actor(marker):
+            raise RuntimeError("Could not replace the station zombie.")
+        existing.remove(marker)
+        marker = None
+    if not marker:
+        marker = actors.spawn_actor_from_class(unreal.TargetPoint, unreal.Vector(6900, 4500, 112))
+        if not marker:
+            raise RuntimeError("Could not place the station encounter marker.")
+        marker.set_actor_label("Station encounter")
+        marker.set_editor_property("tags", [zombie_tag, unreal.Name("EnemyEncounter")])
 
     moon_tag = unreal.Name("CrossroadsMoon")
     if not any(actor.actor_has_tag(moon_tag) for actor in existing):
