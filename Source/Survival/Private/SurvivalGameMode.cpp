@@ -11,6 +11,7 @@
 #include "SurvivalBuildChunk.h"
 #include "SurvivalCharacter.h"
 #include "SurvivalHUD.h"
+#include "SurvivalZombie.h"
 #include "SurvivalPlayerController.h"
 
 namespace
@@ -93,17 +94,109 @@ void ASurvivalGameMode::Tick(float DeltaSeconds)
     UpdateDaylight();
     UpdateScavengeCycle();
 
-    constexpr int32 FirstHordeMinute = 22 * 60;
     const double Now = GetWorld()->GetTimeSeconds();
-    if (!bFirstHordeStarted && Now >= NextHordeAttempt && GetWorldMinutes() >= FirstHordeMinute
-        && (GetWorld()->GetMapName().EndsWith(TEXT("L_SouthernCrossroads"))
-            || GetWorld()->GetMapName().EndsWith(TEXT("L_Crossroads"))
-            || GetWorld()->GetMapName().EndsWith(TEXT("L_CrossroadsRelief"))))
+    if (Now < NextEncounterCheck)
     {
-        NextHordeAttempt = Now + 2.0;
-        if (ASurvivalCharacter* Player = Cast<ASurvivalCharacter>(UGameplayStatics::GetPlayerPawn(this, 0)))
+        return;
+    }
+    NextEncounterCheck = Now + 2.0;
+    auto* Player = Cast<ASurvivalCharacter>(UGameplayStatics::GetPlayerPawn(this, 0));
+    if (!Player || Player->GetHealthPoints() <= 0)
+    {
+        return;
+    }
+
+    Player->CullDistantHorde();
+    UpdateEncounters(*Player);
+    const FString MapName = GetWorld()->GetMapName();
+    if (!MapName.EndsWith(TEXT("L_SouthernCrossroads")) && !MapName.EndsWith(TEXT("L_Crossroads"))
+        && !MapName.EndsWith(TEXT("L_CrossroadsRelief")))
+    {
+        return;
+    }
+
+    const int32 Minutes = GetWorldMinutes();
+    const int32 HourMinute = Minutes % 1440;
+    // Apply the same night index before and after midnight.
+    const int32 Night = (Minutes + 120) / 1440 - 1;
+    if (Night >= 0 && Night % 7 == 0 && Night != LastHordeNight
+        && (HourMinute >= 1320 || HourMinute < 240) && Player->StartNightHorde())
+    {
+        LastHordeNight = Night;
+    }
+}
+
+void ASurvivalGameMode::TriggerHordeTest(ASurvivalCharacter& Player)
+{
+    if (Player.StartNightHorde())
+    {
+        SetTimeOfDay(22.0);
+        LastHordeNight = GetWorldMinutes() / 1440;
+    }
+}
+
+void ASurvivalGameMode::UpdateEncounters(ASurvivalCharacter& Player)
+{
+    const FVector Center = Player.GetActorLocation();
+    for (auto It = AmbientEnemies.CreateIterator(); It; ++It)
+    {
+        ASurvivalZombie* Enemy = It.Value().Get();
+        if (!Enemy)
         {
-            bFirstHordeStarted = Player->TryStartFirstHorde();
+            ClearedEncounters.Add(It.Key());
+            It.RemoveCurrent();
+        }
+        else if (FVector::DistSquared(Center, Enemy->GetActorLocation()) > FMath::Square(13500.0))
+        {
+            Enemy->Destroy();
+            It.RemoveCurrent();
+        }
+    }
+
+    const int32 Stage = Player.GetEncounterStage();
+    const int32 MaxAlive = 3 + Stage;
+    const int32 Slots = 1 + Stage / 3;
+    for (TActorIterator<ATargetPoint> Marker(GetWorld()); Marker && AmbientEnemies.Num() < MaxAlive; ++Marker)
+    {
+        if (!Marker->ActorHasTag(TEXT("EnemyEncounter")))
+        {
+            continue;
+        }
+        const FVector Origin = Marker->GetActorLocation();
+        const double Distance = FVector::DistSquared(Center, Origin);
+        if (Distance > FMath::Square(7500.0) || Distance < FMath::Square(1000.0))
+        {
+            continue;
+        }
+
+        for (int32 Slot = 0; Slot < Slots && AmbientEnemies.Num() < MaxAlive; ++Slot)
+        {
+            const FName Id(*FString::Printf(TEXT("%s_%d"), *Marker->Tags[0].ToString(), Slot));
+            if (AmbientEnemies.Contains(Id) || ClearedEncounters.Contains(Id))
+            {
+                continue;
+            }
+
+            EEncounterEnemy Kind = EEncounterEnemy::Walker;
+            if (Slot == 0 && Marker->ActorHasTag(TEXT("ToxicHabitat")))
+            {
+                Kind = EEncounterEnemy::Toxic;
+            }
+            else if (Slot == 0 && Marker->ActorHasTag(TEXT("HoundHabitat")))
+            {
+                Kind = EEncounterEnemy::Hound;
+            }
+            else if (Marker->ActorHasTag(TEXT("RunnerEncounter")) || Slot == 2)
+            {
+                Kind = EEncounterEnemy::Runner;
+            }
+
+            const FVector Offset = Slot == 0 ? FVector::ZeroVector :
+                FVector::ForwardVector.RotateAngleAxis(FMath::FRandRange(0.f, 360.f), FVector::UpVector) * 180.0;
+            if (ASurvivalZombie* Enemy = ASurvivalZombie::SpawnOnGround(*GetWorld(), Origin + Offset, Kind, Stage, false))
+            {
+                AmbientEnemies.Add(Id, Enemy);
+            }
         }
     }
 }

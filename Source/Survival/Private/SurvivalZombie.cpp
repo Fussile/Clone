@@ -34,6 +34,37 @@ ASurvivalZombie::ASurvivalZombie()
     bUseControllerRotationYaw = false;
 }
 
+ASurvivalZombie* ASurvivalZombie::SpawnOnGround(UWorld& World, const FVector& Around,
+    EEncounterEnemy Kind, int32 Stage, bool bHorde)
+{
+    FHitResult Floor;
+    const double Rise = bHorde ? 550.0 : 35.0;
+    const double Drop = bHorde ? 1800.0 : 170.0;
+    if (!World.LineTraceSingleByChannel(Floor, Around + FVector(0, 0, Rise),
+            Around - FVector(0, 0, Drop), ECC_WorldStatic,
+            FCollisionQueryParams(SCENE_QUERY_STAT(EncounterFloor), true))
+        || Floor.ImpactNormal.Z < 0.7 || Cast<APawn>(Floor.GetActor()))
+    {
+        return nullptr;
+    }
+
+    const double HalfHeight = GetDefault<ASurvivalZombie>()->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+    const FTransform Transform(FRotator(0, FMath::FRandRange(-180.f, 180.f), 0),
+        Floor.ImpactPoint + FVector(0, 0, HalfHeight + 3.0));
+    ASurvivalZombie* Enemy = World.SpawnActorDeferred<ASurvivalZombie>(StaticClass(), Transform,
+        nullptr, nullptr, ESpawnActorCollisionHandlingMethod::DontSpawnIfColliding);
+    if (Enemy)
+    {
+        Enemy->EnemyKind = Kind;
+        Enemy->bIsRunner = Kind == EEncounterEnemy::Runner || Kind == EEncounterEnemy::Hound;
+        Enemy->StageBonus = FMath::Clamp(Stage - 1, 0, 7);
+        Enemy->AggroRange = bHorde ? 0.f : Kind == EEncounterEnemy::Hound ? 3000.f :
+            Kind == EEncounterEnemy::Toxic ? 1400.f : 2100.f;
+        Enemy->FinishSpawning(Transform);
+    }
+    return IsValid(Enemy) ? Enemy : nullptr;
+}
+
 void ASurvivalZombie::BeginPlay()
 {
     Super::BeginPlay();
@@ -43,6 +74,43 @@ void ASurvivalZombie::BeginPlay()
         GetCharacterMovement()->MaxWalkSpeed = 430.0f;
         Health = 55;
     }
+    const bool bHound = EnemyKind == EEncounterEnemy::Hound;
+    const bool bToxic = EnemyKind == EEncounterEnemy::Toxic;
+    Health = (bHound ? 45 : bToxic ? 120 : Health) + 5 * StageBonus;
+    ContactDamage = (bHound ? 10 : bToxic ? 20 : 15) + StageBonus;
+    if (bHound || bToxic)
+    {
+        const FString Role = bHound ? TEXT("Hound") : TEXT("Toxic");
+        const FString Folder = TEXT("/Game/Art/Crossroads/Enemies/") + Role + TEXT("/");
+        const FString MeshName = TEXT("SK_") + Role;
+        const FString ClipName = Role + TEXT("Loop");
+        USkeletalMesh* Variant = LoadObject<USkeletalMesh>(nullptr, *(Folder + MeshName + TEXT(".") + MeshName));
+        UAnimSequence* Clip = LoadObject<UAnimSequence>(nullptr, *(Folder + ClipName + TEXT(".") + ClipName));
+        if (Variant && Clip)
+        {
+            UCapsuleComponent* Capsule = GetCapsuleComponent();
+            if (bHound)
+            {
+                const float OldHalfHeight = Capsule->GetUnscaledCapsuleHalfHeight();
+                Capsule->SetCapsuleSize(32.f, 44.f);
+                AddActorWorldOffset(FVector(0, 0, 44.f - OldHalfHeight));
+                Home = GetActorLocation();
+            }
+
+            const FBox Bounds = Variant->GetBounds().GetBox();
+            const double Scale = (bHound ? 85.0 : 180.0) / FMath::Max(1.0, Bounds.GetSize().Z);
+            GetMesh()->SetSkeletalMesh(Variant);
+            GetMesh()->SetRelativeScale3D(FVector(Scale));
+            GetMesh()->SetRelativeRotation(FRotator(0, -90, 0));
+            GetMesh()->SetRelativeLocation(FVector(0, 0, -Capsule->GetUnscaledCapsuleHalfHeight() - Scale * Bounds.Min.Z));
+            IdleAnimation = Clip;
+            WalkAnimation = Clip;
+            GetCharacterMovement()->MaxWalkSpeed = bHound ? 510.f : 185.f;
+            UpdateLocomotion(false);
+            return;
+        }
+    }
+
     USkeletalMesh* ZombieAsset = LoadObject<USkeletalMesh>(nullptr,
         TEXT("/Game/Art/Crossroads/StationZombie/SK_StationZombie.SK_StationZombie"), nullptr, LOAD_NoWarn);
     if (!ZombieAsset)
@@ -107,7 +175,7 @@ void ASurvivalZombie::ApplyAttack()
     }
     else if (ASurvivalCharacter* Target = Cast<ASurvivalCharacter>(Hit.GetActor()))
     {
-        Target->TakeSurvivalDamage(15);
+        Target->TakeSurvivalDamage(ContactDamage);
     }
 }
 
@@ -151,7 +219,8 @@ void ASurvivalZombie::UpdatePerception(double Now)
         Query.AddIgnoredActor(*It);
         const FVector Eyes = GetActorLocation() + FVector(0, 0, 50);
         const FVector TargetPoint = It->GetActorLocation() + FVector(0, 0, 20);
-        const double HearingRange = It->GetVelocity().Size2D() > 650.0 ? 1300.0 : 550.0;
+        const double MovementNoise = It->GetVelocity().Size2D() > 650.0 ? 1300.0 : 550.0;
+        const double HearingRange = EnemyKind == EEncounterEnemy::Hound ? 2.0 * MovementNoise : MovementNoise;
         const bool bHeard = It->GetVelocity().SizeSquared2D() > FMath::Square(150.0)
             && Distance <= FMath::Square(HearingRange);
         const bool bSeen = !GetWorld()->LineTraceTestByChannel(Eyes, TargetPoint, ECC_Visibility, Query);

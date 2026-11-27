@@ -403,6 +403,10 @@ def import_rifle():
 
 
 def import_characters():
+    for role, filename in (("Hound", "zombie_dog.glb"), ("Toxic", "toxic_zombie_2_idle.glb")):
+        import_skeletal_pack(f"{ART}/Enemies/{role}", ("SK_"+role, role+"Loop"),
+                             SOURCE / "Enemy" / filename, TOOLS.parent / "Saved" / "GeneratedArt" / f"{role}.glb",
+                             "prepare_encounter_enemy", role)
     generated = TOOLS.parent / "Saved" / "GeneratedArt"
     import_skeletal_pack(PLAYER, (
         "SK_Survivor", "SurvivorIdle", "SurvivorWalk", "SurvivorRun", "SurvivorJump",

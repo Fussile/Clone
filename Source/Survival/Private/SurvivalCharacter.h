@@ -190,12 +190,10 @@ public:
     }
     UTextureRenderTarget2D* GetScopeTexture() const;
     bool HasSidearm() const { return bHasSidearm; }
-    int32 GetLivingAttackers() const;
     int32 GetLivingNightHorde() const;
-    bool HasFirstHordeStarted() const { return bFirstHordeStarted; }
-    bool TryStartFirstHorde();
-    int32 GetDefenseWave() const { return DefenseWave; }
-    static constexpr int32 DefenseWaveCount = 3;
+    int32 GetEncounterStage() const;
+    bool StartNightHorde();
+    void CullDistantHorde();
     bool IsRifleSelected() const { return GetHotbarItem(ActiveHotbarSlot) == ESurvivalItem::Rifle; }
     bool HasRifle() const { return bHasRifle; }
     int32 GetRifleAmmo() const;
@@ -351,8 +349,7 @@ private:
     void ReleaseAim();
     void PlaySidearmAnimation(UAnimSequence* Sequence, bool bLoop);
     void StartReload();
-    void StartDefense();
-    bool SpawnAttackers(int32 Count, TArray<TWeakObjectPtr<ASurvivalZombie>>& Group);
+    void TestHordeNight();
     void RestartDefense();
 
     EStance Stance = EStance::Standing;
@@ -426,10 +423,7 @@ private:
     FVector ViewmodelAim = FVector::ZeroVector;
     int32 HealthPoints = 100;
     double HitMarkerUntil = -1.0;
-    int32 DefenseWave = 0;
-    TArray<TWeakObjectPtr<ASurvivalZombie>> Attackers;
     TArray<TWeakObjectPtr<ASurvivalZombie>> NightHorde;
-    bool bFirstHordeStarted = false;
 
     UPROPERTY(Transient)
     TObjectPtr<ASurvivalSidearm> Sidearm;

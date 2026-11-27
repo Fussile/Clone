@@ -135,6 +135,8 @@ def prepare_if_needed():
     biome_packages = [biome_package+"/M_CrossroadsGround",biome_package+"/T_CrossroadsBiomes",biome_package+"/M_CrossroadsOpenWater"]
     biome_packages.extend(f"{biome_package}/{p.stem}" for p in biome_sources.glob("*.jpg"))
     biome_packages.extend(f"{biome_package}/{p.stem[3:]}/{p.stem}" for p in biome_sources.glob("SM_*.glb"))
+    required += tuple(f"/Game/Art/Crossroads/Enemies/{role}/{name}" for role in ("Hound", "Toxic")
+                      for name in ("SK_"+role, role+"Loop"))
     required += tuple(biome_packages)
     missing_before = {path for path in required if not assets.does_asset_exist(path)}
     if (stamp.is_file() and stamp.read_text(encoding="utf-8") == revision
