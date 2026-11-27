@@ -351,7 +351,7 @@ void ASurvivalHUD::DrawHUD()
         {
             const bool bReloading = bRifle ? Character->IsRifleReloading() : Character->IsReloading();
             DrawRect(Panel, Right - 145.0f, Canvas->SizeY - 73.0f, 145.0f, 55.0f);
-            DrawText(bRifle ? TEXT("Bolt-action rifle") : TEXT("Sidearm"), Muted, Right - 132.0f, Canvas->SizeY - 66.0f);
+            DrawText(Character->GetInstanceLabel(Held, Character->GetToolbeltWeaponId(Character->GetActiveHotbarSlot())), Muted, Right - 132.0f, Canvas->SizeY - 66.0f);
             if (!Character->GetWeaponAssembly(bRifle ? ESurvivalItem::Rifle : ESurvivalItem::Sidearm).IsComplete())
                 DrawText(TEXT("Parts missing"), Muted, Right - 132.0f, Canvas->SizeY - 45.0f);
             else DrawText(FString::Printf(TEXT("%d / %d%s"), bRifle ? Character->GetRifleAmmo() : Character->GetAmmo(),

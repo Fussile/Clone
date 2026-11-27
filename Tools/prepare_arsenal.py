@@ -47,6 +47,8 @@ def import_rig(source, directory, clips):
     animations = sorted((obj for obj in objects.values() if isinstance(obj, unreal.AnimSequence)), key=lambda obj: obj.get_path_name())
     if directory.endswith("/Unified") and (len(rigs) != 1 or len(animations) != 1):
         raise RuntimeError(f"Expected one combined rig and take in {directory}, found {len(rigs)} and {len(animations)}")
+    if directory.endswith("/Actions") and (len(rigs) != 1 or len(animations) != len(clips)):
+        raise RuntimeError(f"Expected one held rig and {len(clips)} actions in {directory}")
     if not rigs:
         raise RuntimeError(f"No skeletal mesh imported from {source.name}")
     if not animations:
@@ -183,7 +185,7 @@ def prepare(tools, source, art, import_asset, import_skeletal_pack):
 
     def rig_dir(name):
         if name in portable:
-            return f"{dest}/{name}/Unified"
+            return f"{dest}/{name}/Actions"
         if name in ("Sidearm", "ScrapRifle", "Sniper"):
             return f"{dest}/{name}/FittedArms"
         return f"{dest}/{name}/PlayerArms"
@@ -208,11 +210,12 @@ def prepare(tools, source, art, import_asset, import_skeletal_pack):
     def prepare_rig(name, filename, clips):
         directory = rig_dir(name)
         if name in portable:
-            names = ("Rig0", "Presentation0")
+            roles = {role: "Game" + role for role in ("Idle", "Walk", "Fire", "Reload")}
+            names = ("Rig0", "Presentation0", *roles)
             if not all(assets.does_asset_exist(f"{directory}/{role}") for role in names):
                 path = generated / name / "UnifiedRig.glb"
                 unpack(source, name, "Rig", folder / filename, path, glb)
-                import_rig(path, directory, {})
+                import_rig(path, directory, roles)
             return
         rig = folder / filename
         model, binary = glb["read_glb"](rig)
@@ -237,7 +240,7 @@ def prepare(tools, source, art, import_asset, import_skeletal_pack):
         import_rig(rig, directory, clips)
 
     def geometry_dir(name):
-        suffix = "UnifiedSurface" if name in portable else "WeaponSurface" if name == "Makarov" else "Assembly/Geometry"
+        suffix = "BareSurface" if name in ("AK12", "MP7", "Scorpion") else "UnifiedSurface" if name in portable else "WeaponSurface" if name == "Makarov" else "Assembly/Geometry"
         return f"{dest}/{name}/{suffix}"
 
     def prepare_world(name):
